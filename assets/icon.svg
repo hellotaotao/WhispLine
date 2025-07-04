@@ -1,0 +1,6 @@
+<!-- Placeholder SVG icon -->
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="8" cy="8" r="8" fill="#1976d2"/>
+  <path d="M8 4C9.1 4 10 4.9 10 6V8C10 9.1 9.1 10 8 10C6.9 10 6 9.1 6 8V6C6 4.9 6.9 4 8 4Z" fill="white"/>
+  <path d="M4 8C4 10.21 5.79 12 8 12C10.21 12 12 10.21 12 8H11C11 9.66 9.66 11 8 11C6.34 11 5 9.66 5 8H4Z" fill="white"/>
+</svg>
