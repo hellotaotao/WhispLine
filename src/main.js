@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, screen } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -6,17 +6,18 @@ const store = new Store();
 let mainWindow;
 let settingsWindow;
 let inputPromptWindow;
+let tray;
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     },
     show: false,
-    icon: path.join(__dirname, '../assets/icon.svg')
+    icon: path.join(__dirname, '../assets/icon.png')
   });
 
   mainWindow.loadFile(path.join(__dirname, 'views/main.html'));
@@ -36,8 +37,8 @@ function createSettingsWindow() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 600,
-    height: 500,
+    width: 900,
+    height: 700,
     parent: mainWindow,
     modal: true,
     webPreferences: {
@@ -89,6 +90,45 @@ function createInputPromptWindow() {
   inputPromptWindow.loadFile(path.join(__dirname, 'views/input-prompt.html'));
 }
 
+function createTray() {
+  try {
+    tray = new Tray(path.join(__dirname, '../assets/tray-icon.png'));
+    
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Show Main Window',
+        click: () => {
+          mainWindow.show();
+        }
+      },
+      {
+        label: 'Settings',
+        click: () => {
+          createSettingsWindow();
+        }
+      },
+      {
+        type: 'separator'
+      },
+      {
+        label: 'Quit',
+        click: () => {
+          app.isQuitting = true;
+          app.quit();
+        }
+      }
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.setToolTip('FluidInput');
+    
+    tray.on('double-click', () => {
+      mainWindow.show();
+    });
+  } catch (error) {
+    console.error('Failed to create tray:', error);
+  }
+}
 
 function registerGlobalShortcuts() {
   const shortcut = store.get('shortcut', 'CommandOrControl+Shift+V');
@@ -104,6 +144,7 @@ function registerGlobalShortcuts() {
 app.whenReady().then(() => {
   createMainWindow();
   createInputPromptWindow();
+  createTray();
   registerGlobalShortcuts();
   
   // Show main window on startup
