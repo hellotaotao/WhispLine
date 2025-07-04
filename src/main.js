@@ -1,4 +1,5 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, screen, clipboard } = require('electron');
+const { exec } = require('child_process');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -131,14 +132,19 @@ function createTray() {
 }
 
 function registerGlobalShortcuts() {
-  const shortcut = store.get('shortcut', 'CommandOrControl+Shift+V');
-  
-  globalShortcut.register(shortcut, () => {
-    if (inputPromptWindow) {
-      inputPromptWindow.show();
-      inputPromptWindow.webContents.send('start-recording');
-    }
-  });
+  try {
+    // Use a specific key combination for global shortcut
+    const shortcut = store.get('shortcut', 'CommandOrControl+Shift+Space');
+    
+    globalShortcut.register(shortcut, () => {
+      if (inputPromptWindow) {
+        inputPromptWindow.show();
+        inputPromptWindow.webContents.send('toggle-recording');
+      }
+    });
+  } catch (error) {
+    console.error('Failed to register global shortcut:', error);
+  }
 }
 
 app.whenReady().then(() => {
@@ -171,7 +177,7 @@ app.on('will-quit', () => {
 ipcMain.handle('get-settings', () => {
   return {
     apiKey: store.get('apiKey', ''),
-    shortcut: store.get('shortcut', 'CommandOrControl+Shift+V'),
+    shortcut: store.get('shortcut', 'CommandOrControl+Shift+Space'),
     language: store.get('language', 'en'),
     microphone: store.get('microphone', 'default')
   };
@@ -231,5 +237,29 @@ ipcMain.handle('transcribe-audio', async (event, audioBuffer) => {
   } catch (error) {
     console.error('Transcription error:', error);
     throw error;
+  }
+});
+
+ipcMain.handle('type-text', async (event, text) => {
+  // On macOS, we can use AppleScript to type text
+  if (process.platform === 'darwin') {
+    return new Promise((resolve, reject) => {
+      // Escape the text for AppleScript
+      const escapedText = text.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+      const script = `osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
+      
+      exec(script, (error, stdout, stderr) => {
+        if (error) {
+          console.error('Failed to type text:', error);
+          reject(error);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+  } else {
+    // For other platforms, just copy to clipboard
+    clipboard.writeText(text);
+    return true;
   }
 });

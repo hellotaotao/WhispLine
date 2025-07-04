@@ -4,9 +4,10 @@ A voice input method software built with Electron that allows you to dictate tex
 
 ## Features
 
-- **Global Hotkey Support**: Press Ctrl+Shift+V to start voice input from anywhere
+- **Global Hotkey Support**: Press Ctrl+Shift+Space to start/stop voice input from anywhere
 - **Real-time Audio Visualization**: Beautiful waveform animation while recording
 - **AI Transcription**: Uses Groq's Whisper API for accurate speech-to-text
+- **Auto-typing**: Automatically types transcribed text into active application (macOS)
 - **Cross-platform**: Works on macOS, Windows, and Linux
 - **Background Operation**: Runs silently in the system tray
 - **Customizable Settings**: Configure hotkeys, microphone, and languages
@@ -22,9 +23,10 @@ A voice input method software built with Electron that allows you to dictate tex
 
 1. Launch FluidInput
 2. Configure your Groq API key in Settings
-3. Press the hotkey (default: Ctrl+Shift+V) to start recording
+3. Press the hotkey (default: Ctrl+Shift+Space) to start recording
 4. Speak into your microphone
-5. Release the hotkey to stop recording and transcribe
+5. Press the hotkey again to stop recording and transcribe
+6. Text will be automatically typed into the active application
 
 ## Configuration
 
