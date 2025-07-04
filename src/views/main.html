@@ -8,11 +8,12 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       height: 100vh;
       box-sizing: border-box;
+      display: flex;
     }
     
     .header {
@@ -93,8 +94,44 @@
       background: rgba(255, 255, 255, 0.3);
     }
     
-    .recent-activity {
-      margin-top: 40px;
+    
+    .upgrade-section {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    
+    .upgrade-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .upgrade-description {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    
+    .learn-more-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .learn-more-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
     }
     
     .activity-item {
@@ -116,78 +153,194 @@
       font-size: 14px;
     }
     
+    
     .sidebar {
-      position: fixed;
-      left: 20px;
-      bottom: 20px;
+      width: 240px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
     
-    .sidebar-item {
+    .sidebar-header {
+      padding: 0 20px 30px 20px;
+    }
+    
+    .sidebar-nav {
+      flex: 1;
+    }
+    
+    .sidebar-footer {
+      padding: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: auto;
+    }
+    
+    .nav-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 12px;
-      margin-bottom: 10px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      color: white;
+      gap: 12px;
+      padding: 12px 20px;
+      color: rgba(255, 255, 255, 0.8);
       text-decoration: none;
       font-size: 14px;
       cursor: pointer;
       transition: all 0.2s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
     }
     
-    .sidebar-item:hover {
-      background: rgba(255, 255, 255, 0.2);
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+    
+    .nav-item.active {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+    }
+    
+    .nav-item-icon {
+      font-size: 16px;
+    }
+    
+    .main-content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .section-header {
+      margin: 30px 0 15px 0;
+    }
+    
+    .section-header h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.6);
+      margin: 0;
+      letter-spacing: 1px;
+    }
+    
+    .recent-activity {
+      margin-top: 40px;
+    }
+    
+    .recent-activity h3 {
+      font-size: 18px;
+      margin-bottom: 20px;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo">📝 Flow</div>
-    <div class="badge">Basic</div>
-  </div>
-  
-  <div class="welcome">
-    <h1>Welcome back, Tao</h1>
-  </div>
-  
-  <div class="stats">
-    <div class="stat">
-      <span>🔥</span>
-      <span>4 weeks</span>
-    </div>
-    <div class="stat">
-      <span>🎯</span>
-      <span>164 words</span>
-    </div>
-    <div class="stat">
-      <span>⚡</span>
-      <span>46 WPM</span>
-    </div>
-  </div>
-  
-  <div class="feature-section">
-    <div class="feature-title">Voice dictation in any app</div>
-    <div class="feature-description">Hold down the trigger keys Ctrl + Opt and speak into any textbox</div>
-    <button class="btn" onclick="exploreUseCases()">Explore use cases</button>
-  </div>
-  
-  <div class="recent-activity">
-  </div>
-  
   <div class="sidebar">
-    <div class="sidebar-item" onclick="openSettings()">
-      <span>⚙️</span>
-      <span>Settings</span>
+    <div class="sidebar-header">
+      <div class="header">
+        <div class="logo">📝 Flow</div>
+        <div class="badge">Basic</div>
+      </div>
     </div>
-    <div class="sidebar-item">
-      <span>👥</span>
-      <span>Add your team</span>
+    
+    <div class="sidebar-nav">
+      <button class="nav-item active">
+        <span class="nav-item-icon">🏠</span>
+        <span>Home</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-item-icon">📚</span>
+        <span>Dictionary</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-item-icon">📝</span>
+        <span>Notes</span>
+      </button>
     </div>
-    <div class="sidebar-item">
-      <span>❓</span>
-      <span>Help</span>
+    
+    <div class="sidebar-footer">
+      <div class="upgrade-section">
+        <div class="upgrade-title">
+          <span>✨</span>
+          Try Flow Pro
+        </div>
+        <div class="upgrade-description">
+          Upgrade for unlimited dictation and other pro features
+        </div>
+        <button class="learn-more-btn">Learn more</button>
+      </div>
+      
+      <button class="nav-item" onclick="openSettings()">
+        <span class="nav-item-icon">⚙️</span>
+        <span>Settings</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-item-icon">👥</span>
+        <span>Add your team</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-item-icon">💝</span>
+        <span>Refer a friend</span>
+      </button>
+      <button class="nav-item">
+        <span class="nav-item-icon">❓</span>
+        <span>Help</span>
+      </button>
+    </div>
+  </div>
+  
+  <div class="main-content">
+    <div class="welcome">
+      <h1>Welcome back, Tao</h1>
+    </div>
+    
+    <div class="stats">
+      <div class="stat">
+        <span>🔥</span>
+        <span>4 weeks</span>
+      </div>
+      <div class="stat">
+        <span>🎯</span>
+        <span>164 words</span>
+      </div>
+      <div class="stat">
+        <span>⚡</span>
+        <span>46 WPM</span>
+      </div>
+    </div>
+    
+    <div class="feature-section">
+      <div class="feature-title">Voice dictation in any app</div>
+      <div class="feature-description">Hold down the trigger keys Ctrl + Opt and speak into any textbox</div>
+      <button class="btn" onclick="exploreUseCases()">Explore use cases</button>
+    </div>
+    
+    <div class="recent-activity">
+      <h3>Recent activity</h3>
+      <div class="section-header">
+        <h4>TODAY</h4>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">08:13 PM</div>
+        <div class="activity-text">这样的话就做好到我们不需要API key管理哪 在你完成的代码里面 是吧</div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">08:12 PM</div>
+        <div class="activity-text">我需要你做一个智能页面版已来联系最装上面有一个主录音按钮这个点一下就录音再点一下就停止录音然后正在做音乐室然后要通过这个recording通过API然后上面已经设置了一个API Key上面通过设置一个API key你现在通过这个请求API上面好路了</div>
+      </div>
+      
+      <div class="section-header">
+        <h4>YESTERDAY</h4>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">11:39 AM</div>
+        <div class="activity-text">Audio is silent. 🔇</div>
+      </div>
+      
+      <div class="section-header">
+        <h4>JULY 2, 2025</h4>
+      </div>
     </div>
   </div>
 
