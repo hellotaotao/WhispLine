@@ -1,0 +1,50 @@
+{
+  "name": "fluid-input",
+  "version": "1.0.0",
+  "description": "Voice input method software built with Electron",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "electron",
+    "voice",
+    "input",
+    "transcription"
+  ],
+  "author": "Tao",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "groq-sdk": "^0.3.0",
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.tao.fluidinput",
+    "productName": "FluidInput",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
