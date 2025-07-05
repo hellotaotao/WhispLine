@@ -1,33 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Settings - FluidInput</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        sans-serif;
       margin: 0;
       padding: 0;
       background: #f5f5f5;
     }
-    
+
     .container {
       display: flex;
       height: 100vh;
     }
-    
+
     .sidebar {
       width: 250px;
       background: white;
       border-right: 1px solid #e0e0e0;
       padding: 20px 0;
     }
-    
+
     .sidebar-section {
       margin-bottom: 30px;
     }
-    
+
     .sidebar-title {
       color: #999;
       font-size: 12px;
@@ -37,7 +38,7 @@
       margin-bottom: 10px;
       padding: 0 20px;
     }
-    
+
     .sidebar-item {
       display: flex;
       align-items: center;
@@ -48,46 +49,46 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    
+
     .sidebar-item:hover {
       background: #f8f8f8;
     }
-    
+
     .sidebar-item.active {
       background: #e8f4fd;
       color: #1976d2;
       border-right: 3px solid #1976d2;
     }
-    
+
     .sidebar-item-icon {
       margin-right: 12px;
       font-size: 16px;
     }
-    
+
     .main-content {
       flex: 1;
       padding: 40px;
     }
-    
+
     .content-header {
       margin-bottom: 30px;
     }
-    
+
     .content-title {
       font-size: 24px;
       font-weight: 600;
       color: #333;
       margin-bottom: 8px;
     }
-    
+
     .setting-group {
       background: white;
       border-radius: 8px;
       padding: 24px;
       margin-bottom: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
-    
+
     .setting-item {
       display: flex;
       align-items: center;
@@ -95,31 +96,31 @@
       padding: 16px 0;
       border-bottom: 1px solid #f0f0f0;
     }
-    
+
     .setting-item:last-child {
       border-bottom: none;
     }
-    
+
     .setting-info {
       flex: 1;
     }
-    
+
     .setting-title {
       font-size: 16px;
       font-weight: 500;
       color: #333;
       margin-bottom: 4px;
     }
-    
+
     .setting-description {
       font-size: 14px;
       color: #666;
     }
-    
+
     .setting-control {
       margin-left: 20px;
     }
-    
+
     .btn {
       background: #1976d2;
       border: none;
@@ -131,20 +132,20 @@
       cursor: pointer;
       transition: all 0.2s;
     }
-    
+
     .btn:hover {
       background: #1565c0;
     }
-    
+
     .btn-secondary {
       background: #f5f5f5;
       color: #333;
     }
-    
+
     .btn-secondary:hover {
       background: #e0e0e0;
     }
-    
+
     .input {
       padding: 8px 12px;
       border: 1px solid #ddd;
@@ -152,13 +153,13 @@
       font-size: 14px;
       width: 200px;
     }
-    
+
     .input:focus {
       outline: none;
       border-color: #1976d2;
       box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
     }
-    
+
     .save-section {
       display: flex;
       justify-content: flex-end;
@@ -167,13 +168,37 @@
       padding-top: 20px;
       border-top: 1px solid #e0e0e0;
     }
-    
+
     .version-info {
       position: absolute;
       bottom: 20px;
       left: 20px;
       font-size: 12px;
       color: #999;
+    }
+
+    .permission-status {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #f5f5f5;
+    }
+
+    .permission-status.granted {
+      background: #e8f5e8;
+      color: #2e7d2e;
+    }
+
+    .permission-status.denied {
+      background: #ffe6e6;
+      color: #d32f2f;
+    }
+
+    .permission-status.unknown {
+      background: #fff3cd;
+      color: #856404;
     }
   </style>
 </head>
@@ -195,7 +220,7 @@
           Personalization
         </div>
       </div>
-      
+
       <div class="sidebar-section">
         <div class="sidebar-title">Account</div>
         <div class="sidebar-item" data-section="account">
@@ -215,109 +240,191 @@
           Data and Privacy
         </div>
       </div>
-      
-      <div class="version-info">
-        Flow v1.3.178
-      </div>
+
+      <div class="version-info">Flow v1.3.178</div>
     </div>
-    
+
     <div class="main-content">
       <div class="content-header">
         <h1 class="content-title">Defaults</h1>
       </div>
-      
+
       <div class="setting-group">
         <div class="setting-item">
           <div class="setting-info">
             <div class="setting-title">Set default keyboard shortcuts</div>
-            <div class="setting-description">Choose your preferred keyboard shortcuts for using Flow.</div>
+            <div class="setting-description">
+              Choose your preferred keyboard shortcuts for using Flow.
+            </div>
           </div>
           <div class="setting-control">
-            <button class="btn btn-secondary" id="changeShortcut">Change shortcut</button>
+            <button class="btn btn-secondary" id="changeShortcut">
+              Change shortcut
+            </button>
           </div>
         </div>
-        
+
         <div class="setting-item">
           <div class="setting-info">
             <div class="setting-title">Set default microphone</div>
-            <div class="setting-description">Choose your preferred microphone for Flow to capture your voice.</div>
+            <div class="setting-description">
+              Choose your preferred microphone for Flow to capture your voice.
+            </div>
           </div>
           <div class="setting-control">
-            <button class="btn btn-secondary" id="selectMicrophone">Select microphone</button>
+            <button class="btn btn-secondary" id="selectMicrophone">
+              Select microphone
+            </button>
           </div>
         </div>
-        
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-title">Microphone Permission</div>
+            <div class="setting-description">
+              Current status of microphone access permission.
+            </div>
+          </div>
+          <div class="setting-control">
+            <div id="permissionStatus" class="permission-status">
+              Checking...
+            </div>
+            <button class="btn btn-secondary" id="checkPermission">
+              Check Permission
+            </button>
+          </div>
+        </div>
+
         <div class="setting-item">
           <div class="setting-info">
             <div class="setting-title">Set default language(s)</div>
-            <div class="setting-description">Choose one or several default language for dictation.</div>
+            <div class="setting-description">
+              Choose one or several default language for dictation.
+            </div>
           </div>
           <div class="setting-control">
-            <button class="btn btn-secondary" id="setLanguages">Set languages</button>
+            <button class="btn btn-secondary" id="setLanguages">
+              Set languages
+            </button>
           </div>
         </div>
-        
+
         <div class="setting-item">
           <div class="setting-info">
             <div class="setting-title">API Key</div>
-            <div class="setting-description">Enter your Groq API key for transcription services.</div>
+            <div class="setting-description">
+              Enter your Groq API key for transcription services.
+            </div>
           </div>
           <div class="setting-control">
-            <input type="password" class="input" id="apiKey" placeholder="Enter API key">
+            <input
+              type="password"
+              class="input"
+              id="apiKey"
+              placeholder="Enter API key"
+            />
           </div>
         </div>
       </div>
-      
+
       <div class="save-section">
-        <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+        <button class="btn btn-secondary" onclick="closeSettings()">
+          Cancel
+        </button>
         <button class="btn" onclick="saveSettings()">Save Settings</button>
       </div>
     </div>
   </div>
 
   <script>
-    const { ipcRenderer } = require('electron');
-    
+    const { ipcRenderer } = require("electron");
+    const PermissionManager = require("../permission-manager");
+
     let currentSettings = {};
-    
+    let permissionManager = null;
+
     async function loadSettings() {
       try {
-        currentSettings = await ipcRenderer.invoke('get-settings');
-        document.getElementById('apiKey').value = currentSettings.apiKey || '';
+        currentSettings = await ipcRenderer.invoke("get-settings");
+        document.getElementById("apiKey").value =
+          currentSettings.apiKey || "";
+
+        // Initialize permission manager
+        if (!permissionManager) {
+          permissionManager = new PermissionManager();
+          await permissionManager.init();
+        }
+
+        // Check initial permission status
+        await checkPermissionStatus();
       } catch (error) {
-        console.error('Failed to load settings:', error);
+        console.error("Failed to load settings:", error);
       }
     }
-    
+
+    async function checkPermissionStatus() {
+      try {
+        const statusElement = document.getElementById("permissionStatus");
+        statusElement.textContent = "Checking...";
+        statusElement.className = "permission-status";
+
+        const result = await permissionManager.checkMicrophonePermission();
+        const statusText = permissionManager.getPermissionStatusText();
+
+        statusElement.textContent = statusText.status;
+        statusElement.className = `permission-status ${result.status}`;
+
+        if (result.status === "granted") {
+          statusElement.classList.add("granted");
+        } else if (result.status === "denied") {
+          statusElement.classList.add("denied");
+        } else {
+          statusElement.classList.add("unknown");
+        }
+      } catch (error) {
+        console.error("Failed to check permission:", error);
+        const statusElement = document.getElementById("permissionStatus");
+        statusElement.textContent = "❌ Error checking permission";
+        statusElement.className = "permission-status denied";
+      }
+    }
+
     async function saveSettings() {
       try {
         const settings = {
-          apiKey: document.getElementById('apiKey').value,
+          apiKey: document.getElementById("apiKey").value,
           shortcut: currentSettings.shortcut,
           language: currentSettings.language,
-          microphone: currentSettings.microphone
+          microphone: currentSettings.microphone,
         };
-        
-        await ipcRenderer.invoke('save-settings', settings);
+
+        await ipcRenderer.invoke("save-settings", settings);
         window.close();
       } catch (error) {
-        console.error('Failed to save settings:', error);
-        alert('Failed to save settings. Please try again.');
+        console.error("Failed to save settings:", error);
+        alert("Failed to save settings. Please try again.");
       }
     }
-    
+
     function closeSettings() {
       window.close();
     }
-    
+
     // Load settings when page loads
-    document.addEventListener('DOMContentLoaded', loadSettings);
-    
+    document.addEventListener("DOMContentLoaded", loadSettings);
+
+    // Permission check button
+    document
+      .getElementById("checkPermission")
+      .addEventListener("click", checkPermissionStatus);
+
     // Sidebar navigation
-    document.querySelectorAll('.sidebar-item').forEach(item => {
-      item.addEventListener('click', () => {
-        document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-        item.classList.add('active');
+    document.querySelectorAll(".sidebar-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        document
+          .querySelectorAll(".sidebar-item")
+          .forEach((i) => i.classList.remove("active"));
+        item.classList.add("active");
       });
     });
   </script>
