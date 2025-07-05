@@ -1,13 +1,19 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, screen, clipboard } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, screen, clipboard, dialog } = require('electron');
 const { exec } = require('child_process');
 const path = require('path');
 const Store = require('electron-store');
+const { uIOhook, UiohookKey } = require('uiohook-napi');
 
 const store = new Store();
 let mainWindow;
 let settingsWindow;
 let inputPromptWindow;
 let tray;
+
+// Key state tracking for hotkey combination
+let ctrlPressed = false;
+let shiftPressed = false;
+let isRecording = false;
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -131,19 +137,63 @@ function createTray() {
   }
 }
 
-function registerGlobalShortcuts() {
+function setupGlobalHotkeys() {
   try {
-    // Use a specific key combination for global shortcut
-    const shortcut = store.get('shortcut', 'CommandOrControl+Shift+Space');
-    
-    globalShortcut.register(shortcut, () => {
-      if (inputPromptWindow) {
-        inputPromptWindow.show();
-        inputPromptWindow.webContents.send('toggle-recording');
+    // Register keyboard event listeners
+    uIOhook.on('keydown', (e) => {
+      // Ctrl key (left or right)
+      if (e.keycode === UiohookKey.Ctrl || e.keycode === UiohookKey.CtrlR) {
+        ctrlPressed = true;
+      }
+      // Shift key (left or right)  
+      if (e.keycode === UiohookKey.Shift || e.keycode === UiohookKey.ShiftR) {
+        shiftPressed = true;
+      }
+      
+      // Start recording when both Ctrl+Shift are pressed
+      if (ctrlPressed && shiftPressed && !isRecording) {
+        isRecording = true;
+        if (inputPromptWindow) {
+          inputPromptWindow.show();
+          inputPromptWindow.webContents.send('start-recording');
+        }
       }
     });
+    
+    uIOhook.on('keyup', (e) => {
+      // Ctrl key released
+      if (e.keycode === UiohookKey.Ctrl || e.keycode === UiohookKey.CtrlR) {
+        ctrlPressed = false;
+      }
+      // Shift key released
+      if (e.keycode === UiohookKey.Shift || e.keycode === UiohookKey.ShiftR) {
+        shiftPressed = false;
+      }
+      
+      // Stop recording when either key is released
+      if ((!ctrlPressed || !shiftPressed) && isRecording) {
+        isRecording = false;
+        if (inputPromptWindow) {
+          inputPromptWindow.webContents.send('stop-recording');
+        }
+      }
+    });
+    
+    // Start the global hook
+    uIOhook.start();
+    console.log('Global hotkey listener started');
+    
   } catch (error) {
-    console.error('Failed to register global shortcut:', error);
+    console.error('Failed to setup global hotkeys:', error);
+  }
+}
+
+function stopGlobalHotkeys() {
+  try {
+    uIOhook.stop();
+    console.log('Global hotkey listener stopped');
+  } catch (error) {
+    console.error('Failed to stop global hotkeys:', error);
   }
 }
 
@@ -151,7 +201,7 @@ app.whenReady().then(() => {
   createMainWindow();
   createInputPromptWindow();
   createTray();
-  registerGlobalShortcuts();
+  setupGlobalHotkeys();
   
   // Show main window on startup
   mainWindow.show();
@@ -170,6 +220,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  stopGlobalHotkeys();
   globalShortcut.unregisterAll();
 });
 
@@ -177,7 +228,7 @@ app.on('will-quit', () => {
 ipcMain.handle('get-settings', () => {
   return {
     apiKey: store.get('apiKey', ''),
-    shortcut: store.get('shortcut', 'CommandOrControl+Shift+Space'),
+    shortcut: 'Ctrl+Shift (hold down)', // Fixed hotkey, not customizable
     language: store.get('language', 'en'),
     microphone: store.get('microphone', 'default')
   };
@@ -189,9 +240,8 @@ ipcMain.handle('save-settings', (event, settings) => {
   store.set('language', settings.language);
   store.set('microphone', settings.microphone);
   
-  // Re-register global shortcuts
-  globalShortcut.unregisterAll();
-  registerGlobalShortcuts();
+  // Note: uiohook doesn't need re-registration like globalShortcut
+  // The hotkey combination is hardcoded to Ctrl+Shift
   
   return true;
 });
@@ -241,25 +291,75 @@ ipcMain.handle('transcribe-audio', async (event, audioBuffer) => {
 });
 
 ipcMain.handle('type-text', async (event, text) => {
-  // On macOS, we can use AppleScript to type text
-  if (process.platform === 'darwin') {
-    return new Promise((resolve, reject) => {
-      // Escape the text for AppleScript
-      const escapedText = text.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
-      const script = `osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
-      
-      exec(script, (error, stdout, stderr) => {
-        if (error) {
-          console.error('Failed to type text:', error);
-          reject(error);
-        } else {
-          resolve(true);
-        }
-      });
-    });
-  } else {
-    // For other platforms, just copy to clipboard
+  try {
+    // Always copy to clipboard first as a reliable fallback
     clipboard.writeText(text);
-    return true;
+    
+    // On macOS, try to use AppleScript if accessibility is enabled
+    if (process.platform === 'darwin') {
+      try {
+        // Test if we have accessibility permissions first
+        const testScript = `osascript -e 'tell application "System Events" to return true'`;
+        
+        await new Promise((resolve, reject) => {
+          exec(testScript, (error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(true);
+            }
+          });
+        });
+        
+        // If test passes, try to type the text
+        const escapedText = text.replace(/"/g, '\\"').replace(/\\/g, '\\\\');
+        const script = `osascript -e 'tell application "System Events" to keystroke "${escapedText}"'`;
+        
+        await new Promise((resolve, reject) => {
+          exec(script, (error) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(true);
+            }
+          });
+        });
+        
+        return { success: true, method: 'typed' };
+        
+      } catch (appleScriptError) {
+        console.log('AppleScript not available, text copied to clipboard');
+        return { 
+          success: true, 
+          method: 'clipboard',
+          message: 'Text copied to clipboard. To enable auto-typing, grant accessibility permissions in System Preferences > Security & Privacy > Accessibility.'
+        };
+      }
+    } else {
+      // For other platforms, clipboard is the primary method
+      return { success: true, method: 'clipboard' };
+    }
+  } catch (error) {
+    console.error('Failed to handle text:', error);
+    throw error;
   }
+});
+
+ipcMain.handle('show-permission-dialog', async () => {
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Accessibility Permission Required',
+    message: 'To enable automatic text typing, FluidInput needs accessibility permissions.',
+    detail: 'Please go to System Preferences > Security & Privacy > Privacy > Accessibility and add FluidInput to the list of allowed applications.',
+    buttons: ['Open System Preferences', 'Continue with Clipboard Only', 'Cancel'],
+    defaultId: 0,
+    cancelId: 2
+  });
+  
+  if (result.response === 0) {
+    // Open System Preferences
+    exec('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+  }
+  
+  return result.response;
 });
