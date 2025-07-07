@@ -39,7 +39,16 @@
       "assets/**/*"
     ],
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "FluidInput needs microphone access to transcribe your voice input.",
+        "NSAppleEventsUsageDescription": "FluidInput needs Apple Events access to insert text into other applications.",
+        "NSSystemAdministrationUsageDescription": "FluidInput needs system administration access for global keyboard shortcuts."
+      }
     },
     "win": {
       "target": "nsis"
