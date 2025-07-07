@@ -8,6 +8,7 @@ const {
   screen,
   clipboard,
   dialog,
+  systemPreferences,
 } = require("electron");
 const { exec } = require("child_process");
 const path = require("path");
@@ -20,6 +21,7 @@ let settingsWindow;
 let inputPromptWindow;
 let tray;
 let hookStarted = false; // Track if hook is started
+let isDevelopment = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
 
 // Key state tracking for hotkey combination
 let ctrlPressed = false;
@@ -168,6 +170,16 @@ function setupGlobalHotkeys() {
       stopGlobalHotkeys();
     }
 
+    // Check accessibility permission before starting (skip in dev mode)
+    if (process.platform === "darwin" && !isDevelopment && !systemPreferences.isTrustedAccessibilityClient(false)) {
+      console.error("Accessibility permission not granted, cannot start global hotkeys");
+      dialog.showErrorBox(
+        "Permission Required", 
+        "Accessibility permission is required for global keyboard shortcuts. Please restart the app after granting permission."
+      );
+      return;
+    }
+
     // Register keyboard event listeners
     uIOhook.on("keydown", (e) => {
       // Ctrl key (left or right)
@@ -211,6 +223,12 @@ function setupGlobalHotkeys() {
     // Add error handler for uiohook
     uIOhook.on("error", (error) => {
       console.error("uIOhook error:", error);
+      if (error.message && error.message.includes("accessibility")) {
+        dialog.showErrorBox(
+          "Accessibility Permission Error",
+          "Global keyboard shortcuts require accessibility permission. Please grant permission in System Preferences and restart the app."
+        );
+      }
     });
 
     // Start the global hook
@@ -220,6 +238,13 @@ function setupGlobalHotkeys() {
   } catch (error) {
     console.error("Failed to setup global hotkeys:", error);
     hookStarted = false;
+    
+    if (process.platform === "darwin" && error.message && error.message.includes("accessibility")) {
+      dialog.showErrorBox(
+        "Permission Error",
+        "Global keyboard shortcuts require accessibility permission. Please grant permission in System Preferences and restart the app."
+      );
+    }
   }
 }
 
@@ -277,7 +302,93 @@ function cleanupOrphanedProcesses() {
   }
 }
 
-app.whenReady().then(() => {
+// Check accessibility permissions on macOS
+async function checkAccessibilityPermissions() {
+  if (process.platform !== "darwin") {
+    return true; // Not needed on other platforms
+  }
+
+  // Skip strict permission check in development mode
+  if (isDevelopment) {
+    console.log("Development mode: skipping strict accessibility permission check");
+    return true;
+  }
+
+  try {
+    const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+    if (!hasPermission) {
+      const result = await dialog.showMessageBox(null, {
+        type: "warning",
+        title: "Accessibility Permission Required",
+        message: "FluidInput needs accessibility permission to capture global keyboard shortcuts.",
+        detail: "Please grant accessibility permission in System Preferences to use FluidInput.\n\nAfter granting permission, please restart the application.",
+        buttons: ["Open System Preferences", "Quit"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (result.response === 0) {
+        // Try to prompt for accessibility permission
+        systemPreferences.isTrustedAccessibilityClient(true);
+      }
+      
+      app.quit();
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Failed to check accessibility permissions:", error);
+    return false;
+  }
+}
+
+// Check microphone permissions
+async function checkMicrophonePermissions() {
+  if (process.platform === "darwin") {
+    try {
+      const status = systemPreferences.getMediaAccessStatus('microphone');
+      if (status !== 'granted' && !isDevelopment) {
+        const result = await dialog.showMessageBox(null, {
+          type: "info",
+          title: "Microphone Permission Required",
+          message: "FluidInput needs microphone access to transcribe your voice.",
+          detail: "Please grant microphone permission when prompted.",
+          buttons: ["Continue", "Quit"],
+          defaultId: 0,
+          cancelId: 1,
+        });
+
+        if (result.response === 1) {
+          app.quit();
+          return false;
+        }
+
+        // Request microphone access
+        try {
+          await systemPreferences.askForMediaAccess('microphone');
+        } catch (err) {
+          console.error("Failed to request microphone access:", err);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check microphone permissions:", error);
+    }
+  }
+  return true;
+}
+
+app.whenReady().then(async () => {
+  // Check permissions first
+  const hasAccessibilityPermission = await checkAccessibilityPermissions();
+  if (!hasAccessibilityPermission) {
+    return; // App will quit if permission denied
+  }
+
+  const hasMicrophonePermission = await checkMicrophonePermissions();
+  if (!hasMicrophonePermission) {
+    return; // App will quit if permission denied
+  }
+
   // Clean up any orphaned processes first
   cleanupOrphanedProcesses();
 
@@ -519,4 +630,49 @@ ipcMain.handle("show-permission-denied-dialog", async () => {
   }
 
   return result.response;
+});
+
+// Check accessibility permission status
+ipcMain.handle("check-accessibility-permission", async () => {
+  if (process.platform !== "darwin") {
+    return { granted: true, status: "not_required" };
+  }
+
+  try {
+    const granted = systemPreferences.isTrustedAccessibilityClient(false);
+    return {
+      granted,
+      status: granted ? "granted" : "denied",
+    };
+  } catch (error) {
+    console.error("Failed to check accessibility permission:", error);
+    return {
+      granted: false,
+      status: "error",
+      error: error.message,
+    };
+  }
+});
+
+// Request accessibility permission
+ipcMain.handle("request-accessibility-permission", async () => {
+  if (process.platform !== "darwin") {
+    return { granted: true, status: "not_required" };
+  }
+
+  try {
+    // This will prompt the user to grant accessibility permission
+    const granted = systemPreferences.isTrustedAccessibilityClient(true);
+    return {
+      granted,
+      status: granted ? "granted" : "prompt_shown",
+    };
+  } catch (error) {
+    console.error("Failed to request accessibility permission:", error);
+    return {
+      granted: false,
+      status: "error",
+      error: error.message,
+    };
+  }
 });
