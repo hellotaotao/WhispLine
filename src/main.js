@@ -21,7 +21,6 @@ let settingsWindow;
 let inputPromptWindow;
 let tray;
 let hookStarted = false; // Track if hook is started
-let isDevelopment = process.argv.includes('--dev') || process.env.NODE_ENV === 'development';
 
 // Key state tracking for hotkey combination
 let ctrlPressed = false;
@@ -144,9 +143,9 @@ function createTray() {
       },
       {
         label: "Quit",
-        click: () => {
+        click: async () => {
           app.isQuitting = true;
-          stopGlobalHotkeys(); // Stop hotkeys before quitting
+          await stopGlobalHotkeys(); // Stop hotkeys before quitting
           app.quit();
         },
       },
@@ -168,16 +167,6 @@ function setupGlobalHotkeys() {
     // Ensure any previous hook is stopped
     if (hookStarted) {
       stopGlobalHotkeys();
-    }
-
-    // Check accessibility permission before starting (skip in dev mode)
-    if (process.platform === "darwin" && !isDevelopment && !systemPreferences.isTrustedAccessibilityClient(false)) {
-      console.error("Accessibility permission not granted, cannot start global hotkeys");
-      dialog.showErrorBox(
-        "Permission Required", 
-        "Accessibility permission is required for global keyboard shortcuts. Please restart the app after granting permission."
-      );
-      return;
     }
 
     // Register keyboard event listeners
@@ -224,62 +213,88 @@ function setupGlobalHotkeys() {
     uIOhook.on("error", (error) => {
       console.error("uIOhook error:", error);
       if (error.message && error.message.includes("accessibility")) {
-        dialog.showErrorBox(
-          "Accessibility Permission Error",
-          "Global keyboard shortcuts require accessibility permission. Please grant permission in System Preferences and restart the app."
-        );
+        // Only show permission dialog when we actually encounter a permission error
+        showAccessibilityPermissionDialog();
       }
     });
 
     // Start the global hook
     uIOhook.start();
     hookStarted = true;
-    console.log("Global hotkey listener started");
+    console.log("Global hotkey listener started successfully");
   } catch (error) {
     console.error("Failed to setup global hotkeys:", error);
     hookStarted = false;
     
     if (process.platform === "darwin" && error.message && error.message.includes("accessibility")) {
-      dialog.showErrorBox(
-        "Permission Error",
-        "Global keyboard shortcuts require accessibility permission. Please grant permission in System Preferences and restart the app."
-      );
+      // Only show permission dialog when we actually encounter a permission error
+      showAccessibilityPermissionDialog();
     }
   }
 }
 
+// Show accessibility permission dialog only when needed
+async function showAccessibilityPermissionDialog() {
+  const result = await dialog.showMessageBox(null, {
+    type: "warning",
+    title: "Accessibility Permission Required",
+    message: "FluidInput needs accessibility permission to capture global keyboard shortcuts (Ctrl+Shift).",
+    detail: "Please grant accessibility permission in System Preferences to use global keyboard shortcuts.\n\nThe app will work with microphone-only mode if you prefer not to grant this permission.",
+    buttons: ["Open System Preferences", "Continue without shortcuts", "Quit"],
+    defaultId: 0,
+    cancelId: 2,
+  });
+
+  if (result.response === 0) {
+    // Open accessibility preferences
+    exec('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+  } else if (result.response === 2) {
+    app.quit();
+  }
+  // If result.response === 1, continue without global shortcuts
+}
+
 function stopGlobalHotkeys() {
   if (!hookStarted) {
-    return; // Already stopped or never started
+    return Promise.resolve(); // Already stopped or never started
   }
 
-  try {
-    console.log("Stopping global hotkey listener...");
-
-    // Remove all listeners first
-    uIOhook.removeAllListeners();
-
-    // Then stop the hook
-    uIOhook.stop();
-    hookStarted = false;
-    console.log("Global hotkey listener stopped successfully");
-  } catch (error) {
-    console.error("Failed to stop global hotkeys:", error);
-    hookStarted = false;
-
-    // Force cleanup if normal stop fails
+  return new Promise((resolve) => {
     try {
-      // Kill any remaining uiohook processes on macOS
-      if (process.platform === "darwin") {
-        exec('pkill -f "FluidInput Helper"', (err) => {
-          if (err) console.log("No FluidInput Helper processes found to kill");
-          else console.log("Force killed FluidInput Helper processes");
-        });
+      console.log("Stopping global hotkey listener...");
+
+      // Remove all listeners first
+      uIOhook.removeAllListeners();
+
+      // Then stop the hook
+      uIOhook.stop();
+      hookStarted = false;
+      console.log("Global hotkey listener stopped successfully");
+      
+      // Small delay to ensure cleanup completes
+      setTimeout(resolve, 100);
+    } catch (error) {
+      console.error("Failed to stop global hotkeys:", error);
+      hookStarted = false;
+
+      // Force cleanup if normal stop fails
+      try {
+        // Kill any remaining uiohook processes on macOS
+        if (process.platform === "darwin") {
+          exec('pkill -f "FluidInput Helper"', (err) => {
+            if (err) console.log("No FluidInput Helper processes found to kill");
+            else console.log("Force killed FluidInput Helper processes");
+            setTimeout(resolve, 100);
+          });
+        } else {
+          setTimeout(resolve, 100);
+        }
+      } catch (killError) {
+        console.error("Failed to force cleanup:", killError);
+        setTimeout(resolve, 100);
       }
-    } catch (killError) {
-      console.error("Failed to force cleanup:", killError);
     }
-  }
+  });
 }
 
 // Clean up any orphaned helper processes from previous runs
@@ -308,34 +323,38 @@ async function checkAccessibilityPermissions() {
     return true; // Not needed on other platforms
   }
 
-  // Skip strict permission check in development mode
-  if (isDevelopment) {
-    console.log("Development mode: skipping strict accessibility permission check");
-    return true;
-  }
-
   try {
+    // First check if we already have permission
     const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
-    if (!hasPermission) {
-      const result = await dialog.showMessageBox(null, {
-        type: "warning",
-        title: "Accessibility Permission Required",
-        message: "FluidInput needs accessibility permission to capture global keyboard shortcuts.",
-        detail: "Please grant accessibility permission in System Preferences to use FluidInput.\n\nAfter granting permission, please restart the application.",
-        buttons: ["Open System Preferences", "Quit"],
-        defaultId: 0,
-        cancelId: 1,
-      });
-
-      if (result.response === 0) {
-        // Try to prompt for accessibility permission
-        systemPreferences.isTrustedAccessibilityClient(true);
-      }
-      
-      app.quit();
-      return false;
+    if (hasPermission) {
+      console.log("Accessibility permission already granted");
+      return true;
     }
-    return true;
+
+    // Skip permission request in development mode
+    if (isDevelopment) {
+      console.log("Development mode: skipping accessibility permission check");
+      return true;
+    }
+
+    // Only show dialog if we don't have permission and not in dev mode
+    const result = await dialog.showMessageBox(null, {
+      type: "warning",
+      title: "Accessibility Permission Required",
+      message: "FluidInput needs accessibility permission to capture global keyboard shortcuts.",
+      detail: "Please grant accessibility permission in System Preferences to use FluidInput.\n\nAfter granting permission, please restart the application.",
+      buttons: ["Open System Preferences", "Quit"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    if (result.response === 0) {
+      // Try to prompt for accessibility permission
+      systemPreferences.isTrustedAccessibilityClient(true);
+    }
+    
+    app.quit();
+    return false;
   } catch (error) {
     console.error("Failed to check accessibility permissions:", error);
     return false;
@@ -347,7 +366,34 @@ async function checkMicrophonePermissions() {
   if (process.platform === "darwin") {
     try {
       const status = systemPreferences.getMediaAccessStatus('microphone');
-      if (status !== 'granted' && !isDevelopment) {
+      console.log("Microphone permission status:", status);
+      
+      if (status === 'granted') {
+        console.log("Microphone permission already granted");
+        return true;
+      }
+      
+      if (status === 'denied') {
+        const result = await dialog.showMessageBox(null, {
+          type: "warning",
+          title: "Microphone Permission Required",
+          message: "FluidInput needs microphone access to transcribe your voice.",
+          detail: "Please grant microphone permission in System Preferences > Privacy & Security > Microphone.",
+          buttons: ["Open System Preferences", "Quit"],
+          defaultId: 0,
+          cancelId: 1,
+        });
+
+        if (result.response === 0) {
+          // Open system preferences
+          exec('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"');
+        }
+        
+        app.quit();
+        return false;
+      }
+      
+      if (status === 'not-determined' && !isDevelopment) {
         const result = await dialog.showMessageBox(null, {
           type: "info",
           title: "Microphone Permission Required",
@@ -378,12 +424,7 @@ async function checkMicrophonePermissions() {
 }
 
 app.whenReady().then(async () => {
-  // Check permissions first
-  const hasAccessibilityPermission = await checkAccessibilityPermissions();
-  if (!hasAccessibilityPermission) {
-    return; // App will quit if permission denied
-  }
-
+  // Only check microphone permission at startup
   const hasMicrophonePermission = await checkMicrophonePermissions();
   if (!hasMicrophonePermission) {
     return; // App will quit if permission denied
@@ -405,9 +446,9 @@ app.whenReady().then(async () => {
           {
             label: "Quit FluidInput",
             accelerator: "Command+Q",
-            click: () => {
+            click: async () => {
               app.isQuitting = true;
-              stopGlobalHotkeys();
+              await stopGlobalHotkeys();
               app.quit();
             }
           }
@@ -439,24 +480,30 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("window-all-closed", () => {
+app.on("window-all-closed", async () => {
   // On macOS, don't quit when all windows are closed unless explicitly quitting
   if (process.platform !== "darwin" || app.isQuitting) {
-    stopGlobalHotkeys();
+    await stopGlobalHotkeys();
     app.quit();
   }
 });
 
-app.on("will-quit", () => {
-  stopGlobalHotkeys();
+app.on("will-quit", async (event) => {
+  event.preventDefault();
+  await stopGlobalHotkeys();
   globalShortcut.unregisterAll();
+  app.exit(0);
 });
 
-app.on("before-quit", (event) => {
-  // Mark that we're intentionally quitting
-  app.isQuitting = true;
-  // Additional cleanup before quit
-  stopGlobalHotkeys();
+app.on("before-quit", async (event) => {
+  if (!app.isQuitting) {
+    event.preventDefault();
+    // Mark that we're intentionally quitting
+    app.isQuitting = true;
+    // Additional cleanup before quit
+    await stopGlobalHotkeys();
+    app.quit();
+  }
 });
 
 // Handle process termination signals
