@@ -389,6 +389,35 @@ app.whenReady().then(async () => {
     return; // App will quit if permission denied
   }
 
+  // Set up macOS menu to handle Cmd+Q properly
+  if (process.platform === "darwin") {
+    const template = [
+      {
+        label: "FluidInput",
+        submenu: [
+          {
+            label: "About FluidInput",
+            role: "about"
+          },
+          {
+            type: "separator"
+          },
+          {
+            label: "Quit FluidInput",
+            accelerator: "Command+Q",
+            click: () => {
+              app.isQuitting = true;
+              stopGlobalHotkeys();
+              app.quit();
+            }
+          }
+        ]
+      }
+    ];
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  }
+
   // Clean up any orphaned processes first
   cleanupOrphanedProcesses();
 
@@ -411,9 +440,11 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  // Always quit on window close to prevent background processes
-  stopGlobalHotkeys();
-  app.quit();
+  // On macOS, don't quit when all windows are closed unless explicitly quitting
+  if (process.platform !== "darwin" || app.isQuitting) {
+    stopGlobalHotkeys();
+    app.quit();
+  }
 });
 
 app.on("will-quit", () => {
@@ -421,7 +452,9 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  // Mark that we're intentionally quitting
+  app.isQuitting = true;
   // Additional cleanup before quit
   stopGlobalHotkeys();
 });
