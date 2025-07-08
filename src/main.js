@@ -184,7 +184,7 @@ function setupGlobalHotkeys() {
       if (ctrlPressed && shiftPressed && !isRecording) {
         isRecording = true;
         if (inputPromptWindow) {
-          inputPromptWindow.show();
+          inputPromptWindow.showInactive();
           inputPromptWindow.webContents.send("start-recording");
         }
       }
