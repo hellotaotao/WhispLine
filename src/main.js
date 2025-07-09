@@ -12,10 +12,11 @@ const {
 } = require("electron");
 const { exec } = require("child_process");
 const path = require("path");
-const Store = require("electron-store");
+const { default: Store } = require("electron-store");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 
 const store = new Store();
+const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
 let mainWindow;
 let settingsWindow;
 let inputPromptWindow;
