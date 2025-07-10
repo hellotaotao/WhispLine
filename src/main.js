@@ -444,6 +444,16 @@ app.whenReady().then(async () => {
           type: "separator"
         },
         {
+          label: "Preferences...",
+          accelerator: process.platform === "darwin" ? "Command+," : "Ctrl+,",
+          click: () => {
+            createSettingsWindow();
+          }
+        },
+        {
+          type: "separator"
+        },
+        {
           label: "Quit FluidInput",
           accelerator: process.platform === "darwin" ? "Command+Q" : "Ctrl+Q",
           click: async () => {
@@ -480,6 +490,11 @@ app.whenReady().then(async () => {
     createInputPromptWindow();
     createTray();
     setupGlobalHotkeys();
+
+    // Register global shortcut for settings
+    globalShortcut.register(process.platform === "darwin" ? "Command+," : "Ctrl+,", () => {
+      createSettingsWindow();
+    });
 
     // Show main window on startup
     mainWindow.show();
