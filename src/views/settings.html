@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Settings - FluidInput</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -63,6 +64,22 @@
     .sidebar-item-icon {
       margin-right: 12px;
       font-size: 16px;
+    }
+
+    .material-icons {
+      font-family: 'Material Icons';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
     }
 
     .main-content {
@@ -208,40 +225,20 @@
       <div class="sidebar-section">
         <div class="sidebar-title">General</div>
         <div class="sidebar-item active" data-section="defaults">
-          <span class="sidebar-item-icon">⚙️</span>
+          <span class="sidebar-item-icon material-icons">tune</span>
           Defaults
         </div>
         <div class="sidebar-item" data-section="system">
-          <span class="sidebar-item-icon">💻</span>
+          <span class="sidebar-item-icon material-icons">computer</span>
           System
         </div>
         <div class="sidebar-item" data-section="personalization">
-          <span class="sidebar-item-icon">🎨</span>
+          <span class="sidebar-item-icon material-icons">palette</span>
           Personalization
         </div>
       </div>
 
-      <div class="sidebar-section">
-        <div class="sidebar-title">Account</div>
-        <div class="sidebar-item" data-section="account">
-          <span class="sidebar-item-icon">👤</span>
-          Account
-        </div>
-        <div class="sidebar-item" data-section="team">
-          <span class="sidebar-item-icon">👥</span>
-          Team
-        </div>
-        <div class="sidebar-item" data-section="billing">
-          <span class="sidebar-item-icon">💳</span>
-          Plans and Billing
-        </div>
-        <div class="sidebar-item" data-section="privacy">
-          <span class="sidebar-item-icon">🔒</span>
-          Data and Privacy
-        </div>
-      </div>
-
-      <div class="version-info">Flow v1.3.178</div>
+      <div class="version-info">FluidInput v1.0.0</div>
     </div>
 
     <div class="main-content">
@@ -254,7 +251,7 @@
           <div class="setting-info">
             <div class="setting-title">Set default keyboard shortcuts</div>
             <div class="setting-description">
-              Choose your preferred keyboard shortcuts for using Flow.
+              Choose your preferred keyboard shortcuts for voice input.
             </div>
           </div>
           <div class="setting-control">
@@ -268,7 +265,7 @@
           <div class="setting-info">
             <div class="setting-title">Set default microphone</div>
             <div class="setting-description">
-              Choose your preferred microphone for Flow to capture your voice.
+              Choose your preferred microphone for voice input.
             </div>
           </div>
           <div class="setting-control">
