@@ -11,7 +11,8 @@
       "Bash(pbpaste:*)",
       "Bash(osascript:*)",
       "Bash(node:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

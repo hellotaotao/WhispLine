@@ -280,17 +280,17 @@ class PermissionManager {
   getPermissionStatusText() {
     switch (this.microphonePermission) {
       case 'granted':
-        return { status: '✅ 麦克风权限已授予', color: 'green' };
+        return { status: '✅ Microphone access granted', color: 'green' };
       case 'denied':
-        return { status: '❌ 麦克风权限被拒绝', color: 'red' };
+        return { status: '❌ Microphone access denied', color: 'red' };
       case 'prompt':
-        return { status: '⏳ 需要麦克风权限', color: 'orange' };
+        return { status: '⏳ Microphone permission required', color: 'orange' };
       case 'no-device':
-        return { status: '🎤 未找到麦克风设备', color: 'orange' };
+        return { status: '🎤 No microphone device found', color: 'orange' };
       case 'unsupported':
-        return { status: '⚠️ 浏览器不支持麦克风', color: 'red' };
+        return { status: '⚠️ Microphone not supported by browser', color: 'red' };
       default:
-        return { status: '❓ 麦克风权限状态未知', color: 'gray' };
+        return { status: '❓ Unknown microphone permission status', color: 'gray' };
     }
   }
 }
