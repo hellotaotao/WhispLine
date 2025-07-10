@@ -431,34 +431,45 @@ app.whenReady().then(async () => {
     return; // App will quit if permission denied
   }
 
-  // Set up macOS menu to handle Cmd+Q properly
-  if (process.platform === "darwin") {
-    const template = [
-      {
-        label: "FluidInput",
-        submenu: [
-          {
-            label: "About FluidInput",
-            role: "about"
-          },
-          {
-            type: "separator"
-          },
-          {
-            label: "Quit FluidInput",
-            accelerator: "Command+Q",
-            click: async () => {
-              app.isQuitting = true;
-              await stopGlobalHotkeys();
-              app.quit();
-            }
+  // Set up application menu to enable standard editing shortcuts
+  const template = [
+    {
+      label: "FluidInput",
+      submenu: [
+        {
+          label: "About FluidInput",
+          role: "about"
+        },
+        {
+          type: "separator"
+        },
+        {
+          label: "Quit FluidInput",
+          accelerator: process.platform === "darwin" ? "Command+Q" : "Ctrl+Q",
+          click: async () => {
+            app.isQuitting = true;
+            await stopGlobalHotkeys();
+            app.quit();
           }
-        ]
-      }
-    ];
-    const menu = Menu.buildFromTemplate(template);
-    Menu.setApplicationMenu(menu);
-  }
+        }
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectall" }
+      ]
+    }
+  ];
+  
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 
   // Clean up any orphaned processes first
   cleanupOrphanedProcesses();
