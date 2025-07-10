@@ -79,12 +79,13 @@
       word-wrap: normal;
       direction: ltr;
       -webkit-font-feature-settings: 'liga';
+      font-feature-settings: 'liga';
       -webkit-font-smoothing: antialiased;
     }
 
     .main-content {
       flex: 1;
-      padding: 40px;
+      padding: 40px 40px 60px 40px;
     }
 
     .content-header {
@@ -177,13 +178,21 @@
       box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
     }
 
+    .language-select {
+      width: 200px;
+    }
+
+    .api-key-input {
+      font-family: monospace;
+      letter-spacing: 1px;
+    }
+
     .save-section {
       display: flex;
       justify-content: flex-end;
       gap: 12px;
       margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #e0e0e0;
+      margin-bottom: 30px;
     }
 
     .version-info {
@@ -294,15 +303,96 @@
 
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Set default language(s)</div>
+            <div class="setting-title">Set default language</div>
             <div class="setting-description">
-              Choose one or several default language for dictation.
+              Choose the default language for voice transcription.
             </div>
           </div>
           <div class="setting-control">
-            <button class="btn btn-secondary" id="setLanguages">
-              Set languages
-            </button>
+            <select class="input language-select" id="languageSelect" title="Select default language for transcription">
+              <option value="auto">Auto-detect</option>
+              <option value="en">English</option>
+              <option value="zh">中文 (Chinese)</option>
+              <option value="ja">日本語 (Japanese)</option>
+              <option value="ko">한국어 (Korean)</option>
+              <option value="es">Español (Spanish)</option>
+              <option value="fr">Français (French)</option>
+              <option value="de">Deutsch (German)</option>
+              <option value="it">Italiano (Italian)</option>
+              <option value="pt">Português (Portuguese)</option>
+              <option value="ru">Русский (Russian)</option>
+              <option value="ar">العربية (Arabic)</option>
+              <option value="hi">हिन्दी (Hindi)</option>
+              <option value="th">ไทย (Thai)</option>
+              <option value="vi">Tiếng Việt (Vietnamese)</option>
+              <option value="nl">Nederlands (Dutch)</option>
+              <option value="pl">Polski (Polish)</option>
+              <option value="sv">Svenska (Swedish)</option>
+              <option value="da">Dansk (Danish)</option>
+              <option value="no">Norsk (Norwegian)</option>
+              <option value="fi">Suomi (Finnish)</option>
+              <option value="tr">Türkçe (Turkish)</option>
+              <option value="he">עברית (Hebrew)</option>
+              <option value="cs">Čeština (Czech)</option>
+              <option value="sk">Slovenčina (Slovak)</option>
+              <option value="uk">Українська (Ukrainian)</option>
+              <option value="bg">Български (Bulgarian)</option>
+              <option value="hr">Hrvatski (Croatian)</option>
+              <option value="sr">Српски (Serbian)</option>
+              <option value="sl">Slovenščina (Slovenian)</option>
+              <option value="et">Eesti (Estonian)</option>
+              <option value="lv">Latviešu (Latvian)</option>
+              <option value="lt">Lietuvių (Lithuanian)</option>
+              <option value="ro">Română (Romanian)</option>
+              <option value="hu">Magyar (Hungarian)</option>
+              <option value="mt">Malti (Maltese)</option>
+              <option value="is">Íslenska (Icelandic)</option>
+              <option value="ga">Gaeilge (Irish)</option>
+              <option value="cy">Cymraeg (Welsh)</option>
+              <option value="eu">Euskera (Basque)</option>
+              <option value="ca">Català (Catalan)</option>
+              <option value="gl">Galego (Galician)</option>
+              <option value="af">Afrikaans</option>
+              <option value="sw">Kiswahili (Swahili)</option>
+              <option value="am">አማርኛ (Amharic)</option>
+              <option value="az">Azərbaycan (Azerbaijani)</option>
+              <option value="be">Беларуская (Belarusian)</option>
+              <option value="bn">বাংলা (Bengali)</option>
+              <option value="bs">Bosanski (Bosnian)</option>
+              <option value="my">မြန်မာ (Burmese)</option>
+              <option value="km">ខ្មែរ (Khmer)</option>
+              <option value="ka">ქართული (Georgian)</option>
+              <option value="gu">ગુજરાતી (Gujarati)</option>
+              <option value="ha">Hausa</option>
+              <option value="haw">ʻŌlelo Hawaiʻi (Hawaiian)</option>
+              <option value="id">Bahasa Indonesia (Indonesian)</option>
+              <option value="jw">Basa Jawa (Javanese)</option>
+              <option value="kn">ಕನ್ನಡ (Kannada)</option>
+              <option value="kk">Қазақ (Kazakh)</option>
+              <option value="ky">Кыргыз (Kyrgyz)</option>
+              <option value="lo">ລາວ (Lao)</option>
+              <option value="mk">Македонски (Macedonian)</option>
+              <option value="ml">മലയാളം (Malayalam)</option>
+              <option value="mr">मराठी (Marathi)</option>
+              <option value="mn">Монгол (Mongolian)</option>
+              <option value="ne">नेपाली (Nepali)</option>
+              <option value="ps">پښتو (Pashto)</option>
+              <option value="fa">فارسی (Persian)</option>
+              <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+              <option value="si">සිංහල (Sinhala)</option>
+              <option value="sd">سنڌي (Sindhi)</option>
+              <option value="so">Soomaali (Somali)</option>
+              <option value="su">Basa Sunda (Sundanese)</option>
+              <option value="tg">Тоҷикӣ (Tajik)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="tt">Татар (Tatar)</option>
+              <option value="te">తెలుగు (Telugu)</option>
+              <option value="tk">Türkmen (Turkmen)</option>
+              <option value="ur">اردو (Urdu)</option>
+              <option value="ug">ئۇيغۇر (Uyghur)</option>
+              <option value="uz">O'zbek (Uzbek)</option>
+              <option value="yo">Yorùbá (Yoruba)</option>
+            </select>
           </div>
         </div>
 
@@ -316,10 +406,9 @@
           <div class="setting-control">
             <input
               type="text"
-              class="input"
+              class="input api-key-input"
               id="apiKey"
               placeholder="Enter API key"
-              style="font-family: monospace; letter-spacing: 1px;"
             />
           </div>
         </div>
@@ -329,7 +418,7 @@
         <button class="btn btn-secondary" onclick="closeSettings()">
           Cancel
         </button>
-        <button class="btn" onclick="saveSettings()">Save Settings</button>
+        <button class="btn" onclick="saveSettings()">Save</button>
       </div>
     </div>
   </div>
@@ -346,6 +435,12 @@
         currentSettings = await ipcRenderer.invoke("get-settings");
         document.getElementById("apiKey").value =
           currentSettings.apiKey || "";
+        
+        // Set the selected language
+        const languageSelect = document.getElementById("languageSelect");
+        if (currentSettings.language) {
+          languageSelect.value = currentSettings.language;
+        }
 
         // Initialize permission manager
         if (!permissionManager) {
@@ -392,7 +487,7 @@
         const settings = {
           apiKey: document.getElementById("apiKey").value,
           shortcut: currentSettings.shortcut,
-          language: currentSettings.language,
+          language: document.getElementById("languageSelect").value,
           microphone: currentSettings.microphone,
         };
 
