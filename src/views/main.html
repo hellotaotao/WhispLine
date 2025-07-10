@@ -370,39 +370,60 @@
 
     <div class="recent-activity">
       <h3>Recent activity</h3>
-      <div class="section-header">
-        <h4>TODAY</h4>
-      </div>
-      <div class="activity-item">
-        <div class="activity-time">08:13 PM</div>
-        <div class="activity-text">
-          这样的话就做好到我们不需要API key管理哪 在你完成的代码里面 是吧
-        </div>
-      </div>
-      <div class="activity-item">
-        <div class="activity-time">08:12 PM</div>
-        <div class="activity-text">
-          我需要你做一个智能页面版已来联系最装上面有一个主录音按钮这个点一下就录音再点一下就停止录音然后正在做音乐室然后要通过这个recording通过API然后上面已经设置了一个API
-          Key上面通过设置一个API key你现在通过这个请求API上面好路了
-        </div>
-      </div>
-
-      <div class="section-header">
-        <h4>YESTERDAY</h4>
-      </div>
-      <div class="activity-item">
-        <div class="activity-time">11:39 AM</div>
-        <div class="activity-text">Audio is silent. 🔇</div>
-      </div>
-
-      <div class="section-header">
-        <h4>JULY 2, 2025</h4>
+      <div id="activity-container">
+        <!-- Activities will be loaded here -->
       </div>
     </div>
   </div>
 
   <script>
     const { ipcRenderer } = require("electron");
+
+    // Load activities when page loads
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadActivities();
+      
+      // Listen for activity updates from main process
+      ipcRenderer.on('activity-updated', async () => {
+        await loadActivities();
+      });
+    });
+
+    async function loadActivities() {
+      try {
+        const activities = await ipcRenderer.invoke("get-recent-activities");
+        displayActivities(activities);
+      } catch (error) {
+        console.error("Error loading activities:", error);
+      }
+    }
+
+    function displayActivities(activities) {
+      const container = document.getElementById('activity-container');
+      if (!container) return;
+
+      if (activities.length === 0) {
+        container.innerHTML = '<p>No recent activity</p>';
+        return;
+      }
+
+      let html = '<div class="section-header"><h4>RECENT</h4></div>';
+      activities.forEach(activity => {
+        const time = new Date(activity.timestamp).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true 
+        });
+        html += `
+          <div class="activity-item">
+            <div class="activity-time">${time}</div>
+            <div class="activity-text">${activity.text}</div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
 
     function exploreUseCases() {
       // Open use cases page or documentation

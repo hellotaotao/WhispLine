@@ -14,8 +14,10 @@ const { exec } = require("child_process");
 const path = require("path");
 const { default: Store } = require("electron-store");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
+const DatabaseManager = require("./database-manager");
 
 const store = new Store();
+const db = new DatabaseManager();
 const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
 let mainWindow;
 let settingsWindow;
@@ -614,9 +616,26 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
     // Clean up temp file
     fs.unlinkSync(tempFile);
 
+    // Save successful transcription to database
+    db.addActivity(transcription.text, true);
+
+    // Notify main window to update Recent Activity
+    if (mainWindow) {
+      mainWindow.webContents.send('activity-updated');
+    }
+
     return transcription.text;
   } catch (error) {
     console.error("Transcription error:", error);
+    
+    // Save failed transcription to database
+    db.addActivity(`Transcription failed: ${error.message}`, false, error.message);
+    
+    // Notify main window to update Recent Activity
+    if (mainWindow) {
+      mainWindow.webContents.send('activity-updated');
+    }
+    
     throw error;
   }
 });
@@ -870,6 +889,16 @@ ipcMain.handle("request-accessibility-permission", async () => {
       status: "error",
       error: error.message,
     };
+  }
+});
+
+// Get recent activities
+ipcMain.handle("get-recent-activities", async (event) => {
+  try {
+    return db.getActivities();
+  } catch (error) {
+    console.error("Error getting recent activities:", error);
+    return [];
   }
 });
 
