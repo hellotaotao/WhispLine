@@ -63,7 +63,7 @@ function createSettingsWindow() {
 
   settingsWindow = new BrowserWindow({
     width: 900,
-    height: 700,
+    height: 750,
     parent: mainWindow,
     modal: true,
     webPreferences: {
@@ -536,7 +536,7 @@ ipcMain.handle("get-settings", () => {
   return {
     apiKey: store.get("apiKey", ""),
     shortcut: "Ctrl+Shift (hold down)", // Fixed hotkey, not customizable
-    language: store.get("language", "en"),
+    language: store.get("language", "auto"),
     microphone: store.get("microphone", "default"),
   };
 });
@@ -576,16 +576,25 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
     }
 
     const groq = new Groq({ apiKey });
+    const language = store.get("language", "auto");
 
     // Save audio buffer to temporary file
     const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
     fs.writeFileSync(tempFile, audioBuffer);
 
-    const transcription = await groq.audio.transcriptions.create({
+    // Prepare transcription options
+    const transcriptionOptions = {
       file: fs.createReadStream(tempFile),
       model: "whisper-large-v3-turbo",
       response_format: "verbose_json",
-    });
+    };
+
+    // Only add language parameter if it's not "auto"
+    if (language !== "auto") {
+      transcriptionOptions.language = language;
+    }
+
+    const transcription = await groq.audio.transcriptions.create(transcriptionOptions);
 
     // Clean up temp file
     fs.unlinkSync(tempFile);
