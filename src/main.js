@@ -677,12 +677,8 @@ ipcMain.handle("type-text", async (event, text) => {
         clipboard.writeText(text);
         console.log("Text copied to clipboard:", JSON.stringify(text));
         
-        // Verify clipboard content
-        const clipboardCheck = clipboard.readText();
-        console.log("Clipboard verification:", JSON.stringify(clipboardCheck));
-        
-        // Try auto-paste
-        await performAutoPaste();
+        // Try text insertion
+        await performTextInsertion();
         
         // Restore original clipboard content after a short delay
         setTimeout(async () => {
@@ -691,23 +687,23 @@ ipcMain.handle("type-text", async (event, text) => {
         }, 500);
         
         // Provide user feedback based on clipboard complexity
-        let message = "Text pasted automatically (clipboard preserved).";
+        let message = "Text inserted automatically (clipboard preserved).";
         if (originalClipboardData.hasComplex || originalClipboardData.isComplexContent) {
-          message = "Text pasted automatically. Note: complex clipboard content may be partially restored.";
+          message = "Text inserted automatically. Note: complex clipboard content may be partially restored.";
         }
         
         return {
           success: true,
-          method: "clipboard_autopaste",
+          method: "clipboard_textinsert",
           message: message,
         };
-      } catch (pasteError) {
-        console.log("Auto-paste failed, user needs to paste manually:", pasteError.message);
+      } catch (insertError) {
+        console.log("Text insertion failed, user needs to paste manually:", insertError.message);
         
-        // If auto-paste failed, we should still restore clipboard
+        // If text insertion failed, we should still restore clipboard
         setTimeout(async () => {
           await restoreCompleteClipboard(originalClipboardData);
-          console.log("Original clipboard fully restored after paste failure");
+          console.log("Original clipboard fully restored after insertion failure");
         }, 100);
         
         return {
@@ -731,10 +727,9 @@ ipcMain.handle("type-text", async (event, text) => {
   }
 });
 
-// Function to perform automatic paste using keyboard shortcut
-async function performAutoPaste() {
+// Function to perform text insertion using keyboard shortcut
+async function performTextInsertion() {
   return new Promise((resolve, reject) => {
-    console.log("Performing auto-paste...");
     // AppleScript to simulate Cmd+V
     const script = `
       tell application "System Events"
@@ -745,14 +740,14 @@ async function performAutoPaste() {
     
     exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
       if (error) {
-        console.error("Auto-paste error:", error.message);
-        reject(new Error(`Auto-paste failed: ${error.message}`));
+        console.error("Text insertion error:", error.message);
+        reject(new Error(`Text insertion failed: ${error.message}`));
         return;
       }
       if (stderr) {
-        console.warn("Auto-paste stderr:", stderr);
+        console.warn("Text insertion stderr:", stderr);
       }
-      console.log("Auto-paste completed successfully");
+      console.log("Text insertion completed successfully");
       resolve();
     });
   });

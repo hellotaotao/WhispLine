@@ -484,9 +484,9 @@
               this.statusText.textContent = "Text typed directly";
               this.statusText.style.color = "#00ff00";
               setTimeout(() => this.hidePrompt(), 1500);
-            } else if (result.method === "clipboard_autopaste") {
-              console.log("Text auto-pasted successfully:", text);
-              this.statusText.textContent = result.message || "Text pasted automatically";
+            } else if (result.method === "clipboard_textinsert") {
+              console.log("Text inserted successfully:", text);
+              this.statusText.textContent = result.message || "Text inserted automatically";
               
               // Different colors based on message complexity
               if (result.message && result.message.includes("partially restored")) {
@@ -495,7 +495,7 @@
                 this.statusText.style.color = "#00ff00"; // Green for full restoration
               }
               
-              // Close immediately after successful paste
+              // Close immediately after successful insertion
               this.hidePrompt();
             } else if (result.method === "clipboard") {
               console.log("Text copied to clipboard:", text);
