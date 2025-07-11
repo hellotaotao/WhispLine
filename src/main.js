@@ -554,6 +554,7 @@ ipcMain.handle("get-settings", () => {
     apiKey: store.get("apiKey", ""),
     shortcut: "Ctrl+Shift (hold down)", // Fixed hotkey, not customizable
     language: store.get("language", "auto"),
+    model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
   };
 });
@@ -562,6 +563,7 @@ ipcMain.handle("save-settings", (event, settings) => {
   store.set("apiKey", settings.apiKey);
   store.set("shortcut", settings.shortcut);
   store.set("language", settings.language);
+  store.set("model", settings.model);
   store.set("microphone", settings.microphone);
 
   // Note: uiohook doesn't need re-registration like globalShortcut
@@ -594,6 +596,9 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
 
     const groq = new Groq({ apiKey });
     const language = store.get("language", "auto");
+    const model = store.get("model", "whisper-large-v3-turbo");
+
+    console.log(`🎙️  Using model: ${model} | Language: ${language}`);
 
     // Save audio buffer to temporary file
     const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
@@ -602,13 +607,19 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
     // Prepare transcription options
     const transcriptionOptions = {
       file: fs.createReadStream(tempFile),
-      model: "whisper-large-v3-turbo",
+      model: model,
       response_format: "verbose_json",
     };
 
     // Only add language parameter if it's not "auto"
     if (language !== "auto") {
       transcriptionOptions.language = language;
+    }
+
+    // Add dictionary prompt if available
+    const dictionary = store.get("dictionary", "");
+    if (dictionary.trim()) {
+      transcriptionOptions.prompt = dictionary;
     }
 
     const transcription = await groq.audio.transcriptions.create(transcriptionOptions);
@@ -623,6 +634,8 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
     if (mainWindow) {
       mainWindow.webContents.send('activity-updated');
     }
+
+    console.log(`✅ Transcription completed: "${transcription.text}"`);
 
     return transcription.text;
   } catch (error) {
@@ -899,6 +912,26 @@ ipcMain.handle("get-recent-activities", async (event) => {
   } catch (error) {
     console.error("Error getting recent activities:", error);
     return [];
+  }
+});
+
+// Dictionary-related IPC handlers
+ipcMain.handle("get-dictionary", async (event) => {
+  try {
+    return store.get("dictionary", "");
+  } catch (error) {
+    console.error("Error getting dictionary:", error);
+    return "";
+  }
+});
+
+ipcMain.handle("save-dictionary", async (event, text) => {
+  try {
+    store.set("dictionary", text);
+    return true;
+  } catch (error) {
+    console.error("Error saving dictionary:", error);
+    throw error;
   }
 });
 

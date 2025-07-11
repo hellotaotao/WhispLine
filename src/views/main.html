@@ -282,6 +282,115 @@
       font-size: 18px;
       margin-bottom: 20px;
     }
+
+    /* Page switching */
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    /* Dictionary styles */
+    .dictionary-section {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 40px;
+      margin-top: 30px;
+    }
+
+    .dictionary-form {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 30px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .dictionary-form label {
+      display: block;
+      margin-bottom: 15px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .dictionary-form textarea {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+      min-height: 150px;
+      box-sizing: border-box;
+    }
+
+    .dictionary-form textarea::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .dictionary-form textarea:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .dictionary-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .dictionary-help {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 30px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .dictionary-help h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+
+    .dictionary-help ul {
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.6;
+    }
+
+    .dictionary-help li {
+      margin-bottom: 8px;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .upgrade-icon {
+      font-size: 16px;
+      margin-right: 6px;
+    }
+
+    /* ...existing code... */
   </style>
 </head>
 <body>
@@ -294,11 +403,11 @@
     </div>
 
     <div class="sidebar-nav">
-      <button class="nav-item active">
+      <button class="nav-item active" onclick="showPage('home')">
         <span class="nav-item-icon material-icons">home</span>
         <span>Home</span>
       </button>
-      <button class="nav-item">
+      <button class="nav-item" onclick="showPage('dictionary')">
         <span class="nav-item-icon material-icons">book</span>
         <span>Dictionary</span>
       </button>
@@ -311,7 +420,7 @@
     <div class="sidebar-footer">
       <div class="upgrade-section">
         <div class="upgrade-title">
-          <span class="material-icons" style="font-size: 16px; margin-right: 6px;">workspace_premium</span>Upgrade to pro
+          <span class="material-icons upgrade-icon">workspace_premium</span>Upgrade to pro
         </div>
         <div class="upgrade-description">
           Upgrade for unlimited dictation and other pro features
@@ -339,39 +448,74 @@
   </div>
 
   <div class="main-content">
-    <div class="welcome">
-      <h1>Welcome to FluidInput</h1>
+    <!-- Home Page -->
+    <div id="home-page" class="page active">
+      <div class="welcome">
+        <h1>Welcome to FluidInput</h1>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span>🔥</span>
+          <span>4 weeks</span>
+        </div>
+        <div class="stat">
+          <span>🎯</span>
+          <span>164 words</span>
+        </div>
+        <div class="stat">
+          <span>⚡</span>
+          <span>46 WPM</span>
+        </div>
+      </div>
+
+      <div class="feature-section">
+        <div class="feature-title">Voice dictation in any app</div>
+        <div class="feature-description">
+          Hold down Ctrl + Shift and speak into any textbox
+        </div>
+        <button class="btn" onclick="exploreUseCases()">
+          Explore use cases
+        </button>
+      </div>
+
+      <div class="recent-activity">
+        <h3>Recent activity</h3>
+        <div id="activity-container">
+          <!-- Activities will be loaded here -->
+        </div>
+      </div>
     </div>
 
-    <div class="stats">
-      <div class="stat">
-        <span>🔥</span>
-        <span>4 weeks</span>
+    <!-- Dictionary Page -->
+    <div id="dictionary-page" class="page">
+      <div class="welcome">
+        <h1>Dictionary</h1>
+        <p>Add custom words and phrases to improve transcription accuracy</p>
       </div>
-      <div class="stat">
-        <span>🎯</span>
-        <span>164 words</span>
-      </div>
-      <div class="stat">
-        <span>⚡</span>
-        <span>46 WPM</span>
-      </div>
-    </div>
 
-    <div class="feature-section">
-      <div class="feature-title">Voice dictation in any app</div>
-      <div class="feature-description">
-        Hold down Ctrl + Shift and speak into any textbox
-      </div>
-      <button class="btn" onclick="exploreUseCases()">
-        Explore use cases
-      </button>
-    </div>
+      <div class="dictionary-section">
+        <div class="dictionary-form">
+          <label for="dictionary-text">Custom Dictionary Prompt:</label>
+          <textarea 
+            id="dictionary-text" 
+            placeholder="Enter custom words, phrases, or context to help improve transcription accuracy. For example: 'Technical terms: API, JSON, OAuth, WebSocket'"
+            rows="8"
+          ></textarea>
+          <div class="dictionary-actions">
+            <button class="btn" onclick="saveDictionary()">Save Dictionary</button>
+          </div>
+        </div>
 
-    <div class="recent-activity">
-      <h3>Recent activity</h3>
-      <div id="activity-container">
-        <!-- Activities will be loaded here -->
+        <div class="dictionary-help">
+          <h3>How to use the Dictionary</h3>
+          <ul>
+            <li>Add technical terms, proper nouns, or domain-specific vocabulary</li>
+            <li>Include context or examples for better recognition</li>
+            <li>Use clear, descriptive language</li>
+            <li>This content will be sent as a prompt to improve transcription accuracy</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -382,12 +526,58 @@
     // Load activities when page loads
     document.addEventListener('DOMContentLoaded', async () => {
       await loadActivities();
+      await loadDictionary();
       
       // Listen for activity updates from main process
       ipcRenderer.on('activity-updated', async () => {
         await loadActivities();
       });
     });
+
+    // Page switching
+    function showPage(pageId) {
+      // Hide all pages
+      document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+      });
+      
+      // Show selected page
+      document.getElementById(pageId + '-page').classList.add('active');
+      
+      // Update navigation
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      event.target.closest('.nav-item').classList.add('active');
+    }
+
+    // Load dictionary content
+    async function loadDictionary() {
+      try {
+        const dictionary = await ipcRenderer.invoke("get-dictionary");
+        document.getElementById('dictionary-text').value = dictionary || '';
+      } catch (error) {
+        console.error("Error loading dictionary:", error);
+      }
+    }
+
+    // Save dictionary
+    async function saveDictionary() {
+      const text = document.getElementById('dictionary-text').value;
+      try {
+        await ipcRenderer.invoke("save-dictionary", text);
+        // Show some feedback
+        const button = document.querySelector('.dictionary-actions .btn');
+        const originalText = button.textContent;
+        button.textContent = 'Saved!';
+        setTimeout(() => {
+          button.textContent = originalText;
+        }, 2000);
+      } catch (error) {
+        console.error("Error saving dictionary:", error);
+        alert('Error saving dictionary: ' + error.message);
+      }
+    }
 
     async function loadActivities() {
       try {

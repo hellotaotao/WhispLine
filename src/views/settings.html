@@ -182,6 +182,10 @@
       width: 200px;
     }
 
+    .model-select {
+      width: 250px;
+    }
+
     .api-key-input {
       font-family: monospace;
       letter-spacing: 1px;
@@ -412,6 +416,21 @@
             />
           </div>
         </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-title">Model Selection</div>
+            <div class="setting-description">
+              Choose between standard and Turbo models for transcription.
+            </div>
+          </div>
+          <div class="setting-control">
+            <select class="input model-select" id="modelSelect" title="Select transcription model">
+              <option value="whisper-large-v3">Whisper Large V3 (Standard)</option>
+              <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo (Faster)</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div class="save-section">
@@ -440,6 +459,12 @@
         const languageSelect = document.getElementById("languageSelect");
         if (currentSettings.language) {
           languageSelect.value = currentSettings.language;
+        }
+
+        // Set the selected model
+        const modelSelect = document.getElementById("modelSelect");
+        if (currentSettings.model) {
+          modelSelect.value = currentSettings.model;
         }
 
         // Initialize permission manager
@@ -488,6 +513,7 @@
           apiKey: document.getElementById("apiKey").value,
           shortcut: currentSettings.shortcut,
           language: document.getElementById("languageSelect").value,
+          model: document.getElementById("modelSelect").value,
           microphone: currentSettings.microphone,
         };
 
