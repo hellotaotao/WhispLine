@@ -579,8 +579,16 @@ ipcMain.handle("open-settings", () => {
 
 ipcMain.handle("hide-input-prompt", () => {
   if (inputPromptWindow) {
+    // Send cleanup signal to renderer process before hiding
+    inputPromptWindow.webContents.send("cleanup-microphone");
     inputPromptWindow.hide();
   }
+});
+
+ipcMain.handle("cleanup-microphone", () => {
+  // This handler is called when the renderer process needs to clean up microphone resources
+  console.log("Microphone cleanup requested from renderer process");
+  return true;
 });
 
 ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {

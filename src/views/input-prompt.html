@@ -227,6 +227,12 @@
           }
         });
 
+        // Listen for cleanup microphone signal
+        ipcRenderer.on("cleanup-microphone", () => {
+          console.log("Received cleanup signal from main process");
+          this.cleanup();
+        });
+
         // Legacy support for toggle recording
         ipcRenderer.on("toggle-recording", async () => {
           if (!this.isRecording) {
@@ -241,6 +247,11 @@
           if (e.key === "Escape" && this.isRecording) {
             this.stopRecording();
           }
+        });
+
+        // Add window beforeunload event to ensure cleanup
+        window.addEventListener("beforeunload", () => {
+          this.cleanup();
         });
       }
 
@@ -316,19 +327,65 @@
         this.promptText.textContent = "Processing...";
         this.statusText.textContent = "Transcribing audio...";
 
+        // Stop media recorder
         if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
           this.mediaRecorder.stop();
         }
 
-        if (this.mediaStream) {
-          this.mediaStream.getTracks().forEach((track) => track.stop());
-        }
-
-        if (this.audioContext) {
-          this.audioContext.close();
-        }
+        // Force cleanup of media stream and tracks
+        this.cleanup();
 
         this.stopWaveAnimation();
+      }
+
+      cleanup() {
+        console.log('Starting microphone cleanup...');
+        
+        // Stop all media tracks
+        if (this.mediaStream) {
+          console.log('Stopping media stream tracks...');
+          this.mediaStream.getTracks().forEach((track) => {
+            console.log(`Stopping track: ${track.kind}, state: ${track.readyState}`);
+            track.stop();
+            console.log(`Track stopped: ${track.kind}, new state: ${track.readyState}`);
+          });
+          this.mediaStream = null;
+          console.log('Media stream cleared');
+        }
+
+        // Close audio context
+        if (this.audioContext) {
+          console.log(`Closing audio context, current state: ${this.audioContext.state}`);
+          if (this.audioContext.state !== 'closed') {
+            this.audioContext.close().then(() => {
+              console.log('Audio context closed successfully');
+            }).catch(err => {
+              console.error('Error closing audio context:', err);
+            });
+          }
+          this.audioContext = null;
+        }
+
+        // Clean up media recorder
+        if (this.mediaRecorder) {
+          console.log('Cleaning up media recorder...');
+          this.mediaRecorder = null;
+        }
+
+        // Clean up analyser
+        if (this.analyser) {
+          console.log('Cleaning up analyser...');
+          this.analyser = null;
+        }
+        
+        if (this.dataArray) {
+          this.dataArray = null;
+        }
+
+        // Reset audio chunks
+        this.audioChunks = [];
+        
+        console.log('Microphone cleanup completed');
       }
 
       async processRecording() {
@@ -361,6 +418,9 @@
       async handlePermissionDenied(permissionResult) {
         this.isRecording = false;
 
+        // Force cleanup of resources
+        this.cleanup();
+
         const statusMessage =
           this.permissionManager.getPermissionStatusText();
         this.statusText.textContent = statusMessage.status;
@@ -388,6 +448,9 @@
 
       async handleRecordingError(error) {
         this.isRecording = false;
+
+        // Force cleanup of resources
+        this.cleanup();
 
         let errorMessage = "Recording failed";
 
@@ -509,6 +572,9 @@
       }
 
       hidePrompt() {
+        // Force cleanup of any remaining resources
+        this.cleanup();
+        
         this.promptElement.classList.remove("visible", "recording");
         this.transcriptionText.classList.remove("visible");
         this.promptText.textContent = "Hold Ctrl + Shift to start dictating";

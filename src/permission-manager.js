@@ -71,8 +71,9 @@ class PermissionManager {
    * Test microphone access by attempting to get media stream
    */
   async testMicrophoneAccess() {
+    let stream = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 44100,
           channelCount: 1,
@@ -81,13 +82,28 @@ class PermissionManager {
         }
       });
 
-      // Permission granted, clean up the stream
-      stream.getTracks().forEach(track => track.stop());
+      // Permission granted, clean up the stream immediately
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('Permission test track stopped:', track.kind, track.readyState);
+        });
+        stream = null;
+      }
+      
       this.microphonePermission = 'granted';
-
       return { granted: true, status: 'granted' };
 
     } catch (error) {
+      // Make sure to clean up in case of errors
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('Permission test track stopped (error):', track.kind, track.readyState);
+        });
+        stream = null;
+      }
+
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         this.microphonePermission = 'denied';
         return { granted: false, status: 'denied' };
