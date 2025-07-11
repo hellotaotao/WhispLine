@@ -119,6 +119,7 @@ function createInputPromptWindow() {
     show: false,
     transparent: true,
     hasShadow: false,
+    focusable: false,
   });
 
   inputPromptWindow.loadFile(path.join(__dirname, "views/input-prompt.html"));
@@ -729,7 +730,7 @@ async function performAutoPaste() {
     // AppleScript to simulate Cmd+V
     const script = `
       tell application "System Events"
-        delay 0.1
+        delay 0.05
         keystroke "v" using command down
       end tell
     `;

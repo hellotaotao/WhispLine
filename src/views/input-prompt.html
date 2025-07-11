@@ -345,7 +345,6 @@
           );
 
           if (transcription && transcription.trim()) {
-            this.showTranscription(transcription);
             this.typeText(transcription);
           } else {
             this.statusText.textContent = "No speech detected";
@@ -411,17 +410,6 @@
         setTimeout(() => this.hidePrompt(), 3000);
       }
 
-      showTranscription(text) {
-        this.transcriptionText.textContent = text;
-        this.transcriptionText.classList.add("visible");
-        this.promptText.textContent = "Transcribed:";
-        this.statusText.textContent = "";
-
-        setTimeout(() => {
-          this.hidePrompt();
-        }, 3000);
-      }
-
       async typeText(text) {
         // Send the transcribed text to the active application
         try {
@@ -444,7 +432,8 @@
                 this.statusText.style.color = "#00ff00"; // Green for full restoration
               }
               
-              setTimeout(() => this.hidePrompt(), result.message && result.message.includes("partially") ? 3000 : 1500);
+              // Close immediately after successful paste
+              this.hidePrompt();
             } else if (result.method === "clipboard") {
               console.log("Text copied to clipboard:", text);
               this.statusText.textContent = result.message || "Text copied - Press Cmd+V to paste";
