@@ -664,8 +664,6 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
 
 ipcMain.handle("type-text", async (event, text) => {
   try {
-    console.log("type-text called with:", JSON.stringify(text));
-    
     if (process.platform === "darwin") {
       // Use clipboard method with comprehensive preservation
       // Save all clipboard formats (text, image, files, etc.)
