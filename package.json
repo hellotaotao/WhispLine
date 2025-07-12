@@ -1,15 +1,15 @@
 {
   "name": "fluid-input",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build": "npm version patch --no-git-tag-version && electron-builder",
+    "build:mac": "npm version patch --no-git-tag-version && electron-builder --mac",
+    "build:win": "npm version patch --no-git-tag-version && electron-builder --win",
+    "build:linux": "npm version patch --no-git-tag-version && electron-builder --linux"
   },
   "keywords": [
     "electron",
