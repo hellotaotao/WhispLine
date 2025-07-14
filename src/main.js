@@ -168,6 +168,15 @@ function createTray() {
 
 function setupGlobalHotkeys() {
   try {
+    // Skip global hotkeys setup in development mode on macOS if no accessibility permission
+    if (process.platform === "darwin") {
+      const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+      if (!hasPermission) {
+        console.log("Development mode: skipping global hotkeys setup due to missing accessibility permission");
+        return;
+      }
+    }
+
     // Ensure any previous hook is stopped
     if (hookStarted) {
       stopGlobalHotkeys();
