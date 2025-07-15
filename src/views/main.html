@@ -212,7 +212,7 @@
       }
 
       let html = '<div class="section-header"><h4>RECENT</h4></div>';
-      activities.forEach(activity => {
+      activities.forEach((activity, index) => {
         const time = new Date(activity.timestamp).toLocaleTimeString('en-US', { 
           hour: '2-digit', 
           minute: '2-digit',
@@ -220,8 +220,13 @@
         });
         html += `
           <div class="activity-item">
-            <div class="activity-time">${time}</div>
-            <div class="activity-text">${activity.text}</div>
+            <div class="activity-content">
+              <div class="activity-time">${time}</div>
+              <div class="activity-text">${activity.text}</div>
+            </div>
+            <button class="copy-btn" onclick="copyToClipboard('${activity.text.replace(/'/g, "\\'")}', this)" title="Copy text">
+              <span class="material-icons">content_copy</span>
+            </button>
           </div>
         `;
       });
@@ -236,6 +241,36 @@
 
     function openSettings() {
       ipcRenderer.invoke("open-settings");
+    }
+
+    async function copyToClipboard(text, button) {
+      try {
+        await navigator.clipboard.writeText(text);
+        
+        // Show feedback
+        const icon = button.querySelector('.material-icons');
+        const originalText = icon.textContent;
+        icon.textContent = 'check';
+        button.style.color = '#4CAF50';
+        
+        setTimeout(() => {
+          icon.textContent = originalText;
+          button.style.color = '';
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to copy text:', error);
+        
+        // Show error feedback
+        const icon = button.querySelector('.material-icons');
+        const originalText = icon.textContent;
+        icon.textContent = 'error';
+        button.style.color = '#f44336';
+        
+        setTimeout(() => {
+          icon.textContent = originalText;
+          button.style.color = '';
+        }, 2000);
+      }
     }
   </script>
 </body>
