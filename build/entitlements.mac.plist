@@ -14,5 +14,9 @@
     <true/>
     <key>com.apple.security.device.microphone</key>
     <true/>
+    <key>com.apple.security.device.input-monitoring</key>
+    <true/>
+    <key>com.apple.security.personal-information.accessibility</key>
+    <true/>
 </dict>
 </plist>
