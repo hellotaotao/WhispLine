@@ -16,79 +16,147 @@
     }
 
     .input-prompt {
-      width: 400px;
-      height: 100px;
-      background: rgba(0, 0, 0, 0.85);
-      border-radius: 12px;
-      -webkit-backdrop-filter: blur(20px);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 360px;
+      height: 80px;
+      background: linear-gradient(135deg, rgba(30, 35, 50, 0.95), rgba(45, 50, 70, 0.95));
+      border-radius: 16px;
+      -webkit-backdrop-filter: blur(25px);
+      backdrop-filter: blur(25px);
+      border: none;
+      box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
       display: flex;
-      flex-direction: column;
-      justify-content: center;
       align-items: center;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      justify-content: center;
+      gap: 30px;
+      padding: 0 20px;
+      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(20px) scale(0.95);
+      position: relative;
+      overflow: hidden;
     }
 
     .input-prompt.visible {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
 
     .input-prompt.recording {
-      height: 120px;
-      box-shadow: 0 0 30px rgba(74, 144, 226, 0.3);
-      border-color: rgba(74, 144, 226, 0.5);
+      height: 90px;
+      box-shadow: 
+        0 0 30px rgba(99, 102, 241, 0.3),
+        0 8px 20px rgba(0, 0, 0, 0.3),
+        0 0 0 1px rgba(99, 102, 241, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      background: linear-gradient(135deg, rgba(35, 40, 80, 0.95), rgba(50, 55, 100, 0.95));
+    }
+
+    .left-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: none;
+    }
+
+    .right-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: none;
+    }
+
+    .content-section {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
     }
 
     .prompt-text {
       color: white;
       font-size: 14px;
-      margin-bottom: 12px;
-      opacity: 0.8;
+      font-weight: 500;
+      opacity: 0.9;
       transition: all 0.3s ease;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .wave-container {
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 40px;
+      height: 28px;
       gap: 2px;
+      width: 120px;
     }
 
     .wave-bar {
       width: 3px;
-      background: linear-gradient(to top, #4a90e2, #7bb3f0);
+      background: linear-gradient(to top, #6366f1, #4f46e5);
       border-radius: 2px;
-      transition: all 0.1s ease;
-      opacity: 0.3;
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      opacity: 0.4;
+      box-shadow: 0 0 6px rgba(99, 102, 241, 0.2);
     }
 
     .wave-bar.active {
       opacity: 1;
+      background: linear-gradient(to top, #6366f1, #8b5cf6);
+      box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
     }
 
     .status-text {
       color: white;
-      font-size: 12px;
-      margin-top: 8px;
-      opacity: 0.6;
+      font-size: 11px;
+      font-weight: 400;
+      opacity: 0.7;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .microphone-icon {
-      font-size: 20px;
-      margin-bottom: 8px;
-      opacity: 0.6;
+      font-size: 24px;
+      opacity: 0.9;
+      color: #6366f1;
+      text-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+      transition: all 0.3s ease;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .input-prompt.recording .microphone-icon {
+      animation: micGlow 2s ease-in-out infinite;
+    }
+
+    @keyframes micGlow {
+      0%, 100% { 
+        transform: scale(1);
+        text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+      }
+      50% { 
+        transform: scale(1.05);
+        text-shadow: 0 0 20px rgba(99, 102, 241, 0.8);
+      }
     }
 
     .material-icons {
       font-family: 'Material Icons';
       font-weight: normal;
       font-style: normal;
-      font-size: 20px;
+      font-size: 28px;
       line-height: 1;
       letter-spacing: normal;
       text-transform: none;
@@ -102,57 +170,117 @@
     }
 
     .recording-dot {
-      width: 8px;
-      height: 8px;
-      background: #ff4757;
+      width: 10px;
+      height: 10px;
+      background: linear-gradient(45deg, #f59e0b, #d97706);
       border-radius: 50%;
       margin-left: 8px;
-      animation: pulse 1.5s infinite;
+      animation: recordingPulse 1.2s ease-in-out infinite;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
     }
 
-    @keyframes pulse {
+    @keyframes recordingPulse {
       0% {
         opacity: 1;
         transform: scale(1);
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
       }
       50% {
-        opacity: 0.5;
+        opacity: 0.7;
         transform: scale(1.2);
+        box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
       }
       100% {
         opacity: 1;
         transform: scale(1);
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
       }
     }
 
     .transcription-text {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 8px;
       color: white;
-      font-size: 14px;
+      font-size: 13px;
+      font-weight: 500;
       text-align: center;
-      padding: 0 20px;
-      max-width: 360px;
+      padding: 8px 16px;
+      background: linear-gradient(135deg, rgba(20, 25, 40, 0.9), rgba(35, 45, 65, 0.9));
+      border-radius: 12px;
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       word-wrap: break-word;
       opacity: 0;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.4s ease;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      line-height: 1.3;
     }
 
     .transcription-text.visible {
       opacity: 1;
     }
+
+    /* Enhanced hover effect */
+    .input-prompt:hover {
+      transform: translateY(-1px) scale(1.01);
+      box-shadow: 
+        0 12px 30px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .input-prompt.recording:hover {
+      box-shadow: 
+        0 0 40px rgba(99, 102, 241, 0.4),
+        0 12px 30px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(99, 102, 241, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    /* Subtle animation for non-recording state */
+    .input-prompt:not(.recording) {
+      animation: breathe 4s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { 
+        box-shadow: 
+          0 8px 20px rgba(0, 0, 0, 0.3),
+          0 0 0 1px rgba(255, 255, 255, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+      50% { 
+        box-shadow: 
+          0 12px 30px rgba(0, 0, 0, 0.35),
+          0 0 0 1px rgba(255, 255, 255, 0.08),
+          inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      }
+    }
   </style>
 </head>
 <body>
   <div class="input-prompt" id="inputPrompt">
-    <div class="microphone-icon material-icons">mic</div>
-    <div class="prompt-text" id="promptText">
-      Hold Ctrl + Shift to start dictating
+    <div class="left-section">
+      <div class="microphone-icon material-icons">mic</div>
+      <div class="content-section">
+        <div class="prompt-text" id="promptText">
+          Hold Ctrl + Shift to start dictating
+        </div>
+        <div class="status-text" id="statusText"></div>
+      </div>
     </div>
-
-    <div class="wave-container" id="waveContainer">
-      <!-- Wave bars will be generated by JavaScript -->
+    
+    <div class="right-section">
+      <div class="wave-container" id="waveContainer">
+        <!-- Wave bars will be generated by JavaScript -->
+      </div>
     </div>
-
-    <div class="status-text" id="statusText"></div>
+    
     <div class="transcription-text" id="transcriptionText"></div>
   </div>
 
@@ -184,10 +312,10 @@
       }
 
       createWaveBars() {
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 16; i++) {
           const bar = document.createElement("div");
           bar.className = "wave-bar";
-          bar.style.height = "4px";
+          bar.style.height = "3px";
           this.waveContainer.appendChild(bar);
         }
       }
@@ -537,7 +665,7 @@
                 (index / bars.length) * this.dataArray.length
               );
               const amplitude = this.dataArray[dataIndex] / 255;
-              const height = Math.max(4, amplitude * 40);
+              const height = Math.max(3, amplitude * 25);
 
               bar.style.height = `${height}px`;
               bar.classList.toggle("active", amplitude > 0.1);
@@ -545,7 +673,7 @@
           } else {
             // Fallback random animation
             bars.forEach((bar) => {
-              const height = Math.random() * 30 + 4;
+              const height = Math.random() * 20 + 3;
               bar.style.height = `${height}px`;
               bar.classList.toggle("active", Math.random() > 0.5);
             });
@@ -566,7 +694,7 @@
         // Reset wave bars
         const bars = this.waveContainer.querySelectorAll(".wave-bar");
         bars.forEach((bar) => {
-          bar.style.height = "4px";
+          bar.style.height = "3px";
           bar.classList.remove("active");
         });
       }
