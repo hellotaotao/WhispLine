@@ -392,12 +392,12 @@
           this.promptText.textContent = "Checking permissions...";
           this.statusText.textContent = "";
 
-          // Check and request microphone permission
+          // Check microphone permission (should already be granted from main process)
           const permissionResult =
-            await this.permissionManager.requestMicrophonePermission(false);
+            await this.permissionManager.checkMicrophonePermission();
 
           if (!permissionResult.granted) {
-            await this.handlePermissionDenied(permissionResult);
+            this.handlePermissionDenied(permissionResult);
             return;
           }
 

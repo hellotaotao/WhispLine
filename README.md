@@ -49,6 +49,15 @@ npm run dev
 npm run build
 ```
 
+## To Remove FluidInput completely from macOS’s Accessibility and Microphone permission lists, so that the permission granting process can be tested repeatedly.
+```
+tccutil reset Accessibility com.tao.FluidInput
+tccutil reset Microphone com.tao.FluidInput
+
+tccutil reset Accessibility com.tao.WhispLine
+tccutil reset Microphone com.tao.WhispLine
+```
+
 ## Requirements
 
 - Node.js 16 or higher
@@ -58,3 +67,4 @@ npm run build
 ## License
 
 MIT License
+
