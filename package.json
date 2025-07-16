@@ -1,6 +1,6 @@
 {
   "name": "whisp-line",
-  "version": "1.0.19",
+  "version": "1.0.28",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -44,10 +44,22 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
       "extendInfo": {
+        "CFBundleDisplayName": "WhispLine",
+        "CFBundleName": "WhispLine",
+        "CFBundleIdentifier": "com.tao.whispline",
         "NSMicrophoneUsageDescription": "WhispLine needs microphone access to transcribe your voice input.",
         "NSAppleEventsUsageDescription": "WhispLine needs Apple Events access to insert text into other applications.",
-        "NSSystemAdministrationUsageDescription": "WhispLine needs system administration access for global keyboard shortcuts."
+        "NSSystemAdministrationUsageDescription": "WhispLine needs system administration access for global keyboard shortcuts.",
+        "LSMinimumSystemVersion": "10.15.0"
       }
     },
     "win": {
@@ -56,6 +68,5 @@
     "linux": {
       "target": "AppImage"
     }
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  }
 }

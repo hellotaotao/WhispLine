@@ -205,11 +205,20 @@ function setupGlobalHotkeys() {
 
       // Start recording when both Ctrl+Shift are pressed
       if (ctrlPressed && shiftPressed && !isRecording) {
-        isRecording = true;
-        if (inputPromptWindow) {
-          inputPromptWindow.showInactive();
-          inputPromptWindow.webContents.send("start-recording");
-        }
+        // Check microphone permission before starting recording
+        checkAndRequestMicrophonePermission().then(hasPermission => {
+          if (hasPermission) {
+            isRecording = true;
+            if (inputPromptWindow) {
+              inputPromptWindow.showInactive();
+              inputPromptWindow.webContents.send("start-recording");
+            }
+          } else {
+            console.log("Recording cancelled due to lack of microphone permission");
+          }
+        }).catch(error => {
+          console.error("Error checking microphone permission:", error);
+        });
       }
     });
 
@@ -416,7 +425,7 @@ async function checkMicrophonePermissions() {
         return false;
       }
       
-      if (status === 'not-determined' && !isDevelopment) {
+      if (status === 'not-determined') {
         const result = await dialog.showMessageBox(null, {
           type: "info",
           title: "Microphone Permission Required",
@@ -446,13 +455,133 @@ async function checkMicrophonePermissions() {
   return true;
 }
 
-app.whenReady().then(async () => {
-  // Only check microphone permission at startup
-  const hasMicrophonePermission = await checkMicrophonePermissions();
-  if (!hasMicrophonePermission) {
-    return; // App will quit if permission denied
+// Check and request microphone permission when actually needed
+async function checkAndRequestMicrophonePermission() {
+  if (process.platform !== "darwin") {
+    return true; // Not needed on other platforms
   }
 
+  try {
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    console.log("Checking microphone permission for recording, status:", status);
+    
+    if (status === 'granted') {
+      console.log("Microphone permission already granted");
+      return true;
+    }
+    
+    if (status === 'not-determined') {
+      console.log("Microphone permission not determined, requesting...");
+      
+      // Show user-friendly dialog before requesting permission
+      const result = await dialog.showMessageBox(null, {
+        type: "info",
+        title: "Microphone Permission Required",
+        message: "WhispLine needs microphone access to transcribe your voice.",
+        detail: "Please grant microphone permission in the next dialog to use voice input features.",
+        buttons: ["Grant Permission", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+
+      if (result.response === 1) {
+        console.log("User cancelled permission request");
+        return false;
+      }
+
+      // Request microphone access
+      try {
+        await systemPreferences.askForMediaAccess('microphone');
+        const newStatus = systemPreferences.getMediaAccessStatus('microphone');
+        console.log("Permission request completed, new status:", newStatus);
+        
+        if (newStatus === 'granted') {
+          console.log("Microphone permission successfully granted");
+          return true;
+        } else {
+          console.log("Microphone permission was not granted");
+          await showPermissionDeniedGuidance();
+          return false;
+        }
+      } catch (err) {
+        console.error("Failed to request microphone access:", err);
+        await showPermissionDeniedGuidance();
+        return false;
+      }
+    }
+    
+    if (status === 'denied') {
+      console.log("Microphone permission previously denied");
+      await showPermissionDeniedGuidance();
+      return false;
+    }
+    
+  } catch (error) {
+    console.error("Failed to check microphone permissions:", error);
+    return false;
+  }
+  
+  return false;
+}
+
+// Show guidance for manually enabling microphone permission
+async function showPermissionDeniedGuidance() {
+  const result = await dialog.showMessageBox(null, {
+    type: "warning",
+    title: "Microphone Permission Needed",
+    message: "WhispLine cannot access your microphone.",
+    detail: "To use voice input features, please:\n\n1. Go to System Preferences > Security & Privacy > Privacy > Microphone\n2. Enable microphone access for WhispLine\n3. Try using the voice input again\n\nAlternatively, you can continue using the app without voice input.",
+    buttons: ["Open System Preferences", "Continue Without Voice"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+
+  if (result.response === 0) {
+    // Open system preferences
+    exec('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"');
+  }
+}
+
+// Request initial microphone permission on startup to ensure app appears in system settings
+async function requestInitialMicrophonePermission() {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  try {
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    console.log("Initial microphone permission check, status:", status);
+    
+    // Always request permission if not granted to ensure app is registered
+    if (status !== 'granted') {
+      console.log("Requesting microphone permission to register app in system settings...");
+      
+      try {
+        // Force the system permission dialog to appear and register the app
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        const newStatus = systemPreferences.getMediaAccessStatus('microphone');
+        console.log("Permission request completed, granted:", granted, "new status:", newStatus);
+        
+        if (newStatus === 'granted') {
+          console.log("Microphone permission granted - app registered in system settings");
+        } else if (newStatus === 'denied') {
+          console.log("Microphone permission denied - app should now be visible in system settings for manual control");
+        }
+        
+      } catch (err) {
+        console.error("Failed to request initial microphone access:", err);
+        // Even if request fails, the app should still be registered
+        console.log("App should still be registered in system settings despite error");
+      }
+    } else {
+      console.log("Microphone permission already granted");
+    }
+  } catch (error) {
+    console.error("Failed to check initial microphone permissions:", error);
+  }
+}
+
+app.whenReady().then(async () => {
   // Set up application menu to enable standard editing shortcuts
   const template = [
     {
@@ -507,7 +636,7 @@ app.whenReady().then(async () => {
   cleanupOrphanedProcesses();
 
   // Small delay to ensure cleanup completes
-  setTimeout(() => {
+  setTimeout(async () => {
     createMainWindow();
     createInputPromptWindow();
     createTray();
@@ -517,6 +646,13 @@ app.whenReady().then(async () => {
     globalShortcut.register(process.platform === "darwin" ? "Command+," : "Ctrl+,", () => {
       createSettingsWindow();
     });
+
+    // Request microphone permission on startup to ensure app appears in system settings
+    if (process.platform === "darwin") {
+      setTimeout(async () => {
+        await requestInitialMicrophonePermission();
+      }, 2000); // Wait for UI to be ready
+    }
 
     // Show main window on startup
     mainWindow.show();
