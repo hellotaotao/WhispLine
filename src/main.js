@@ -936,6 +936,11 @@ ipcMain.handle("get-recent-activities", async (event) => {
   }
 });
 
+// Get app version using Electron's official API
+ipcMain.handle("get-app-version", () => {
+  return app.getVersion();
+});
+
 // Dictionary-related IPC handlers
 ipcMain.handle("get-dictionary", async (event) => {
   try {

@@ -251,7 +251,7 @@
         </div>
       </div>
 
-      <div class="version-info">WhispLine v1.0.0</div>
+      <div class="version-info" id="versionInfo">WhispLine v1.0.0</div>
     </div>
 
     <div class="main-content">
@@ -466,6 +466,10 @@
         if (currentSettings.model) {
           modelSelect.value = currentSettings.model;
         }
+
+        // Load app version
+        const version = await ipcRenderer.invoke("get-app-version");
+        document.getElementById("versionInfo").textContent = `WhispLine v${version}`;
 
         // Initialize permission manager
         if (!permissionManager) {
