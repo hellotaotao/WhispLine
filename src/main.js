@@ -156,7 +156,7 @@ function createTray() {
     ]);
 
     tray.setContextMenu(contextMenu);
-    tray.setToolTip("FluidInput");
+    tray.setToolTip("WhispLine");
 
     tray.on("double-click", () => {
       mainWindow.show();
@@ -261,7 +261,7 @@ async function showAccessibilityPermissionDialog() {
   const result = await dialog.showMessageBox(null, {
     type: "warning",
     title: "Accessibility Permission Required",
-    message: "FluidInput needs accessibility permission to capture global keyboard shortcuts (Ctrl+Shift) and insert transcribed text automatically.",
+    message: "WhispLine needs accessibility permission to capture global keyboard shortcuts (Ctrl+Shift) and insert transcribed text automatically.",
     detail: "Please grant accessibility permission in System Preferences to use global keyboard shortcuts and automatic text insertion.\n\nThe app will work with microphone-only mode and manual pasting if you prefer not to grant this permission.",
     buttons: ["Open System Preferences", "Continue without shortcuts", "Quit"],
     defaultId: 0,
@@ -304,9 +304,9 @@ function stopGlobalHotkeys() {
       try {
         // Kill any remaining uiohook processes on macOS
         if (process.platform === "darwin") {
-          exec('pkill -f "FluidInput Helper"', (err) => {
-            if (err) console.log("No FluidInput Helper processes found to kill");
-            else console.log("Force killed FluidInput Helper processes");
+          exec('pkill -f "WhispLine Helper"', (err) => {
+            if (err) console.log("No WhispLine Helper processes found to kill");
+            else console.log("Force killed WhispLine Helper processes");
             setTimeout(resolve, 100);
           });
         } else {
@@ -323,12 +323,12 @@ function stopGlobalHotkeys() {
 // Clean up any orphaned helper processes from previous runs
 function cleanupOrphanedProcesses() {
   if (process.platform === "darwin") {
-    exec('pgrep -f "FluidInput Helper"', (error, stdout) => {
+    exec('pgrep -f "WhispLine Helper"', (error, stdout) => {
       if (!error && stdout.trim()) {
         console.log(
-          "Found orphaned FluidInput Helper processes, cleaning up...",
+          "Found orphaned WhispLine Helper processes, cleaning up...",
         );
-        exec('pkill -f "FluidInput Helper"', (killError) => {
+        exec('pkill -f "WhispLine Helper"', (killError) => {
           if (killError) {
             console.error("Failed to cleanup orphaned processes:", killError);
           } else {
@@ -364,8 +364,8 @@ async function checkAccessibilityPermissions() {
     const result = await dialog.showMessageBox(null, {
       type: "warning",
       title: "Accessibility Permission Required",
-      message: "FluidInput needs accessibility permission to capture global keyboard shortcuts and insert transcribed text automatically.",
-      detail: "Please grant accessibility permission in System Preferences to use FluidInput.\n\nAfter granting permission, please restart the application.",
+      message: "WhispLine needs accessibility permission to capture global keyboard shortcuts and insert transcribed text automatically.",
+      detail: "Please grant accessibility permission in System Preferences to use WhispLine.\n\nAfter granting permission, please restart the application.",
       buttons: ["Open System Preferences", "Quit"],
       defaultId: 0,
       cancelId: 1,
@@ -400,7 +400,7 @@ async function checkMicrophonePermissions() {
         const result = await dialog.showMessageBox(null, {
           type: "warning",
           title: "Microphone Permission Required",
-          message: "FluidInput needs microphone access to transcribe your voice.",
+          message: "WhispLine needs microphone access to transcribe your voice.",
           detail: "Please grant microphone permission in System Preferences > Privacy & Security > Microphone.",
           buttons: ["Open System Preferences", "Quit"],
           defaultId: 0,
@@ -420,7 +420,7 @@ async function checkMicrophonePermissions() {
         const result = await dialog.showMessageBox(null, {
           type: "info",
           title: "Microphone Permission Required",
-          message: "FluidInput needs microphone access to transcribe your voice.",
+          message: "WhispLine needs microphone access to transcribe your voice.",
           detail: "Please grant microphone permission when prompted.",
           buttons: ["Continue", "Quit"],
           defaultId: 0,
@@ -456,10 +456,10 @@ app.whenReady().then(async () => {
   // Set up application menu to enable standard editing shortcuts
   const template = [
     {
-      label: "FluidInput",
+      label: "WhispLine",
       submenu: [
         {
-          label: "About FluidInput",
+          label: "About WhispLine",
           role: "about"
         },
         {
@@ -476,7 +476,7 @@ app.whenReady().then(async () => {
           type: "separator"
         },
         {
-          label: "Quit FluidInput",
+          label: "Quit WhispLine",
           accelerator: process.platform === "darwin" ? "Command+Q" : "Ctrl+Q",
           click: async () => {
             app.isQuitting = true;
@@ -774,7 +774,7 @@ ipcMain.handle("show-permission-dialog", async () => {
   const result = await dialog.showMessageBox(mainWindow, {
     type: "info",
     title: "Text Insertion Permission",
-    message: "FluidInput needs permission to insert text into applications.",
+    message: "WhispLine needs permission to insert text into applications.",
     detail:
       "The app will copy text to your clipboard as a fallback method. You can manually paste the transcribed text where needed.",
     buttons: ["Continue with Clipboard", "Cancel"],
@@ -837,7 +837,7 @@ ipcMain.handle("show-microphone-permission-dialog", async () => {
   const result = await dialog.showMessageBox(mainWindow, {
     type: "info",
     title: "Microphone Permission Required",
-    message: "FluidInput needs access to your microphone to transcribe speech.",
+    message: "WhispLine needs access to your microphone to transcribe speech.",
     detail:
       "Please grant microphone permission in the next dialog to use voice input features.",
     buttons: ["Grant Permission", "Cancel"],
@@ -857,8 +857,8 @@ ipcMain.handle("show-permission-denied-dialog", async () => {
   const result = await dialog.showMessageBox(mainWindow, {
     type: "warning",
     title: "Microphone Permission Denied",
-    message: "FluidInput cannot access your microphone.",
-    detail: `To use voice input features, please:\n\n1. Go to ${settingsPath}\n2. Enable microphone access for FluidInput\n3. Restart the application\n\nAlternatively, you can continue without voice input.`,
+    message: "WhispLine cannot access your microphone.",
+    detail: `To use voice input features, please:\n\n1. Go to ${settingsPath}\n2. Enable microphone access for WhispLine\n3. Restart the application\n\nAlternatively, you can continue without voice input.`,
     buttons: ["Open System Settings", "Continue Without Voice", "Retry"],
     defaultId: 0,
     cancelId: 1,

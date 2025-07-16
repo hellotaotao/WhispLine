@@ -1,6 +1,6 @@
 /**
  * Permission Manager Module
- * Handles microphone and other permissions for FluidInput
+ * Handles microphone and other permissions for WhispLine
  */
 
 class PermissionManager {
