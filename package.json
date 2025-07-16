@@ -1,6 +1,6 @@
 {
-  "name": "fluid-input",
-  "version": "1.0.1",
+  "name": "whisp-line",
+  "version": "1.0.19",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -29,8 +29,8 @@
     "uiohook-napi": "^1.5.4"
   },
   "build": {
-    "appId": "com.tao.fluidinput",
-    "productName": "FluidInput",
+    "appId": "com.tao.whispline",
+    "productName": "WhispLine",
     "directories": {
       "output": "dist"
     },
@@ -45,9 +45,9 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "FluidInput needs microphone access to transcribe your voice input.",
-        "NSAppleEventsUsageDescription": "FluidInput needs Apple Events access to insert text into other applications.",
-        "NSSystemAdministrationUsageDescription": "FluidInput needs system administration access for global keyboard shortcuts."
+        "NSMicrophoneUsageDescription": "WhispLine needs microphone access to transcribe your voice input.",
+        "NSAppleEventsUsageDescription": "WhispLine needs Apple Events access to insert text into other applications.",
+        "NSSystemAdministrationUsageDescription": "WhispLine needs system administration access for global keyboard shortcuts."
       }
     },
     "win": {
