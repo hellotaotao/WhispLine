@@ -399,68 +399,6 @@ async function checkAccessibilityPermissions() {
   }
 }
 
-// Check microphone permissions
-async function checkMicrophonePermissions() {
-  if (process.platform === "darwin") {
-    try {
-      const status = systemPreferences.getMediaAccessStatus('microphone');
-      console.log("Microphone permission status:", status);
-      
-      if (status === 'granted') {
-        console.log("Microphone permission already granted");
-        return true;
-      }
-      
-      if (status === 'denied') {
-        const result = await dialog.showMessageBox(null, {
-          type: "warning",
-          title: "Microphone Permission Required",
-          message: "WhispLine needs microphone access to transcribe your voice.",
-          detail: "Please grant microphone permission in System Preferences > Privacy & Security > Microphone.",
-          buttons: ["Open System Preferences", "Quit"],
-          defaultId: 0,
-          cancelId: 1,
-        });
-
-        if (result.response === 0) {
-          // Open system preferences
-          exec('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"');
-        }
-        
-        app.quit();
-        return false;
-      }
-      
-      if (status === 'not-determined') {
-        const result = await dialog.showMessageBox(null, {
-          type: "info",
-          title: "Microphone Permission Required",
-          message: "WhispLine needs microphone access to transcribe your voice.",
-          detail: "Please grant microphone permission when prompted.",
-          buttons: ["Continue", "Quit"],
-          defaultId: 0,
-          cancelId: 1,
-        });
-
-        if (result.response === 1) {
-          app.quit();
-          return false;
-        }
-
-        // Request microphone access
-        try {
-          await systemPreferences.askForMediaAccess('microphone');
-        } catch (err) {
-          console.error("Failed to request microphone access:", err);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check microphone permissions:", error);
-    }
-  }
-  return true;
-}
-
 // Check and request microphone permission when actually needed
 async function checkAndRequestMicrophonePermission() {
   if (process.platform !== "darwin") {
