@@ -172,23 +172,12 @@ function createTray() {
   }
 }
 
-function setupGlobalHotkeys() {
+async function setupGlobalHotkeys() {
   try {
-    // Always check accessibility permission on macOS
+    // Check accessibility permission on macOS
     if (process.platform === "darwin") {
-      const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
-      
-      // Debug info
-      if (isDevelopment) {
-        console.log("Current process:", process.execPath);
-        console.log("App name:", app.getName());
-        console.log("App path:", app.getAppPath());
-        console.log("Has permission:", hasPermission);
-        console.log("Development mode:", isDevelopment);
-      }
-      
+      const hasPermission = await checkAccessibilityPermissions();
       if (!hasPermission) {
-        showAccessibilityPermissionDialog();
         return;
       }
     }
@@ -362,36 +351,15 @@ async function checkAccessibilityPermissions() {
   }
 
   try {
-    // First check if we already have permission
+    // Check if we already have permission
     const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
     if (hasPermission) {
       console.log("Accessibility permission already granted");
       return true;
     }
 
-    // Skip permission request in development mode
-    if (isDevelopment) {
-      console.log("Development mode: skipping accessibility permission check");
-      return true;
-    }
-
-    // Only show dialog if we don't have permission and not in dev mode
-    const result = await dialog.showMessageBox(null, {
-      type: "warning",
-      title: "Accessibility Permission Required",
-      message: "WhispLine needs accessibility permission to capture global keyboard shortcuts and insert transcribed text automatically.",
-      detail: "Please grant accessibility permission in System Preferences to use WhispLine.\n\nAfter granting permission, please restart the application.",
-      buttons: ["Open System Preferences", "Quit"],
-      defaultId: 0,
-      cancelId: 1,
-    });
-
-    if (result.response === 0) {
-      // Try to prompt for accessibility permission
-      systemPreferences.isTrustedAccessibilityClient(true);
-    }
-    
-    app.quit();
+    // Show permission dialog
+    await showAccessibilityPermissionDialog();
     return false;
   } catch (error) {
     console.error("Failed to check accessibility permissions:", error);
@@ -584,7 +552,7 @@ app.whenReady().then(async () => {
     createMainWindow();
     createInputPromptWindow();
     createTray();
-    setupGlobalHotkeys();
+    await setupGlobalHotkeys();
 
     // Request microphone permission on startup to ensure app appears in system settings
     if (process.platform === "darwin") {
