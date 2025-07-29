@@ -286,6 +286,23 @@
 
         <div class="setting-item">
           <div class="setting-info">
+            <div class="setting-title">Accessibility Permission</div>
+            <div class="setting-description">
+              Required for global hotkeys (Ctrl+Shift) and automatic text insertion.
+            </div>
+          </div>
+          <div class="setting-control">
+            <div id="accessibilityStatus" class="permission-status">
+              Checking...
+            </div>
+            <button class="btn btn-secondary" id="checkAccessibility">
+              Check Permission
+            </button>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
             <div class="setting-title">Microphone Permission</div>
             <div class="setting-description">
               Current status of microphone access permission.
@@ -475,6 +492,7 @@
 
         // Check initial permission status
         await checkPermissionStatus();
+        await checkAccessibilityStatus();
       } catch (error) {
         console.error("Failed to load settings:", error);
       }
@@ -507,6 +525,63 @@
       }
     }
 
+    async function checkAccessibilityStatus() {
+      try {
+        const statusElement = document.getElementById("accessibilityStatus");
+        statusElement.textContent = "Checking...";
+        statusElement.className = "permission-status";
+
+        const result = await ipcRenderer.invoke("check-accessibility-permission");
+        
+        let statusText, statusClass;
+        if (result.granted) {
+          statusText = "✅ Accessibility permission granted";
+          statusClass = "granted";
+        } else if (result.status === "not_required") {
+          statusText = "✅ Not required on this platform";
+          statusClass = "granted";
+        } else {
+          statusText = "❌ Accessibility permission denied";
+          statusClass = "denied";
+        }
+
+        statusElement.textContent = statusText;
+        statusElement.className = `permission-status ${statusClass}`;
+      } catch (error) {
+        console.error("Failed to check accessibility permission:", error);
+        const statusElement = document.getElementById("accessibilityStatus");
+        statusElement.textContent = "❌ Error checking permission";
+        statusElement.className = "permission-status denied";
+      }
+    }
+
+    async function recheckAccessibilityPermission() {
+      try {
+        const statusElement = document.getElementById("accessibilityStatus");
+        statusElement.textContent = "Rechecking...";
+        statusElement.className = "permission-status";
+
+        const result = await ipcRenderer.invoke("recheck-accessibility-permission");
+        
+        let statusText, statusClass;
+        if (result.granted) {
+          statusText = "✅ Accessibility permission granted";
+          statusClass = "granted";
+        } else {
+          statusText = "❌ Accessibility permission denied";
+          statusClass = "denied";
+        }
+
+        statusElement.textContent = statusText;
+        statusElement.className = `permission-status ${statusClass}`;
+      } catch (error) {
+        console.error("Failed to recheck accessibility permission:", error);
+        const statusElement = document.getElementById("accessibilityStatus");
+        statusElement.textContent = "❌ Error checking permission";
+        statusElement.className = "permission-status denied";
+      }
+    }
+
     async function saveSettings() {
       try {
         const settings = {
@@ -532,10 +607,51 @@
     // Load settings when page loads
     document.addEventListener("DOMContentLoaded", loadSettings);
 
-    // Permission check button
+    // Listen for permission status updates from main process
+    ipcRenderer.on('permission-status-updated', (event, data) => {
+      if (data.accessibility !== undefined) {
+        const statusElement = document.getElementById("accessibilityStatus");
+        if (data.accessibility) {
+          statusElement.textContent = "✅ Accessibility permission granted";
+          statusElement.className = "permission-status granted";
+        } else {
+          statusElement.textContent = "❌ Accessibility permission denied";
+          statusElement.className = "permission-status denied";
+        }
+      }
+    });
+
+    // Listen for accessibility permission changes from main process
+    ipcRenderer.on('accessibility-permission-changed', (event, data) => {
+      const statusElement = document.getElementById("accessibilityStatus");
+      if (data.granted) {
+        statusElement.textContent = "✅ Accessibility permission granted";
+        statusElement.className = "permission-status granted";
+        
+        // Show user notification about hotkey activation
+        if (data.message) {
+          // You could add a toast notification here if desired
+          console.log(data.message);
+        }
+      } else {
+        statusElement.textContent = "❌ Accessibility permission denied";
+        statusElement.className = "permission-status denied";
+        
+        // Show user notification about hotkey deactivation
+        if (data.message) {
+          console.log(data.message);
+        }
+      }
+    });
+
+    // Permission check buttons
     document
       .getElementById("checkPermission")
       .addEventListener("click", checkPermissionStatus);
+    
+    document
+      .getElementById("checkAccessibility")
+      .addEventListener("click", recheckAccessibilityPermission);
 
     // Sidebar navigation
     document.querySelectorAll(".sidebar-item").forEach((item) => {
