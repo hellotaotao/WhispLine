@@ -24,6 +24,7 @@ let settingsWindow;
 let inputPromptWindow;
 let tray;
 let hookStarted = false; // Track if hook is started
+let currentAccessibilityPermission = false; // Track current accessibility permission state
 
 // Key state tracking for hotkey combination
 let ctrlPressed = false;
@@ -54,6 +55,16 @@ function createMainWindow() {
   // Handle main window closed event
   mainWindow.on("closed", () => {
     mainWindow = null;
+  });
+
+  // Add window focus event listener for dynamic permission detection
+  // Note: This provides additional coverage beyond app.on("activate") for edge cases
+  // where user might return to main window without app activation event
+  mainWindow.on("focus", async () => {
+    // Only recheck if we don't currently have permission (optimize for common case)
+    if (!currentAccessibilityPermission) {
+      await recheckAccessibilityPermission();
+    }
   });
 }
 
@@ -86,6 +97,12 @@ function createSettingsWindow() {
 
   settingsWindow.on("closed", () => {
     settingsWindow = null;
+  });
+
+  // Check permissions when settings window gains focus
+  settingsWindow.on("focus", async () => {
+    // Always check in settings window since user might want to see current status
+    await recheckAccessibilityPermission();
   });
 
   settingsWindow.once("ready-to-show", () => {
@@ -182,9 +199,12 @@ async function setupGlobalHotkeys() {
       }
     }
 
-    // Ensure any previous hook is stopped
+    // Ensure any previous hook is stopped before starting new one
     if (hookStarted) {
-      stopGlobalHotkeys();
+      console.log("Stopping existing hotkey listener before restart...");
+      await stopGlobalHotkeys();
+      // Small delay to ensure cleanup completes
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
     // Register keyboard event listeners
@@ -275,6 +295,24 @@ async function showAccessibilityPermissionDialog() {
   if (result.response === 0) {
     // Open accessibility preferences
     exec('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+    
+    // Set up a timer to periodically check for permission changes
+    // This will help detect when user grants permission in System Preferences
+    const checkInterval = setInterval(async () => {
+      const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+      if (hasPermission) {
+        console.log("Permission detected! Updating hotkey status...");
+        clearInterval(checkInterval);
+        await recheckAccessibilityPermission();
+      }
+    }, 2000); // Check every 2 seconds
+    
+    // Stop checking after 2 minutes to avoid infinite polling
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      console.log("Stopped automatic permission checking after timeout");
+    }, 120000);
+    
   } else if (result.response === 2) {
     app.quit();
   }
@@ -347,12 +385,15 @@ function cleanupOrphanedProcesses() {
 // Check accessibility permissions on macOS
 async function checkAccessibilityPermissions() {
   if (process.platform !== "darwin") {
-    return true; // Not needed on other platforms
+    currentAccessibilityPermission = true; // Not needed on other platforms
+    return true;
   }
 
   try {
     // Check if we already have permission
     const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+    currentAccessibilityPermission = hasPermission; // Initialize the state
+    
     if (hasPermission) {
       console.log("Accessibility permission already granted");
       return true;
@@ -363,6 +404,63 @@ async function checkAccessibilityPermissions() {
     return false;
   } catch (error) {
     console.error("Failed to check accessibility permissions:", error);
+    currentAccessibilityPermission = false;
+    return false;
+  }
+}
+
+// Recheck accessibility permission and update hotkey status if needed
+async function recheckAccessibilityPermission() {
+  if (process.platform !== "darwin") {
+    return true; // Not needed on other platforms
+  }
+
+  try {
+    const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+    console.log("Rechecking accessibility permission:", hasPermission, "Previous state:", currentAccessibilityPermission);
+    
+    // Check if permission status has changed
+    if (hasPermission !== currentAccessibilityPermission) {
+      console.log(`Accessibility permission changed from ${currentAccessibilityPermission} to ${hasPermission}`);
+      currentAccessibilityPermission = hasPermission;
+      
+      if (hasPermission && !hookStarted) {
+        // Permission was granted, start hotkeys
+        console.log("Permission granted! Starting hotkeys...");
+        await setupGlobalHotkeys();
+        
+        // Notify user about hotkey activation
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('accessibility-permission-changed', {
+            granted: true,
+            message: 'Accessibility permission granted! Global hotkeys are now active.'
+          });
+        }
+      } else if (!hasPermission && hookStarted) {
+        // Permission was revoked, stop hotkeys
+        console.log("Permission revoked! Stopping hotkeys...");
+        await stopGlobalHotkeys();
+        
+        // Notify user about hotkey deactivation
+        if (mainWindow && mainWindow.webContents) {
+          mainWindow.webContents.send('accessibility-permission-changed', {
+            granted: false,
+            message: 'Accessibility permission revoked. Global hotkeys are disabled.'
+          });
+        }
+      }
+      
+      // Update settings window if open
+      if (settingsWindow && settingsWindow.webContents) {
+        settingsWindow.webContents.send('permission-status-updated', {
+          accessibility: hasPermission
+        });
+      }
+    }
+    
+    return hasPermission;
+  } catch (error) {
+    console.error("Failed to recheck accessibility permissions:", error);
     return false;
   }
 }
@@ -568,6 +666,11 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
+    } else {
+      // Only recheck if we don't currently have permission (avoid unnecessary checks)
+      if (!currentAccessibilityPermission) {
+        recheckAccessibilityPermission();
+      }
     }
   });
 });
@@ -955,6 +1058,10 @@ ipcMain.handle("request-accessibility-permission", async () => {
   try {
     // This will prompt the user to grant accessibility permission
     const granted = systemPreferences.isTrustedAccessibilityClient(true);
+    
+    // Update our cached state
+    currentAccessibilityPermission = granted;
+    
     return {
       granted,
       status: granted ? "granted" : "prompt_shown",
@@ -967,6 +1074,16 @@ ipcMain.handle("request-accessibility-permission", async () => {
       error: error.message,
     };
   }
+});
+
+// Manual recheck accessibility permission (for settings page button)
+ipcMain.handle("recheck-accessibility-permission", async () => {
+  console.log("Manual accessibility permission recheck requested");
+  const hasPermission = await recheckAccessibilityPermission();
+  return {
+    granted: hasPermission,
+    status: hasPermission ? "granted" : "denied",
+  };
 });
 
 // Get recent activities
