@@ -78,6 +78,12 @@ function createSettingsWindow() {
 
   settingsWindow.loadFile(path.join(__dirname, "views/settings.html"));
 
+  settingsWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.key === "Escape") {
+      settingsWindow.close();
+    }
+  });
+
   settingsWindow.on("closed", () => {
     settingsWindow = null;
   });
