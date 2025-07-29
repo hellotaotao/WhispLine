@@ -642,11 +642,6 @@ app.whenReady().then(async () => {
     createTray();
     setupGlobalHotkeys();
 
-    // Register global shortcut for settings
-    globalShortcut.register(process.platform === "darwin" ? "Command+," : "Ctrl+,", () => {
-      createSettingsWindow();
-    });
-
     // Request microphone permission on startup to ensure app appears in system settings
     if (process.platform === "darwin") {
       setTimeout(async () => {
