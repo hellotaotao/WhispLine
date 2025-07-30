@@ -831,9 +831,7 @@ ipcMain.handle("type-text", async (event, text) => {
   try {
     if (process.platform === "darwin") {
       // Use clipboard method with comprehensive preservation
-      // Save all clipboard formats (text, image, files, etc.)
       const originalClipboardData = await saveCompleteClipboard();
-      console.log("Original clipboard saved with formats:", originalClipboardData.formats);
       
       try {
         // Set our text to clipboard
@@ -846,12 +844,11 @@ ipcMain.handle("type-text", async (event, text) => {
         // Restore original clipboard content after a short delay
         setTimeout(async () => {
           await restoreCompleteClipboard(originalClipboardData);
-          console.log("Original clipboard fully restored");
         }, 500);
         
         // Provide user feedback based on clipboard complexity
         let message = "Text inserted automatically (clipboard preserved).";
-        if (originalClipboardData.hasComplex || originalClipboardData.isComplexContent) {
+        if (originalClipboardData.isComplexContent) {
           message = "Text inserted automatically. Note: complex clipboard content may be partially restored.";
         }
         
@@ -866,7 +863,6 @@ ipcMain.handle("type-text", async (event, text) => {
         // If text insertion failed, we should still restore clipboard
         setTimeout(async () => {
           await restoreCompleteClipboard(originalClipboardData);
-          console.log("Original clipboard fully restored after insertion failure");
         }, 100);
         
         return {
@@ -1121,279 +1117,90 @@ ipcMain.handle("save-dictionary", async (event, text) => {
   }
 });
 
-// Function to save complete clipboard content (all formats)
+// Function to save complete clipboard content using Electron APIs
 async function saveCompleteClipboard() {
-  return new Promise((resolve, reject) => {
-    // Use a more comprehensive AppleScript to handle complex clipboard data
-    const script = `
-      on run
-        set clipboardInfo to {}
-        set formatList to {}
-        
-        try
-          -- Try to get all available types/formats
-          tell application "System Events"
-            set clipboardTypes to clipboard info
-            repeat with aType in clipboardTypes
-              set end of formatList to (aType as string)
-            end repeat
-          end tell
-        on error
-          -- Fallback format detection
-        end try
-        
-        -- Check for standard formats
-        set hasText to false
-        set hasImage to false
-        set hasRTF to false
-        set hasHTML to false
-        set hasFiles to false
-        set hasOther to false
-        
-        try
-          set textData to the clipboard as text
-          set hasText to true
-        end try
-        
-        try
-          set imageData to the clipboard as «class TIFF»
-          set hasImage to true
-        end try
-        
-        try
-          set rtfData to the clipboard as «class RTF »
-          set hasRTF to true
-        end try
-        
-        try
-          set htmlData to the clipboard as «class HTML»
-          set hasHTML to true
-        end try
-        
-        try
-          set fileData to the clipboard as «class furl»
-          set hasFiles to true
-        end try
-        
-        -- Check for other complex formats (Notes, audio, etc.)
-        if (count of formatList) > 0 then
-          repeat with aFormat in formatList
-            if aFormat contains "NSStringPboardType" or aFormat contains "public.utf8-plain-text" then
-              -- Text format
-            else if aFormat contains "public.tiff" or aFormat contains "public.jpeg" then
-              -- Image format
-            else if aFormat contains "public.rtf" then
-              -- RTF format
-            else if aFormat contains "public.html" then
-              -- HTML format
-            else if aFormat contains "public.file-url" then
-              -- File format
-            else
-              -- Other complex format detected
-              set hasOther to true
-            end if
-          end repeat
-        end if
-        
-        set result to ""
-        if hasText then set result to result & "text,"
-        if hasImage then set result to result & "image,"
-        if hasRTF then set result to result & "rtf,"
-        if hasHTML then set result to result & "html,"
-        if hasFiles then set result to result & "files,"
-        if hasOther then set result to result & "complex,"
-        
-        return result
-      end run
-    `;
-    
-    exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
-      if (error) {
-        console.warn("Failed to detect clipboard formats, using fallback method");
-        // Enhanced fallback - use Node.js clipboard with multiple attempts
-        const clipboardData = performEnhancedClipboardBackup();
-        resolve(clipboardData);
-        return;
-      }
-      
-      const formats = stdout.trim().split(',').map(f => f.trim()).filter(f => f);
-      console.log("Detected clipboard formats:", formats);
-      
-      const clipboardData = {
-        formats: formats,
-        hasText: formats.includes('text'),
-        hasImage: formats.includes('image'),
-        hasRTF: formats.includes('rtf'),
-        hasHTML: formats.includes('html'),
-        hasFiles: formats.includes('files'),
-        hasComplex: formats.includes('complex'),
-        timestamp: Date.now()
-      };
-      
-      // Save different types of data
-      try {
-        if (clipboardData.hasText) {
-          clipboardData.text = clipboard.readText();
-        }
-        if (clipboardData.hasImage) {
-          clipboardData.image = clipboard.readImage();
-        }
-        if (clipboardData.hasHTML) {
-          clipboardData.html = clipboard.readHTML();
-        }
-        if (clipboardData.hasRTF) {
-          clipboardData.rtf = clipboard.readRTF();
-        }
-      } catch (saveError) {
-        console.warn("Error saving some clipboard formats:", saveError);
-      }
-      
-      resolve(clipboardData);
-    });
-  });
-}
+  const formats = clipboard.availableFormats();
+  const data = { formats };
 
-// Enhanced fallback clipboard backup for complex scenarios
-function performEnhancedClipboardBackup() {
-  const clipboardData = {
-    formats: [],
-    hasText: false,
-    hasImage: false,
-    hasRTF: false,
-    hasHTML: false,
-    hasComplex: false,
-    isComplexContent: false,
-    timestamp: Date.now()
-  };
-  
-  try {
-    // Try multiple formats
-    const text = clipboard.readText();
-    if (text && text.length > 0) {
-      clipboardData.text = text;
-      clipboardData.hasText = true;
-      clipboardData.formats.push('text');
-    }
-  } catch (e) {}
-  
-  try {
-    const image = clipboard.readImage();
-    if (image && !image.isEmpty()) {
-      clipboardData.image = image;
-      clipboardData.hasImage = true;
-      clipboardData.formats.push('image');
-    }
-  } catch (e) {}
-  
-  try {
-    const html = clipboard.readHTML();
-    if (html && html.length > 0) {
-      clipboardData.html = html;
-      clipboardData.hasHTML = true;
-      clipboardData.formats.push('html');
-    }
-  } catch (e) {}
-  
-  try {
-    const rtf = clipboard.readRTF();
-    if (rtf && rtf.length > 0) {
-      clipboardData.rtf = rtf;
-      clipboardData.hasRTF = true;
-      clipboardData.formats.push('rtf');
-    }
-  } catch (e) {}
-  
-  // If we can't read any standard formats but there's something in clipboard,
-  // it's probably complex content
-  if (clipboardData.formats.length === 0) {
-    clipboardData.isComplexContent = true;
-    clipboardData.hasComplex = true;
-    clipboardData.formats.push('complex');
+  // Standard formats - just read them directly like old code
+  data.text = clipboard.readText();
+  data.html = clipboard.readHTML();
+  data.rtf = clipboard.readRTF();
+  data.image = clipboard.readImage();
+
+  // macOS-specific formats
+  if (process.platform === 'darwin') {
+    try {
+      data.bookmark = clipboard.readBookmark();
+    } catch (e) {}
+    
+    try {
+      data.findText = clipboard.readFindText();
+    } catch (e) {}
   }
-  
-  return clipboardData;
+
+  // Custom formats - read all available formats as buffers
+  data.customFormats = {};
+  for (const format of formats) {
+    try {
+      data.customFormats[format] = clipboard.readBuffer(format);
+    } catch (e) {}
+  }
+
+  // Simple check for complex content
+  data.isComplexContent = formats.length > 5;
+
+  console.log("Original clipboard saved with formats:", formats);
+  return data;
 }
 
 // Function to restore complete clipboard content
 async function restoreCompleteClipboard(clipboardData) {
-  return new Promise((resolve, reject) => {
-    if (!clipboardData || clipboardData.formats.length === 0) {
-      console.log("No clipboard data to restore");
-      resolve();
-      return;
-    }
-    
-    console.log("Attempting to restore clipboard with formats:", clipboardData.formats);
-    
-    try {
-      // For complex content that we can't handle properly, use AppleScript workaround
-      if (clipboardData.hasComplex || clipboardData.isComplexContent) {
-        console.log("Detected complex content, using alternative restoration method");
-        
-        // Use a different approach: temporarily write to pasteboard using AppleScript
-        const restoreScript = `
-          tell application "System Events"
-            -- For complex content, we can't perfectly restore it
-            -- So we'll restore the best available format
-            delay 0.1
-          end tell
-        `;
-        
-        exec(`osascript -e '${restoreScript}'`, (error) => {
-          if (error) {
-            console.warn("Complex content restore script failed:", error.message);
-          }
-          
-          // Try to restore the best available simple format
-          restoreSimpleFormat(clipboardData);
-          resolve();
-        });
-        
-        return;
-      }
-      
-      // Standard restoration for simple formats
-      restoreSimpleFormat(clipboardData);
-      resolve();
-      
-    } catch (error) {
-      console.error("Failed to restore clipboard:", error);
-      // Fallback to text only
-      restoreSimpleFormat(clipboardData);
-      resolve(); // Don't reject, just log the error
-    }
-  });
-}
+  if (!clipboardData || !clipboardData.formats || clipboardData.formats.length === 0) {
+    return;
+  }
 
-// Helper function to restore simple formats
-function restoreSimpleFormat(clipboardData) {
   try {
-    // Restore in priority order: image > rtf > html > text
-    if (clipboardData.hasImage && clipboardData.image) {
-      console.log("Restoring image to clipboard");
-      clipboard.writeImage(clipboardData.image);
-    } else if (clipboardData.hasRTF && clipboardData.rtf) {
-      console.log("Restoring RTF to clipboard");
-      clipboard.writeRTF(clipboardData.rtf);
-    } else if (clipboardData.hasHTML && clipboardData.html) {
-      console.log("Restoring HTML to clipboard");
-      clipboard.writeHTML(clipboardData.html);
-    } else if (clipboardData.hasText && clipboardData.text) {
-      console.log("Restoring text to clipboard");
-      clipboard.writeText(clipboardData.text);
-    } else {
-      console.log("No restorable format found, clipboard may remain empty");
+    clipboard.clear();
+
+    // Restore standard formats - just like old code
+    const dataToWrite = {};
+    if (clipboardData.text) dataToWrite.text = clipboardData.text;
+    if (clipboardData.html) dataToWrite.html = clipboardData.html;
+    if (clipboardData.rtf) dataToWrite.rtf = clipboardData.rtf;
+    if (clipboardData.image && !clipboardData.image.isEmpty()) {
+      dataToWrite.image = clipboardData.image;
     }
+    if (clipboardData.bookmark) dataToWrite.bookmark = clipboardData.bookmark;
+
+    if (Object.keys(dataToWrite).length > 0) {
+      clipboard.write(dataToWrite);
+    }
+
+    // macOS find text
+    if (process.platform === 'darwin' && clipboardData.findText) {
+      try {
+        clipboard.writeFindText(clipboardData.findText);
+      } catch (e) {}
+    }
+
+    // Restore all custom formats
+    if (clipboardData.customFormats) {
+      for (const [format, buffer] of Object.entries(clipboardData.customFormats)) {
+        try {
+          clipboard.writeBuffer(format, buffer);
+        } catch (e) {}
+      }
+    }
+
+    console.log("Original clipboard restored");
+
   } catch (error) {
-    console.error("Failed to restore simple format:", error);
-    // Last resort: try text only
-    if (clipboardData.hasText && clipboardData.text) {
+    // Fallback to text only
+    if (clipboardData.text) {
       try {
         clipboard.writeText(clipboardData.text);
-        console.log("Fallback: restored text to clipboard");
-      } catch (textError) {
-        console.error("Failed to restore even text:", textError);
-      }
+      } catch (e) {}
     }
   }
 }
