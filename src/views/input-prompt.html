@@ -286,7 +286,6 @@
 
   <script>
     const { ipcRenderer } = require("electron");
-    const PermissionManager = require("../permission-manager");
 
     class VoiceInputPrompt {
       constructor() {
@@ -298,7 +297,6 @@
         this.analyser = null;
         this.dataArray = null;
         this.animationId = null;
-        this.permissionManager = new PermissionManager();
 
         this.promptElement = document.getElementById("inputPrompt");
         this.promptText = document.getElementById("promptText");
@@ -308,7 +306,6 @@
 
         this.createWaveBars();
         this.setupEventListeners();
-        this.initializePermissions();
       }
 
       createWaveBars() {
@@ -320,25 +317,6 @@
         }
       }
 
-      async initializePermissions() {
-        try {
-          await this.permissionManager.init();
-
-          // Setup permission change listener
-          this.permissionManager.onPermissionChange(
-            "microphone",
-            (status) => {
-              console.log("Microphone permission changed:", status);
-              if (status === "denied" && this.isRecording) {
-                this.stopRecording();
-                this.statusText.textContent = "Microphone permission denied";
-              }
-            }
-          );
-        } catch (error) {
-          console.error("Failed to initialize permissions:", error);
-        }
-      }
 
       setupEventListeners() {
         // Listen for start recording from main process
@@ -389,17 +367,8 @@
         try {
           // Show prompt immediately
           this.promptElement.classList.add("visible");
-          this.promptText.textContent = "Checking permissions...";
+          this.promptText.textContent = "Starting recording...";
           this.statusText.textContent = "";
-
-          // Check microphone permission (should already be granted from main process)
-          const permissionResult =
-            await this.permissionManager.checkMicrophonePermission();
-
-          if (!permissionResult.granted) {
-            this.handlePermissionDenied(permissionResult);
-            return;
-          }
 
           this.isRecording = true;
           this.audioChunks = [];
@@ -410,8 +379,17 @@
           this.statusText.innerHTML =
             'Recording <div class="recording-dot"></div>';
 
-          // Create optimized media stream using permission manager
-          this.mediaStream = await this.permissionManager.createMediaStream();
+          // Create media stream directly using getUserMedia
+          // In Electron, system-level permissions are handled by main process
+          this.mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              sampleRate: 44100,
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
 
           // Setup audio context for visualization
           this.audioContext = new (window.AudioContext ||
@@ -543,36 +521,6 @@
         }
       }
 
-      async handlePermissionDenied(permissionResult) {
-        this.isRecording = false;
-
-        // Force cleanup of resources
-        this.cleanup();
-
-        const statusMessage =
-          this.permissionManager.getPermissionStatusText();
-        this.statusText.textContent = statusMessage.status;
-        this.statusText.style.color = statusMessage.color;
-
-        switch (permissionResult.status) {
-          case "denied":
-            this.promptText.textContent = "Permission denied";
-            break;
-          case "no-device":
-            this.promptText.textContent = "No microphone found";
-            break;
-          case "unsupported":
-            this.promptText.textContent = "Microphone not supported";
-            break;
-          case "user-cancelled":
-            this.promptText.textContent = "Permission cancelled";
-            break;
-          default:
-            this.promptText.textContent = "Cannot access microphone";
-        }
-
-        setTimeout(() => this.hidePrompt(), 3000);
-      }
 
       async handleRecordingError(error) {
         this.isRecording = false;

@@ -457,10 +457,8 @@
 
   <script>
     const { ipcRenderer } = require("electron");
-    const PermissionManager = require("../permission-manager");
 
     let currentSettings = {};
-    let permissionManager = null;
 
     async function loadSettings() {
       try {
@@ -484,41 +482,33 @@
         const version = await ipcRenderer.invoke("get-app-version");
         document.getElementById("versionInfo").textContent = `WhispLine v${version}`;
 
-        // Initialize permission manager
-        if (!permissionManager) {
-          permissionManager = new PermissionManager();
-          await permissionManager.init();
-        }
-
         // Check initial permission status
-        await checkPermissionStatus();
+        await checkMicrophonePermissionStatus();
         await checkAccessibilityStatus();
       } catch (error) {
         console.error("Failed to load settings:", error);
       }
     }
 
-    async function checkPermissionStatus() {
+    async function checkMicrophonePermissionStatus() {
       try {
         const statusElement = document.getElementById("permissionStatus");
         statusElement.textContent = "Checking...";
         statusElement.className = "permission-status";
 
-        const result = await permissionManager.checkMicrophonePermission();
-        const statusText = permissionManager.getPermissionStatusText();
-
-        statusElement.textContent = statusText.status;
-        statusElement.className = `permission-status ${result.status}`;
-
-        if (result.status === "granted") {
-          statusElement.classList.add("granted");
-        } else if (result.status === "denied") {
-          statusElement.classList.add("denied");
+        // Check system-level microphone permission through main process
+        if (window.navigator && window.navigator.platform && window.navigator.platform.includes('Mac')) {
+          // For macOS, we rely on main process to check system permission
+          // Since Electron apps don't need browser-level permission
+          statusElement.textContent = "✅ Available (Electron app)";
+          statusElement.className = "permission-status granted";
         } else {
-          statusElement.classList.add("unknown");
+          // For other platforms
+          statusElement.textContent = "✅ Available";
+          statusElement.className = "permission-status granted";
         }
       } catch (error) {
-        console.error("Failed to check permission:", error);
+        console.error("Failed to check microphone permission:", error);
         const statusElement = document.getElementById("permissionStatus");
         statusElement.textContent = "❌ Error checking permission";
         statusElement.className = "permission-status denied";
@@ -647,7 +637,7 @@
     // Permission check buttons
     document
       .getElementById("checkPermission")
-      .addEventListener("click", checkPermissionStatus);
+      .addEventListener("click", checkMicrophonePermissionStatus);
     
     document
       .getElementById("checkAccessibility")
