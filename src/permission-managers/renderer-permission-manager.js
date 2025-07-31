@@ -1,9 +1,9 @@
 /**
- * Permission Manager Module
- * Handles microphone and other permissions for WhispLine
+ * Renderer Process Permission Manager
+ * Handles browser-level permissions in Electron renderer process
  */
 
-class PermissionManager {
+class RendererPermissionManager {
   constructor() {
     this.microphonePermission = 'unknown';
     this.permissionCallbacks = new Map();
@@ -20,10 +20,14 @@ class PermissionManager {
       this.setupPermissionChangeListener();
       return true;
     } catch (error) {
-      console.error('Failed to initialize permission manager:', error);
+      console.error('Failed to initialize renderer permission manager:', error);
       return false;
     }
   }
+
+  // ============================================================================
+  // MICROPHONE PERMISSION METHODS
+  // ============================================================================
 
   /**
    * Check current microphone permission status
@@ -225,6 +229,10 @@ class PermissionManager {
     }
   }
 
+  // ============================================================================
+  // PERMISSION CHANGE LISTENERS
+  // ============================================================================
+
   /**
    * Register callback for permission changes
    */
@@ -271,6 +279,10 @@ class PermissionManager {
     }
   }
 
+  // ============================================================================
+  // STATUS AND UTILITY METHODS
+  // ============================================================================
+
   /**
    * Get permission status summary
    */
@@ -313,7 +325,7 @@ class PermissionManager {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = PermissionManager;
+  module.exports = RendererPermissionManager;
 } else if (typeof window !== 'undefined') {
-  window.PermissionManager = PermissionManager;
+  window.RendererPermissionManager = RendererPermissionManager;
 }
