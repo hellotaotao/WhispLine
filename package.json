@@ -1,6 +1,6 @@
 {
   "name": "whisp-line",
-  "version": "1.0.37",
+  "version": "1.0.44",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -24,6 +24,7 @@
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
+    "auto-launch": "^5.0.6",
     "electron-store": "^10.1.0",
     "groq-sdk": "^0.26.0",
     "uiohook-napi": "^1.5.4"

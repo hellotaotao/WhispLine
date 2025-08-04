@@ -242,7 +242,7 @@
           Defaults
         </div>
         <div class="sidebar-item" data-section="system">
-          <span class="sidebar-item-icon material-icons">computer</span>
+          <span class="sidebar-item-icon material-icons">settings</span>
           System
         </div>
         <div class="sidebar-item" data-section="personalization">
@@ -250,10 +250,8 @@
           Personalization
         </div>
       </div>
-
-      <div class="version-info" id="versionInfo">WhispLine v1.0.0</div>
     </div>
-
+      <div id="versionInfo" class="version-info">WhispLine v1.0.0</div>
     <div class="main-content">
       <div class="setting-group">
         <div class="setting-item">
@@ -446,6 +444,38 @@
         </div>
       </div>
 
+      <div class="setting-group">
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-title">Start with system</div>
+            <div class="setting-description">
+              Automatically start WhispLine when your computer starts up.
+            </div>
+          </div>
+          <div class="setting-control">
+            <label class="switch">
+            <input type="checkbox" id="autoLaunchCheck" aria-label="Start with system">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting-item" id="startMinimizedItem">
+          <div class="setting-info">
+            <div class="setting-title">Start minimized</div>
+            <div class="setting-description">
+              When starting with system, hide the main window and run in the background.
+            </div>
+          </div>
+          <div class="setting-control">
+            <label class="switch">
+              <input type="checkbox" id="startMinimizedCheck" aria-label="Start minimized">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="save-section">
         <button class="btn btn-secondary" onclick="closeSettings()">
           Cancel
@@ -481,6 +511,12 @@
         // Load app version
         const version = await ipcRenderer.invoke("get-app-version");
         document.getElementById("versionInfo").textContent = `WhispLine v${version}`;
+
+        // Configure auto-launch and start-minimized controls
+        const autoLaunchCheck = document.getElementById("autoLaunchCheck");
+        const startMinimizedCheck = document.getElementById("startMinimizedCheck");
+        autoLaunchCheck.checked = currentSettings.autoLaunch;
+        startMinimizedCheck.checked = currentSettings.startMinimized;
 
         // Check initial permission status
         await checkMicrophonePermissionStatus();
@@ -580,6 +616,8 @@
           language: document.getElementById("languageSelect").value,
           model: document.getElementById("modelSelect").value,
           microphone: currentSettings.microphone,
+          autoLaunch: document.getElementById("autoLaunchCheck").checked,
+          startMinimized: document.getElementById("startMinimizedCheck").checked,
         };
 
         await ipcRenderer.invoke("save-settings", settings);

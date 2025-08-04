@@ -9,6 +9,7 @@ const {
   clipboard,
   dialog,
 } = require("electron");
+const AutoLaunch = require('auto-launch');
 const { exec } = require("child_process");
 const path = require("path");
 const { default: Store } = require("electron-store");
@@ -20,6 +21,13 @@ const store = new Store();
 const db = new DatabaseManager();
 const permissionManager = new PermissionManager();
 const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+
+// Auto-launch setup
+const autoLauncher = new AutoLaunch({
+  name: 'WhispLine',
+  path: app.getPath('exe'),
+});
+
 let mainWindow;
 let settingsWindow;
 let inputPromptWindow;
@@ -417,6 +425,14 @@ app.whenReady().then(async () => {
         { role: "paste" },
         { role: "selectall" }
       ]
+    },
+    {
+      label: "Window",
+      role: "window",
+      submenu: [
+        { role: "minimize" },
+        { role: "close" }
+      ]
     }
   ];
   
@@ -440,18 +456,24 @@ app.whenReady().then(async () => {
       }, 2000); // Wait for UI to be ready
     }
 
-    // Show main window on startup
-    mainWindow.show();
+    // Check if app should start minimized
+    const startMinimized = store.get("startMinimized", false);
+    // Show main window on startup unless startMinimized is true
+    if (!startMinimized) {
+      mainWindow.show();
+    }
   }, 1000);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+    // On macOS, show or recreate main window when dock icon is clicked
+    if (mainWindow) {
+      mainWindow.show();
     } else {
-      // Only recheck if we don't currently have permission (avoid unnecessary checks)
-      if (!permissionManager.hasAccessibilityPermission()) {
-        permissionManager.recheckAccessibilityPermission();
-      }
+      createMainWindow();
+    }
+    // Recheck accessibility permission if needed
+    if (!permissionManager.hasAccessibilityPermission()) {
+      permissionManager.recheckAccessibilityPermission();
     }
   });
 });
@@ -503,15 +525,32 @@ ipcMain.handle("get-settings", () => {
     language: store.get("language", "auto"),
     model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
+    autoLaunch: store.get("autoLaunch", false),
+    startMinimized: store.get("startMinimized", false),
   };
 });
 
-ipcMain.handle("save-settings", (event, settings) => {
+ipcMain.handle("save-settings", async (event, settings) => {
   store.set("apiKey", settings.apiKey);
   store.set("shortcut", settings.shortcut);
   store.set("language", settings.language);
   store.set("model", settings.model);
   store.set("microphone", settings.microphone);
+  store.set("autoLaunch", settings.autoLaunch);
+  store.set("startMinimized", settings.startMinimized);
+
+  // Handle auto-launch setting
+  try {
+    if (settings.autoLaunch) {
+      await autoLauncher.enable();
+      console.log("Auto-launch enabled");
+    } else {
+      await autoLauncher.disable();
+      console.log("Auto-launch disabled");
+    }
+  } catch (error) {
+    console.error("Failed to update auto-launch setting:", error);
+  }
 
   // Note: uiohook doesn't need re-registration like globalShortcut
   // The hotkey combination is hardcoded to Ctrl+Shift
@@ -707,7 +746,6 @@ ipcMain.handle("show-permission-dialog", async () => {
 
   return result.response;
 });
-
 
 // Check accessibility permission status
 ipcMain.handle("check-accessibility-permission", async () => {
