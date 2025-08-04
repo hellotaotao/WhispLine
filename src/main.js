@@ -361,22 +361,27 @@ function stopGlobalHotkeys() {
 
 // Clean up any orphaned helper processes from previous runs
 function cleanupOrphanedProcesses() {
-  if (process.platform === "darwin") {
-    exec('pgrep -f "WhispLine Helper"', (error, stdout) => {
-      if (!error && stdout.trim()) {
-        console.log(
-          "Found orphaned WhispLine Helper processes, cleaning up...",
-        );
-        exec('pkill -f "WhispLine Helper"', (killError) => {
-          if (killError) {
-            console.error("Failed to cleanup orphaned processes:", killError);
-          } else {
-            console.log("Successfully cleaned up orphaned processes");
-          }
-        });
-      }
-    });
-  }
+  return new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      exec('pgrep -f "WhispLine Helper"', (error, stdout) => {
+        if (!error && stdout.trim()) {
+          console.log("Found orphaned WhispLine Helper processes, cleaning up...");
+          exec('pkill -f "WhispLine Helper"', (killError) => {
+            if (killError) {
+              console.error("Failed to cleanup orphaned processes:", killError);
+            } else {
+              console.log("Successfully cleaned up orphaned processes");
+            }
+            resolve();
+          });
+        } else {
+          resolve();
+        }
+      });
+    } else {
+      resolve();
+    }
+  });
 }
 
 
@@ -440,29 +445,24 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(menu);
 
   // Clean up any orphaned processes first
-  cleanupOrphanedProcesses();
+  await cleanupOrphanedProcesses();
 
-  // Small delay to ensure cleanup completes
-  setTimeout(async () => {
-    createMainWindow();
-    createInputPromptWindow();
-    createTray();
-    await setupGlobalHotkeys();
+  // Initialize application components immediately to improve startup performance
+  createMainWindow();
+  createInputPromptWindow();
+  createTray();
+  await setupGlobalHotkeys();
 
-    // Request microphone permission on startup to ensure app appears in system settings
-    if (process.platform === "darwin") {
-      setTimeout(async () => {
-        await permissionManager.requestInitialMicrophonePermission();
-      }, 2000); // Wait for UI to be ready
-    }
+  // Show main window on startup unless startMinimized is true
+  const startMinimized = store.get("startMinimized", false);
+  if (!startMinimized) {
+    mainWindow.show();
+  }
 
-    // Check if app should start minimized
-    const startMinimized = store.get("startMinimized", false);
-    // Show main window on startup unless startMinimized is true
-    if (!startMinimized) {
-      mainWindow.show();
-    }
-  }, 1000);
+  // Request microphone permission on startup (non-blocking for UX)
+  if (process.platform === "darwin") {
+    permissionManager.requestInitialMicrophonePermission();
+  }
 
   app.on("activate", () => {
     // On macOS, show or recreate main window when dock icon is clicked
