@@ -689,6 +689,41 @@ ipcMain.handle("type-text", async (event, text) => {
           success: true,
           method: "clipboard",
           message: "Text copied to clipboard. Press Cmd+V to paste.",
+};
+      }
+    } else if (process.platform === 'win32') {
+        try {
+            // If text contains non-ASCII (e.g. Chinese), use clipboard + Ctrl+V
+            if (/[\u0080-\uFFFF]/.test(text)) {
+                clipboard.writeText(text);
+                await new Promise((resolve, reject) => {
+                    const pasteScript = `$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 50; $wshell.SendKeys('^v')`;
+                    exec(`powershell -Command "${pasteScript}"`, (err) => err ? reject(err) : resolve());
+                });
+                return {
+                    success: true,
+                    method: "clipboard_paste",
+                    message: "Text pasted via clipboard."
+                };
+            }
+            // Otherwise send ASCII via SendKeys
+            const escaped = text.replace(/'/g, "''");
+            await new Promise((resolve, reject) => {
+                const script = `$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 50; $wshell.SendKeys('${escaped}')`;
+                exec(`powershell -Command "${script}"`, (err) => err ? reject(err) : resolve());
+            });
+            return {
+                success: true,
+                method: "sendkeys",
+                message: "Text inserted automatically."
+            };
+        } catch (error) {
+            console.error("Windows insertion failed, falling back to clipboard full:", error);
+            clipboard.writeText(text);
+            return {
+                success: true,
+                method: "clipboard",
+                message: "Text copied to clipboard. Press Ctrl+V to paste."
         };
       }
     } else {
