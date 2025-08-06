@@ -16,6 +16,15 @@ const { default: Store } = require("electron-store");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
+let windowsTextInserter;
+if (process.platform === 'win32') {
+  try {
+    windowsTextInserter = require('./windows-text-inserter-koffi');
+  } catch (err) {
+    console.error("Could not load windows-text-inserter-koffi:", err);
+    windowsTextInserter = null;
+  }
+}
 
 const store = new Store();
 const db = new DatabaseManager();
@@ -689,43 +698,35 @@ ipcMain.handle("type-text", async (event, text) => {
           success: true,
           method: "clipboard",
           message: "Text copied to clipboard. Press Cmd+V to paste.",
-};
+        };
       }
     } else if (process.platform === 'win32') {
-        try {
-            // If text contains non-ASCII (e.g. Chinese), use clipboard + Ctrl+V
-            if (/[\u0080-\uFFFF]/.test(text)) {
-                clipboard.writeText(text);
-                await new Promise((resolve, reject) => {
-                    const pasteScript = `$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 50; $wshell.SendKeys('^v')`;
-                    exec(`powershell -Command "${pasteScript}"`, (err) => err ? reject(err) : resolve());
-                });
+        // Try koffi-based SendInput first
+        if (windowsTextInserter) {
+            try {
+                await windowsTextInserter.insertText(text);
                 return {
                     success: true,
-                    method: "clipboard_paste",
-                    message: "Text pasted via clipboard."
+                    method: "koffi_sendinput",
+                    message: "Text inserted via Win32 SendInput (koffi)."
                 };
+            } catch (error) {
+                console.error("Koffi SendInput failed:", error);
             }
-            // Otherwise send ASCII via SendKeys
-            const escaped = text.replace(/'/g, "''");
-            await new Promise((resolve, reject) => {
-                const script = `$wshell = New-Object -ComObject WScript.Shell; Start-Sleep -Milliseconds 50; $wshell.SendKeys('${escaped}')`;
-                exec(`powershell -Command "${script}"`, (err) => err ? reject(err) : resolve());
-            });
-            return {
-                success: true,
-                method: "sendkeys",
-                message: "Text inserted automatically."
-            };
-        } catch (error) {
-            console.error("Windows insertion failed, falling back to clipboard full:", error);
+        }
+        
+        // Fallback to clipboard
+        try {
             clipboard.writeText(text);
             return {
                 success: true,
                 method: "clipboard",
                 message: "Text copied to clipboard. Press Ctrl+V to paste."
-        };
-      }
+            };
+        } catch (error) {
+            console.error("Clipboard fallback failed:", error);
+            throw error;
+        }
     } else {
       // For non-macOS platforms, fall back to clipboard
       clipboard.writeText(text);
