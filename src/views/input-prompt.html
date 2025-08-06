@@ -560,6 +560,13 @@
               this.statusText.textContent = "Text typed directly";
               this.statusText.style.color = "#00ff00";
               setTimeout(() => this.hidePrompt(), 1500);
+            } else if (result.method === "koffi_sendinput") {
+              // Windows SendInput method
+              console.log("Text inserted via SendInput:", text);
+              this.statusText.textContent = result.message || "Text inserted";
+              this.statusText.style.color = "#00ff00";
+              // Hide prompt immediately after successful insertion on Windows
+              this.hidePrompt();
             } else if (result.method === "clipboard_textinsert") {
               console.log("Text inserted successfully:", text);
               this.statusText.textContent = result.message || "Text inserted automatically";
