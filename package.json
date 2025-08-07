@@ -1,6 +1,6 @@
 {
   "name": "whisp-line",
-  "version": "1.0.46",
+  "version": "1.0.48",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -27,8 +27,10 @@
     "auto-launch": "^5.0.6",
     "electron-store": "^10.1.0",
     "groq-sdk": "^0.26.0",
-    "koffi": "^2.12.4",
     "uiohook-napi": "^1.5.4"
+  },
+  "optionalDependencies": {
+    "koffi": "^2.12.4"
   },
   "build": {
     "appId": "com.tao.whispline",
