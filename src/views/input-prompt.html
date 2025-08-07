@@ -269,7 +269,7 @@
       <div class="microphone-icon material-icons">mic</div>
       <div class="content-section">
         <div class="prompt-text" id="promptText">
-          Hold Ctrl + Shift to start dictating
+          Hold Ctrl + Shift to dictate, Shift + Alt for English
         </div>
         <div class="status-text" id="statusText"></div>
       </div>
@@ -290,6 +290,7 @@
     class VoiceInputPrompt {
       constructor() {
         this.isRecording = false;
+        this.translateMode = false;
         this.audioContext = null;
         this.mediaStream = null;
         this.mediaRecorder = null;
@@ -320,8 +321,9 @@
 
       setupEventListeners() {
         // Listen for start recording from main process
-        ipcRenderer.on("start-recording", async () => {
+        ipcRenderer.on("start-recording", async (event, translateMode = false) => {
           if (!this.isRecording) {
+            this.translateMode = translateMode;
             await this.startRecording();
           }
         });
@@ -375,7 +377,11 @@
 
           // Update UI for recording state
           this.promptElement.classList.add("recording");
-          this.promptText.textContent = "Listening...";
+          if (this.translateMode) {
+            this.promptText.textContent = "Listening (English output)...";
+          } else {
+            this.promptText.textContent = "Listening...";
+          }
           this.statusText.innerHTML =
             'Recording <div class="recording-dot"></div>';
 
@@ -504,7 +510,8 @@
 
           const transcription = await ipcRenderer.invoke(
             "transcribe-audio",
-            audioBuffer
+            audioBuffer,
+            this.translateMode
           );
 
           if (transcription && transcription.trim()) {
@@ -660,7 +667,7 @@
         
         this.promptElement.classList.remove("visible", "recording");
         this.transcriptionText.classList.remove("visible");
-        this.promptText.textContent = "Hold Ctrl + Shift to start dictating";
+        this.promptText.textContent = "Hold Ctrl + Shift to dictate, Shift + Alt for English";
         this.statusText.textContent = "";
         this.statusText.style.color = "";
         this.transcriptionText.textContent = "";
