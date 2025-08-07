@@ -37,6 +37,7 @@ let hookStarted = false; // Track if hook is started
 // Key state tracking for hotkey combination
 let ctrlPressed = false;
 let shiftPressed = false;
+let altPressed = false;
 let isRecording = false;
 
 // Set up permission manager event listeners
@@ -252,23 +253,43 @@ async function setupGlobalHotkeys() {
       if (e.keycode === UiohookKey.Shift || e.keycode === UiohookKey.ShiftR) {
         shiftPressed = true;
       }
+      // Alt key (left or right)
+      if (e.keycode === UiohookKey.Alt || e.keycode === UiohookKey.AltR) {
+        altPressed = true;
+      }
 
-      // Start recording when both Ctrl+Shift are pressed
-      if (ctrlPressed && shiftPressed && !isRecording) {
-        // Check microphone permission before starting recording
-        permissionManager.checkAndRequestMicrophonePermission().then(hasPermission => {
-          if (hasPermission) {
-            isRecording = true;
-            if (inputPromptWindow) {
-              inputPromptWindow.showInactive();
-              inputPromptWindow.webContents.send("start-recording");
+      // Start recording when Ctrl+Shift OR Shift+Alt are pressed
+      if (!isRecording) {
+        let shouldStartRecording = false;
+        let translateMode = false;
+        
+        // Ctrl+Shift for normal transcription
+        if (ctrlPressed && shiftPressed) {
+          shouldStartRecording = true;
+          translateMode = false;
+        }
+        // Shift+Alt for English translation
+        else if (shiftPressed && altPressed) {
+          shouldStartRecording = true;
+          translateMode = true;
+        }
+        
+        if (shouldStartRecording) {
+          // Check microphone permission before starting recording
+          permissionManager.checkAndRequestMicrophonePermission().then(hasPermission => {
+            if (hasPermission) {
+              isRecording = true;
+              if (inputPromptWindow) {
+                inputPromptWindow.showInactive();
+                inputPromptWindow.webContents.send("start-recording", translateMode);
+              }
+            } else {
+              console.log("Recording cancelled due to lack of microphone permission");
             }
-          } else {
-            console.log("Recording cancelled due to lack of microphone permission");
-          }
-        }).catch(error => {
-          console.error("Error checking microphone permission:", error);
-        });
+          }).catch(error => {
+            console.error("Error checking microphone permission:", error);
+          });
+        }
       }
     });
 
@@ -281,13 +302,15 @@ async function setupGlobalHotkeys() {
       if (e.keycode === UiohookKey.Shift || e.keycode === UiohookKey.ShiftR) {
         shiftPressed = false;
       }
+      // Alt key released
+      if (e.keycode === UiohookKey.Alt || e.keycode === UiohookKey.AltR) {
+        altPressed = false;
+      }
 
-      // Stop recording when either key is released
-      if ((!ctrlPressed || !shiftPressed) && isRecording) {
+      // Stop recording when neither Ctrl+Shift nor Shift+Alt is pressed
+      if (isRecording && !( (ctrlPressed && shiftPressed) || (shiftPressed && altPressed) )) {
         isRecording = false;
-        if (inputPromptWindow) {
-          inputPromptWindow.webContents.send("stop-recording");
-        }
+        inputPromptWindow?.webContents.send("stop-recording");
       }
     });
 
@@ -576,7 +599,7 @@ ipcMain.handle("cleanup-microphone", () => {
   return true;
 });
 
-ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
+ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = false) => {
   const Groq = require("groq-sdk");
   const fs = require("fs");
   const path = require("path");
@@ -592,51 +615,79 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer) => {
     const language = store.get("language", "auto");
     const model = store.get("model", "whisper-large-v3-turbo");
 
-    console.log(`🎙️  Using model: ${model} | Language: ${language}`);
+    const actualModel = translateMode ? "whisper-large-v3" : model;
+    console.log(`🎙️  Using model: ${actualModel} | Language: ${language} | Translate mode: ${translateMode}`);
 
     // Save audio buffer to temporary file
     const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
     fs.writeFileSync(tempFile, audioBuffer);
 
-    // Prepare transcription options
-    const transcriptionOptions = {
-      file: fs.createReadStream(tempFile),
-      model: model,
-      response_format: "verbose_json",
-    };
+    let result;
+    
+    if (translateMode) {
+      // Use translation API to output English (must use whisper-large-v3, not turbo)
+      const translationOptions = {
+        file: fs.createReadStream(tempFile),
+        model: "whisper-large-v3", // Translation only works with whisper-large-v3
+        response_format: "text", // Try text format for translation
+        temperature: 0.0, // Lower temperature for more consistent translation
+      };
 
-    // Only add language parameter if it's not "auto"
-    if (language !== "auto") {
-      transcriptionOptions.language = language;
+      // Don't add dictionary prompt for translations as it might interfere
+      
+      try {
+        const translationResponse = await groq.audio.translations.create(translationOptions);
+        console.log("Translation API response:", translationResponse);
+        
+        // For text format, the response is the text directly
+        result = typeof translationResponse === 'string' 
+          ? { text: translationResponse }
+          : translationResponse;
+      } catch (error) {
+        console.error("Translation API error:", error);
+        throw error;
+      }
+    } else {
+      // Use normal transcription
+      const transcriptionOptions = {
+        file: fs.createReadStream(tempFile),
+        model: model,
+        response_format: "verbose_json",
+      };
+
+      // Only add language parameter if it's not "auto"
+      if (language !== "auto") {
+        transcriptionOptions.language = language;
+      }
+
+      // Add dictionary prompt if available
+      const dictionary = store.get("dictionary", "");
+      if (dictionary.trim()) {
+        transcriptionOptions.prompt = dictionary;
+      }
+
+      result = await groq.audio.transcriptions.create(transcriptionOptions);
     }
-
-    // Add dictionary prompt if available
-    const dictionary = store.get("dictionary", "");
-    if (dictionary.trim()) {
-      transcriptionOptions.prompt = dictionary;
-    }
-
-    const transcription = await groq.audio.transcriptions.create(transcriptionOptions);
 
     // Clean up temp file
     fs.unlinkSync(tempFile);
 
     // Save successful transcription to database
-    db.addActivity(transcription.text, true);
+    db.addActivity(result.text, true);
 
     // Notify main window to update Recent Activity
     if (mainWindow) {
       mainWindow.webContents.send('activity-updated');
     }
 
-    console.log(`✅ Transcription completed: "${transcription.text}"`);
+    console.log(`✅ ${translateMode ? 'Translation' : 'Transcription'} completed: "${result.text}"`);
 
-    return transcription.text;
+    return result.text;
   } catch (error) {
-    console.error("Transcription error:", error);
+    console.error(`${translateMode ? 'Translation' : 'Transcription'} error:`, error);
     
     // Save failed transcription to database
-    db.addActivity(`Transcription failed: ${error.message}`, false, error.message);
+    db.addActivity(`${translateMode ? 'Translation' : 'Transcription'} failed: ${error.message}`, false, error.message);
     
     // Notify main window to update Recent Activity
     if (mainWindow) {
