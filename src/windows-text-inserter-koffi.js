@@ -1,3 +1,15 @@
+// Platform check - only load koffi on Windows
+if (process.platform !== 'win32') {
+  // Export empty function for non-Windows platforms
+  module.exports = {
+    insertText: async () => {
+      console.log('Windows text insertion not available on this platform');
+      return false;
+    }
+  };
+  return;
+}
+
 const koffi = require('koffi');
 
 // Define Windows API structures and constants

@@ -16,15 +16,6 @@ const { default: Store } = require("electron-store");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
-let windowsTextInserter;
-if (process.platform === 'win32') {
-  try {
-    windowsTextInserter = require('./windows-text-inserter-koffi');
-  } catch (err) {
-    console.error("Could not load windows-text-inserter-koffi:", err);
-    windowsTextInserter = null;
-  }
-}
 
 const store = new Store();
 const db = new DatabaseManager();
@@ -700,33 +691,6 @@ ipcMain.handle("type-text", async (event, text) => {
           message: "Text copied to clipboard. Press Cmd+V to paste.",
         };
       }
-    } else if (process.platform === 'win32') {
-        // Try koffi-based SendInput first
-        if (windowsTextInserter) {
-            try {
-                await windowsTextInserter.insertText(text);
-                return {
-                    success: true,
-                    method: "koffi_sendinput",
-                    message: "Text inserted via Win32 SendInput (koffi)."
-                };
-            } catch (error) {
-                console.error("Koffi SendInput failed:", error);
-            }
-        }
-        
-        // Fallback to clipboard
-        try {
-            clipboard.writeText(text);
-            return {
-                success: true,
-                method: "clipboard",
-                message: "Text copied to clipboard. Press Ctrl+V to paste."
-            };
-        } catch (error) {
-            console.error("Clipboard fallback failed:", error);
-            throw error;
-        }
     } else {
       // For non-macOS platforms, fall back to clipboard
       clipboard.writeText(text);
