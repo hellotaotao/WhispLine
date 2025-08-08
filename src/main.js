@@ -409,6 +409,15 @@ function cleanupOrphanedProcesses() {
 
 
 app.whenReady().then(async () => {
+  // Set macOS Dock icon (useful in development)
+  if (process.platform === 'darwin') {
+    try {
+      app.dock.setIcon(path.join(__dirname, '../assets/icon.png'));
+    } catch (e) {
+      console.warn('Failed to set Dock icon:', e);
+    }
+  }
+
   // Set up application menu to enable standard editing shortcuts
   const template = [
     {
