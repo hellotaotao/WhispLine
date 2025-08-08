@@ -217,19 +217,24 @@
       }
 
       let html = '<div class="section-header"><h4>RECENT</h4></div>';
-      activities.forEach((activity, index) => {
+      activities.forEach((activity) => {
         const time = new Date(activity.timestamp).toLocaleTimeString('en-US', { 
           hour: '2-digit', 
           minute: '2-digit',
           hour12: true 
         });
+        
+        // Guard against undefined/null text
+        const rawText = (activity.text ?? '').toString();
+        const safeAttr = rawText.replace(/'/g, "\\'");
+        
         html += `
           <div class="activity-item">
             <div class="activity-content">
               <div class="activity-time">${time}</div>
-              <div class="activity-text">${activity.text}</div>
+              <div class="activity-text">${rawText}</div>
             </div>
-            <button class="copy-btn" onclick="copyToClipboard('${activity.text.replace(/'/g, "\\'")}', this)" title="Copy text">
+            <button class="copy-btn" onclick="copyToClipboard('${safeAttr}', this)" title="Copy text">
               <span class="material-icons">content_copy</span>
             </button>
           </div>
