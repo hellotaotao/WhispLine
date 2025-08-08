@@ -1,6 +1,6 @@
 {
   "name": "whisp-line",
-  "version": "1.0.60",
+  "version": "1.0.61",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -52,6 +52,9 @@
       "entitlementsInherit": "build/entitlements.mac.plist",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "files": [
+        "!node_modules/koffi/**/*"
+      ],
       "target": [
         {
           "target": "dmg",
