@@ -8,6 +8,7 @@ const {
   screen,
   clipboard,
   dialog,
+  systemPreferences,
 } = require("electron");
 const AutoLaunch = require('auto-launch');
 const { exec } = require("child_process");
@@ -33,6 +34,7 @@ let settingsWindow;
 let inputPromptWindow;
 let tray;
 let hookStarted = false; // Track if hook is started
+let accessibilityWatchdog = null; // Low-frequency permission watchdog (macOS only)
 
 // Key state tracking for hotkey combination
 let ctrlPressed = false;
@@ -259,8 +261,9 @@ async function setupGlobalHotkeys() {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    // Register keyboard event listeners
+    // Register keyboard event listeners (with defensive try/catch)
     uIOhook.on("keydown", (e) => {
+      try {
       // Ctrl key (left or right)
       if (e.keycode === UiohookKey.Ctrl || e.keycode === UiohookKey.CtrlR) {
         ctrlPressed = true;
@@ -309,9 +312,13 @@ async function setupGlobalHotkeys() {
           });
         }
       }
+      } catch (handlerErr) {
+        console.error("uIOhook keydown handler error:", handlerErr);
+      }
     });
 
     uIOhook.on("keyup", (e) => {
+      try {
       // Ctrl key released
       if (e.keycode === UiohookKey.Ctrl || e.keycode === UiohookKey.CtrlR) {
         ctrlPressed = false;
@@ -330,21 +337,67 @@ async function setupGlobalHotkeys() {
         isRecording = false;
         inputPromptWindow?.webContents.send("stop-recording");
       }
-    });
-
-    // Add error handler for uiohook
-    uIOhook.on("error", (error) => {
-      console.error("uIOhook error:", error);
-      if (error.message && error.message.includes("accessibility")) {
-        // Only show permission dialog when we actually encounter a permission error
-        permissionManager.showAccessibilityPermissionDialog();
+      } catch (handlerErr) {
+        console.error("uIOhook keyup handler error:", handlerErr);
       }
     });
 
-    // Start the global hook
-    uIOhook.start();
+    // Add error handler for uiohook
+    uIOhook.on("error", async (error) => {
+      try {
+        console.error("uIOhook error:", error);
+        // On any error, immediately stop the hook to avoid potential freeze
+        await stopGlobalHotkeys();
+      } catch (stopErr) {
+        console.error("Failed to stop hotkeys after uIOhook error:", stopErr);
+      } finally {
+        // Recheck permission and notify UI
+        try {
+          await permissionManager.recheckAccessibilityPermission();
+        } catch (reErr) {
+          console.error("Permission recheck failed after uIOhook error:", reErr);
+        }
+        if (process.platform === "darwin" && error && error.message && error.message.toLowerCase().includes("access")) {
+          permissionManager.showAccessibilityPermissionDialog();
+        }
+      }
+    });
+
+    // Start the global hook (wrap in try/catch to catch synchronous start errors)
+    try {
+      uIOhook.start();
+    } catch (startErr) {
+      console.error("uIOhook.start() threw:", startErr);
+      await stopGlobalHotkeys();
+      if (process.platform === "darwin") {
+        permissionManager.showAccessibilityPermissionDialog();
+      }
+      return;
+    }
     hookStarted = true;
     console.log("Global hotkey listener started successfully");
+
+    // Start low-frequency watchdog (every 2s) to ensure eventual recovery if permission is revoked without error event
+    if (process.platform === 'darwin') {
+      if (accessibilityWatchdog) {
+        clearInterval(accessibilityWatchdog);
+      }
+      accessibilityWatchdog = setInterval(async () => {
+        try {
+          if (!hookStarted) return; // if already stopped, do nothing
+          const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+          if (!hasPermission) {
+            console.warn("Accessibility permission revoked detected by watchdog. Stopping hotkeys to recover...");
+            clearInterval(accessibilityWatchdog);
+            accessibilityWatchdog = null;
+            await stopGlobalHotkeys();
+            await permissionManager.recheckAccessibilityPermission();
+          }
+        } catch (wdErr) {
+          console.error("Accessibility watchdog error:", wdErr);
+        }
+      }, 2000);
+    }
   } catch (error) {
     console.error("Failed to setup global hotkeys:", error);
     hookStarted = false;
@@ -373,12 +426,24 @@ function stopGlobalHotkeys() {
       uIOhook.stop();
       hookStarted = false;
       console.log("Global hotkey listener stopped successfully");
+
+      // Clear watchdog if running
+      if (accessibilityWatchdog) {
+        clearInterval(accessibilityWatchdog);
+        accessibilityWatchdog = null;
+      }
       
       // Small delay to ensure cleanup completes
       setTimeout(resolve, 100);
     } catch (error) {
       console.error("Failed to stop global hotkeys:", error);
       hookStarted = false;
+
+      // Clear watchdog even on failure path
+      if (accessibilityWatchdog) {
+        clearInterval(accessibilityWatchdog);
+        accessibilityWatchdog = null;
+      }
 
       // Force cleanup if normal stop fails
       try {
@@ -736,8 +801,11 @@ ipcMain.handle("type-text", async (event, text) => {
         clipboard.writeText(text);
         console.log("Text copied to clipboard:", JSON.stringify(text));
         
-        // Try text insertion
-        await performTextInsertion();
+        // Try text insertion only when Accessibility permission is granted
+        const canInsert = permissionManager.hasAccessibilityPermission();
+        if (canInsert) {
+          await performTextInsertion();
+        }
         
         // Restore original clipboard content after a short delay
         setTimeout(async () => {
@@ -745,14 +813,16 @@ ipcMain.handle("type-text", async (event, text) => {
         }, 500);
         
         // Provide user feedback based on clipboard complexity
-        let message = "Text inserted automatically (clipboard preserved).";
+        let message = canInsert
+          ? "Text inserted automatically (clipboard preserved)."
+          : "Text copied to clipboard. Press Cmd+V to paste.";
         if (originalClipboardData.isComplexContent) {
           message = "Text inserted automatically. Note: complex clipboard content may be partially restored.";
         }
         
         return {
           success: true,
-          method: "clipboard_textinsert",
+          method: canInsert ? "clipboard_textinsert" : "clipboard",
           message: message,
         };
       } catch (insertError) {
