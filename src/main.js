@@ -184,6 +184,22 @@ function createInputPromptWindow() {
   inputPromptWindow.loadFile(path.join(__dirname, "views/input-prompt.html"));
 }
 
+// Position Input Prompt on the display where the user is currently active (by cursor)
+function positionInputPromptOnActiveDisplay(offsetBottom = 100) {
+  if (!inputPromptWindow) return;
+  try {
+    const point = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(point) || screen.getPrimaryDisplay();
+    const area = display.workArea || display.bounds;
+    const { width: winW, height: winH } = inputPromptWindow.getBounds();
+    const x = Math.round(area.x + area.width / 2 - winW / 2);
+    const y = Math.round(area.y + area.height - winH - Math.max(0, offsetBottom));
+    inputPromptWindow.setPosition(x, y, false);
+  } catch (e) {
+    // Fallback: no-op if positioning fails
+  }
+}
+
 function createTray() {
   try {
     tray = new Tray(path.join(__dirname, "../assets/tray-icon.png"));
@@ -280,6 +296,8 @@ async function setupGlobalHotkeys() {
             if (hasPermission) {
               isRecording = true;
               if (inputPromptWindow) {
+                // Reposition to the active display before showing
+                positionInputPromptOnActiveDisplay(100);
                 inputPromptWindow.showInactive();
                 inputPromptWindow.webContents.send("start-recording", translateMode);
               }
