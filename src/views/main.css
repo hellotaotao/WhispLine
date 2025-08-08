@@ -16,12 +16,23 @@ body {
   display: flex;
   align-items: center;
   margin-bottom: 40px;
+  /* Make logo and badge stack vertically */
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Inline row for badge + version under the logo */
+.subline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .logo {
-  font-size: 24px;
+  font-size: 36px;
   font-weight: bold;
-  margin-right: 10px;
+  margin-right: 0;
 }
 
 .badge {
@@ -30,6 +41,23 @@ body {
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
+  /* Place on next line with some spacing */
+  margin-top: 6px;
+}
+
+/* Override when inside subline */
+.subline .badge { margin-top: 0; }
+
+/* Version text */
+.app-version {
+  margin-top: 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Override when inside subline */
+.subline .app-version {
+  margin-top: 0;
 }
 
 .welcome {
@@ -249,6 +277,13 @@ body {
   padding: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin-top: auto;
+}
+
+/* Version text at bottom-left of sidebar */
+.app-version {
+  margin-top: 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .nav-item {

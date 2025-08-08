@@ -12,7 +12,10 @@
     <div class="sidebar-header">
       <div class="header">
         <div class="logo">WhispLine</div>
-        <div class="badge">Basic</div>
+        <div class="subline">
+          <div class="badge">Basic</div>
+          <div id="appVersion" class="app-version">v-</div>
+        </div>
       </div>
     </div>
 
@@ -64,29 +67,13 @@
   <div class="main-content">
     <!-- Home Page -->
     <div id="home-page" class="page active">
-      <div class="welcome">
-        <h1>Welcome to WhispLine</h1>
-      </div>
-
-      <div class="stats">
-        <div class="stat">
-          <span>🔥</span>
-          <span>4 weeks</span>
-        </div>
-        <div class="stat">
-          <span>🎯</span>
-          <span>164 words</span>
-        </div>
-        <div class="stat">
-          <span>⚡</span>
-          <span>46 WPM</span>
-        </div>
-      </div>
-
       <div class="feature-section">
         <div class="feature-title">Voice dictation in any app</div>
         <div class="feature-description">
-          Hold down Ctrl + Shift and speak into any textbox
+          Hold down Ctrl + Shift and speak into any textbox.
+        </div>
+        <div class="feature-description">
+          Hold down Option + Shift to translate spoken text to English.
         </div>
         <button class="btn" onclick="exploreUseCases()">
           Explore use cases
@@ -141,6 +128,15 @@
     document.addEventListener('DOMContentLoaded', async () => {
       await loadActivities();
       await loadDictionary();
+      
+      // Load app version into sidebar footer
+      try {
+        const version = await ipcRenderer.invoke("get-app-version");
+        const el = document.getElementById('appVersion');
+        if (el) el.textContent = `v${version}`;
+      } catch (e) {
+        console.error('Failed to load app version', e);
+      }
       
       // Listen for activity updates from main process
       ipcRenderer.on('activity-updated', async () => {

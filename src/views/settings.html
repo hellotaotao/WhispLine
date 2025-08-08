@@ -199,14 +199,6 @@
       margin-bottom: 30px;
     }
 
-    .version-info {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      font-size: 12px;
-      color: #999;
-    }
-
     .permission-status {
       font-size: 14px;
       font-weight: 500;
@@ -251,7 +243,6 @@
         </div>
       </div>
     </div>
-      <div id="versionInfo" class="version-info">WhispLine v1.0.0</div>
     <div class="main-content">
       <div class="setting-group">
         <div class="setting-item">
@@ -507,10 +498,6 @@
         if (currentSettings.model) {
           modelSelect.value = currentSettings.model;
         }
-
-        // Load app version
-        const version = await ipcRenderer.invoke("get-app-version");
-        document.getElementById("versionInfo").textContent = `WhispLine v${version}`;
 
         // Configure auto-launch and start-minimized controls
         const autoLaunchCheck = document.getElementById("autoLaunchCheck");
