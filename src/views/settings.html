@@ -20,7 +20,7 @@
     }
 
     .sidebar {
-      width: 250px;
+      width: 200px;
       background: white;
       border-right: 1px solid #e0e0e0;
       padding: 20px 0;
@@ -85,7 +85,16 @@
 
     .main-content {
       flex: 1;
-      padding: 40px 40px 60px 40px;
+      padding: 40px 28px 40px 28px; /* reduce horizontal padding to widen inner content */
+      overflow-y: auto; /* scroll only the right content area */
+    }
+
+    .content-section {
+      display: none;
+    }
+
+    .content-section.active {
+      display: block;
     }
 
     .content-header {
@@ -196,7 +205,6 @@
       justify-content: flex-end;
       gap: 12px;
       margin-top: 30px;
-      margin-bottom: 30px;
     }
 
     .permission-status {
@@ -228,22 +236,19 @@
   <div class="container">
     <div class="sidebar">
       <div class="sidebar-section">
-        <div class="sidebar-title">General</div>
+        <div class="sidebar-title">Settings</div>
         <div class="sidebar-item active" data-section="defaults">
-          <span class="sidebar-item-icon material-icons">tune</span>
-          Defaults
-        </div>
-        <div class="sidebar-item" data-section="system">
           <span class="sidebar-item-icon material-icons">settings</span>
-          System
+          General
         </div>
-        <div class="sidebar-item" data-section="personalization">
-          <span class="sidebar-item-icon material-icons">palette</span>
-          Personalization
+        <div class="sidebar-item" data-section="models">
+          <span class="sidebar-item-icon material-icons">tune</span>
+          Models
         </div>
       </div>
     </div>
     <div class="main-content">
+      <div id="section-defaults" class="content-section active">
       <div class="setting-group">
         <div class="setting-item">
           <div class="setting-info">
@@ -402,38 +407,7 @@
           </div>
         </div>
 
-        <div class="setting-item">
-          <div class="setting-info">
-            <div class="setting-title">API Key</div>
-            <div class="setting-description">
-              Enter your Groq API key for transcription services.
-            </div>
-          </div>
-          <div class="setting-control">
-            <input
-              type="text"
-              class="input api-key-input"
-              id="apiKey"
-              placeholder="Enter API key"
-            />
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <div class="setting-title">Model Selection</div>
-            <div class="setting-description">
-              Choose between standard and Turbo models for transcription.
-            </div>
-          </div>
-          <div class="setting-control">
-            <select class="input model-select" id="modelSelect" title="Select transcription model">
-              <option value="whisper-large-v3">Whisper Large V3 (Standard)</option>
-              <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo (Faster)</option>
-            </select>
-          </div>
-        </div>
-      </div>
+  </div>
 
       <div class="setting-group">
         <div class="setting-item">
@@ -465,6 +439,47 @@
             </label>
           </div>
         </div>
+      </div>
+      </div>
+
+      <div id="section-models" class="content-section">
+        <div class="setting-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">API Key</div>
+              <div class="setting-description">
+                Enter your Groq API key for transcription services.
+              </div>
+            </div>
+            <div class="setting-control">
+              <input
+                type="text"
+                class="input api-key-input"
+                id="apiKey"
+                placeholder="Enter API key"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-title">Model Selection</div>
+              <div class="setting-description">
+                Choose between standard and Turbo models for transcription.
+              </div>
+            </div>
+            <div class="setting-control">
+              <select class="input model-select" id="modelSelect" title="Select transcription model">
+                <option value="whisper-large-v3">Whisper Large V3 (Standard)</option>
+                <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo (Faster)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="section-system" class="content-section">
+        <!-- Reserved for future system settings -->
       </div>
 
       <div class="save-section">
@@ -675,6 +690,11 @@
           .querySelectorAll(".sidebar-item")
           .forEach((i) => i.classList.remove("active"));
         item.classList.add("active");
+
+  const target = item.getAttribute('data-section');
+  document.querySelectorAll('.content-section').forEach((sec) => sec.classList.remove('active'));
+  const content = document.getElementById(`section-${target}`);
+  if (content) content.classList.add('active');
       });
     });
   </script>
