@@ -547,6 +547,15 @@ app.whenReady().then(async () => {
       ]
     },
     {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { type: "separator" },
+        { role: "toggleDevTools" }
+      ]
+    },
+    {
       label: "Window",
       role: "window",
       submenu: [
