@@ -17,11 +17,39 @@ const { default: Store } = require("electron-store");
 const { uIOhook, UiohookKey } = require("uiohook-napi");
 const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
+const TranscriptionService = require("./services/transcription-service");
 
 const store = new Store();
 const db = new DatabaseManager();
 const permissionManager = new PermissionManager();
 const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+
+// Transcription service cache to avoid recreating clients
+let transcriptionServiceCache = new Map();
+
+// Helper function to get or create transcription service
+function getTranscriptionService(provider, apiKey) {
+  const cacheKey = `${provider}:${apiKey}`;
+  
+  if (!transcriptionServiceCache.has(cacheKey)) {
+    try {
+      const service = new TranscriptionService(provider, apiKey);
+      transcriptionServiceCache.set(cacheKey, service);
+      console.log(`Created new transcription service for provider: ${provider}`);
+    } catch (error) {
+      console.error(`Failed to create transcription service for ${provider}:`, error);
+      throw error;
+    }
+  }
+  
+  return transcriptionServiceCache.get(cacheKey);
+}
+
+// Helper function to clear service cache (useful when API keys change)
+function clearTranscriptionServiceCache() {
+  transcriptionServiceCache.clear();
+  console.log('Transcription service cache cleared');
+}
 
 // Auto-launch setup
 const autoLauncher = new AutoLaunch({
@@ -675,6 +703,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
   store.set("startMinimized", settings.startMinimized);
   store.set("provider", settings.provider || "groq");
 
+  // Clear transcription service cache when settings change (especially API keys)
+  clearTranscriptionServiceCache();
+
   // Handle auto-launch setting
   try {
     if (settings.autoLaunch) {
@@ -713,12 +744,6 @@ ipcMain.handle("cleanup-microphone", () => {
 });
 
 ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = false) => {
-  const Groq = require("groq-sdk");
-  const fs = require("fs");
-  const path = require("path");
-  const os = require("os");
-  const OpenAI = require("openai");
-
   try {
     const provider = store.get("provider", "groq");
     const apiKey = provider === 'openai'
@@ -727,92 +752,31 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
     if (!apiKey) {
       throw new Error("API key not configured");
     }
-  const language = store.get("language", "auto");
-  const model = store.get("model", "whisper-large-v3-turbo");
 
-  // Initialize clients lazily
-  const groq = provider === 'groq' ? new Groq({ apiKey }) : null;
-  const openai = provider === 'openai' ? new OpenAI({ 
-    apiKey,
-    dangerouslyAllowBrowser: false,
-    // Explicitly set base URL to ensure correct endpoint
-    baseURL: 'https://api.openai.com/v1'
-  }) : null;
+    const language = store.get("language", "auto");
+    const model = store.get("model", "whisper-large-v3-turbo");
+    const dictionary = store.get('dictionary', '');
 
-  const actualModel = translateMode ? (provider === 'openai' ? 'whisper-1' : 'whisper-large-v3') : model;
-  console.log(`🎙️  Provider: ${provider} | Using model: ${actualModel} | Language: ${language} | Translate mode: ${translateMode}`);
+    // Get cached transcription service
+    const transcriptionService = getTranscriptionService(provider, apiKey);
 
-    // Save audio buffer to temporary file
-    const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
-    fs.writeFileSync(tempFile, audioBuffer);
-
-    let result;
-
-    if (provider === 'openai') {
-      if (translateMode) {
-        // OpenAI translations API currently supports only whisper-1
-        const translationOptions = {
-          file: fs.createReadStream(tempFile),
-          model: 'whisper-1',
-          response_format: 'text',
-        };
-        const translationResponse = await openai.audio.translations.create(translationOptions);
-        result = typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
-      } else {
-        // OpenAI transcriptions - use stable whisper-1 for now
-        // GPT-4o models may require special access permissions
-        const transcriptionOptions = {
-          file: fs.createReadStream(tempFile),
-          model: 'whisper-1', // Force whisper-1 for stability
-          response_format: 'text',
-        };
-        
-        if (language !== 'auto') transcriptionOptions.language = language;
-        const dictionary = store.get('dictionary', '');
-        if (dictionary.trim()) transcriptionOptions.prompt = dictionary;
-        
-        const transcription = await openai.audio.transcriptions.create(transcriptionOptions);
-        result = typeof transcription === 'string' ? { text: transcription } : transcription;
-      }
-    } else {
-      if (translateMode) {
-        // Groq translation (English output)
-        const translationOptions = {
-          file: fs.createReadStream(tempFile),
-          model: 'whisper-large-v3',
-          response_format: 'text',
-          temperature: 0.0,
-        };
-        const translationResponse = await groq.audio.translations.create(translationOptions);
-        result = typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
-      } else {
-        // Groq transcription (verbose_json for timestamps)
-        const transcriptionOptions = {
-          file: fs.createReadStream(tempFile),
-          model: model,
-          response_format: 'verbose_json',
-        };
-        if (language !== 'auto') transcriptionOptions.language = language;
-        const dictionary = store.get('dictionary', '');
-        if (dictionary.trim()) transcriptionOptions.prompt = dictionary;
-        result = await groq.audio.transcriptions.create(transcriptionOptions);
-      }
-    }
-
-    // Clean up temp file
-    fs.unlinkSync(tempFile);
+    // Transcribe audio
+    const resultText = await transcriptionService.transcribeAudio(audioBuffer, {
+      model,
+      language,
+      prompt: dictionary,
+      translateMode
+    });
 
     // Save successful transcription to database
-    db.addActivity(result.text, true);
+    db.addActivity(resultText, true);
 
     // Notify main window to update Recent Activity
     if (mainWindow) {
       mainWindow.webContents.send('activity-updated');
     }
 
-    console.log(`✅ ${translateMode ? 'Translation' : 'Transcription'} completed: "${result.text}"`);
-
-    return result.text;
+    return resultText;
   } catch (error) {
     console.error(`${translateMode ? 'Translation' : 'Transcription'} error:`, error);
     
