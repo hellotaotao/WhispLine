@@ -230,6 +230,7 @@
       background: #fff3cd;
       color: #856404;
     }
+  .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -430,26 +431,37 @@
         <div class="setting-group">
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-title">API Key</div>
+              <div class="setting-title">API Provider</div>
               <div class="setting-description">
-                Enter your Groq API key for transcription services.
+                Choose transcription API service.
               </div>
             </div>
             <div class="setting-control">
-              <input
-                type="text"
-                class="input api-key-input"
-                id="apiKey"
-                placeholder="Enter API key"
-              />
+              <select class="input provider-select" id="providerSelect">
+                <option value="groq">Groq</option>
+                <option value="openai">OpenAI</option>
+              </select>
             </div>
           </div>
 
-          <div class="setting-item">
+          <div class="setting-item" id="apiKeyGroup">
+            <div class="setting-info">
+              <div class="setting-title">API Key</div>
+              <div class="setting-description" id="apiKeyHelp">
+                Enter your API key for selected provider.
+              </div>
+            </div>
+            <div class="setting-control">
+              <input type="text" class="input api-key-input hidden" id="apiKeyGroq" placeholder="Groq API key" />
+              <input type="text" class="input api-key-input hidden" id="apiKeyOpenAI" placeholder="OpenAI API key" />
+            </div>
+          </div>
+
+          <div class="setting-item" id="modelSelectGroup">
             <div class="setting-info">
               <div class="setting-title">Model Selection</div>
               <div class="setting-description">
-                Choose between standard and Turbo models for transcription.
+                Select transcription model.
               </div>
             </div>
             <div class="setting-control">
@@ -476,15 +488,65 @@
   </div>
 
   <script>
-    const { ipcRenderer } = require("electron");
+const { ipcRenderer } = require("electron");
 
-    let currentSettings = {};
+// Define available models per API provider
+const modelOptions = {
+  groq: [
+    { value: "whisper-large-v3", label: "Whisper Large V3 (Standard)" },
+    { value: "whisper-large-v3-turbo", label: "Whisper Large V3 Turbo (Faster)" }
+  ],
+  openai: [
+    { value: "whisper-1", label: "Whisper V1 (Stable)" }
+    // Note: GPT-4o models may require special access permissions
+    // { value: "gpt-4o-transcribe", label: "GPT-4o Transcribe (High Quality)" },
+    // { value: "gpt-4o-mini-transcribe", label: "GPT-4o Mini Transcribe (Fast)" }
+  ]
+};
 
-    async function loadSettings() {
-      try {
-        currentSettings = await ipcRenderer.invoke("get-settings");
-        document.getElementById("apiKey").value =
-          currentSettings.apiKey || "";
+// Update model dropdown based on selected provider
+function updateModelOptions(provider) {
+  const select = document.getElementById("modelSelect");
+  select.innerHTML = '';
+  (modelOptions[provider] || []).forEach(opt => {
+    const option = document.createElement('option');
+    option.value = opt.value;
+    option.textContent = opt.label;
+    select.appendChild(option);
+  });
+}
+
+function toggleApiKeyVisibility(provider) {
+  const keyGroq = document.getElementById('apiKeyGroq');
+  const keyOpenAI = document.getElementById('apiKeyOpenAI');
+  if (!keyGroq || !keyOpenAI) return;
+  if (provider === 'openai') {
+    keyGroq.classList.add('hidden');
+    keyOpenAI.classList.remove('hidden');
+  } else {
+    keyOpenAI.classList.add('hidden');
+    keyGroq.classList.remove('hidden');
+  }
+}
+
+let currentSettings = {};
+
+async function loadSettings() {
+  try {
+    currentSettings = await ipcRenderer.invoke("get-settings");
+  // Initialize provider and models
+  const providerSelect = document.getElementById('providerSelect');
+  providerSelect.value = currentSettings.provider || 'groq';
+  updateModelOptions(providerSelect.value);
+  // Toggle which API key input is visible for current provider
+  if (typeof toggleApiKeyVisibility === 'function') {
+    toggleApiKeyVisibility(providerSelect.value);
+  }
+
+  const apiKeyGroq = document.getElementById('apiKeyGroq');
+  const apiKeyOpenAI = document.getElementById('apiKeyOpenAI');
+  apiKeyGroq.value = currentSettings.apiKeyGroq || currentSettings.apiKey || '';
+  apiKeyOpenAI.value = currentSettings.apiKeyOpenAI || '';
         
         // Set the selected language
         const languageSelect = document.getElementById("languageSelect");
@@ -493,10 +555,8 @@
         }
 
         // Set the selected model
-        const modelSelect = document.getElementById("modelSelect");
-        if (currentSettings.model) {
-          modelSelect.value = currentSettings.model;
-        }
+        const modelSelect = document.getElementById('modelSelect');
+        if (currentSettings.model) modelSelect.value = currentSettings.model;
 
         // Configure auto-launch and start-minimized controls
         const autoLaunchCheck = document.getElementById("autoLaunchCheck");
@@ -596,14 +656,17 @@
 
     async function saveSettings() {
       try {
+        const provider = document.getElementById('providerSelect').value;
         const settings = {
-          apiKey: document.getElementById("apiKey").value,
+          apiKeyGroq: document.getElementById('apiKeyGroq').value,
+          apiKeyOpenAI: document.getElementById('apiKeyOpenAI').value,
           shortcut: currentSettings.shortcut,
-          language: document.getElementById("languageSelect").value,
-          model: document.getElementById("modelSelect").value,
+          language: document.getElementById('languageSelect').value,
+          model: document.getElementById('modelSelect').value,
           microphone: currentSettings.microphone,
-          autoLaunch: document.getElementById("autoLaunchCheck").checked,
-          startMinimized: document.getElementById("startMinimizedCheck").checked,
+          autoLaunch: document.getElementById('autoLaunchCheck').checked,
+          startMinimized: document.getElementById('startMinimizedCheck').checked,
+          provider
         };
 
         await ipcRenderer.invoke("save-settings", settings);
@@ -621,44 +684,15 @@
     // Load settings when page loads
     document.addEventListener("DOMContentLoaded", loadSettings);
 
-    // Listen for permission status updates from main process
-    ipcRenderer.on('permission-status-updated', (event, data) => {
-      if (data.accessibility !== undefined) {
-        const statusElement = document.getElementById("accessibilityStatus");
-        if (data.accessibility) {
-          statusElement.textContent = "✅ Accessibility permission granted";
-          statusElement.className = "permission-status granted";
-        } else {
-          statusElement.textContent = "❌ Accessibility permission denied";
-          statusElement.className = "permission-status denied";
-        }
+    // Listen to provider changes
+    document.getElementById('providerSelect').addEventListener('change', e => {
+      updateModelOptions(e.target.value);
+      if (typeof toggleApiKeyVisibility === 'function') {
+        toggleApiKeyVisibility(e.target.value);
       }
     });
 
-    // Listen for accessibility permission changes from main process
-    ipcRenderer.on('accessibility-permission-changed', (event, data) => {
-      const statusElement = document.getElementById("accessibilityStatus");
-      if (data.granted) {
-        statusElement.textContent = "✅ Accessibility permission granted";
-        statusElement.className = "permission-status granted";
-        
-        // Show user notification about hotkey activation
-        if (data.message) {
-          // You could add a toast notification here if desired
-          console.log(data.message);
-        }
-      } else {
-        statusElement.textContent = "❌ Accessibility permission denied";
-        statusElement.className = "permission-status denied";
-        
-        // Show user notification about hotkey deactivation
-        if (data.message) {
-          console.log(data.message);
-        }
-      }
-    });
-
-    // Permission check buttons
+ // Permission check buttons
     document
       .getElementById("checkPermission")
       .addEventListener("click", checkMicrophonePermissionStatus);

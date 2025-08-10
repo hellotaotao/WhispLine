@@ -645,23 +645,35 @@ process.on("SIGTERM", () => {
 ipcMain.handle("get-settings", () => {
   return {
     apiKey: store.get("apiKey", ""),
+    apiKeyGroq: store.get("apiKeyGroq", store.get("apiKey", "")),
+    apiKeyOpenAI: store.get("apiKeyOpenAI", ""),
     shortcut: "Ctrl+Shift (hold down)", // Fixed hotkey, not customizable
     language: store.get("language", "auto"),
     model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
     autoLaunch: store.get("autoLaunch", false),
     startMinimized: store.get("startMinimized", false),
+    provider: store.get("provider", "groq"),
   };
 });
 
 ipcMain.handle("save-settings", async (event, settings) => {
-  store.set("apiKey", settings.apiKey);
+  // Persist API keys (provider-specific + legacy fallback)
+  if (typeof settings.apiKeyGroq === 'string') {
+    store.set("apiKeyGroq", settings.apiKeyGroq);
+  }
+  if (typeof settings.apiKeyOpenAI === 'string') {
+    store.set("apiKeyOpenAI", settings.apiKeyOpenAI);
+  }
+  // Keep legacy apiKey synchronized with currently selected provider's key
+  store.set("apiKey", settings.provider === 'openai' ? (settings.apiKeyOpenAI || '') : (settings.apiKeyGroq || ''));
   store.set("shortcut", settings.shortcut);
   store.set("language", settings.language);
   store.set("model", settings.model);
   store.set("microphone", settings.microphone);
   store.set("autoLaunch", settings.autoLaunch);
   store.set("startMinimized", settings.startMinimized);
+  store.set("provider", settings.provider || "groq");
 
   // Handle auto-launch setting
   try {
@@ -705,69 +717,86 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
   const fs = require("fs");
   const path = require("path");
   const os = require("os");
+  const OpenAI = require("openai");
 
   try {
-    const apiKey = store.get("apiKey");
+    const provider = store.get("provider", "groq");
+    const apiKey = provider === 'openai'
+      ? (store.get("apiKeyOpenAI", store.get("apiKey", "")))
+      : (store.get("apiKeyGroq", store.get("apiKey", "")));
     if (!apiKey) {
       throw new Error("API key not configured");
     }
+  const language = store.get("language", "auto");
+  const model = store.get("model", "whisper-large-v3-turbo");
 
-    const groq = new Groq({ apiKey });
-    const language = store.get("language", "auto");
-    const model = store.get("model", "whisper-large-v3-turbo");
+  // Initialize clients lazily
+  const groq = provider === 'groq' ? new Groq({ apiKey }) : null;
+  const openai = provider === 'openai' ? new OpenAI({ 
+    apiKey,
+    dangerouslyAllowBrowser: false,
+    // Explicitly set base URL to ensure correct endpoint
+    baseURL: 'https://api.openai.com/v1'
+  }) : null;
 
-    const actualModel = translateMode ? "whisper-large-v3" : model;
-    console.log(`🎙️  Using model: ${actualModel} | Language: ${language} | Translate mode: ${translateMode}`);
+  const actualModel = translateMode ? (provider === 'openai' ? 'whisper-1' : 'whisper-large-v3') : model;
+  console.log(`🎙️  Provider: ${provider} | Using model: ${actualModel} | Language: ${language} | Translate mode: ${translateMode}`);
 
     // Save audio buffer to temporary file
     const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
     fs.writeFileSync(tempFile, audioBuffer);
 
     let result;
-    
-    if (translateMode) {
-      // Use translation API to output English (must use whisper-large-v3, not turbo)
-      const translationOptions = {
-        file: fs.createReadStream(tempFile),
-        model: "whisper-large-v3", // Translation only works with whisper-large-v3
-        response_format: "text", // Try text format for translation
-        temperature: 0.0, // Lower temperature for more consistent translation
-      };
 
-      // Don't add dictionary prompt for translations as it might interfere
-      
-      try {
-        const translationResponse = await groq.audio.translations.create(translationOptions);
-        console.log("Translation API response:", translationResponse);
+    if (provider === 'openai') {
+      if (translateMode) {
+        // OpenAI translations API currently supports only whisper-1
+        const translationOptions = {
+          file: fs.createReadStream(tempFile),
+          model: 'whisper-1',
+          response_format: 'text',
+        };
+        const translationResponse = await openai.audio.translations.create(translationOptions);
+        result = typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
+      } else {
+        // OpenAI transcriptions - use stable whisper-1 for now
+        // GPT-4o models may require special access permissions
+        const transcriptionOptions = {
+          file: fs.createReadStream(tempFile),
+          model: 'whisper-1', // Force whisper-1 for stability
+          response_format: 'text',
+        };
         
-        // For text format, the response is the text directly
-        result = typeof translationResponse === 'string' 
-          ? { text: translationResponse }
-          : translationResponse;
-      } catch (error) {
-        console.error("Translation API error:", error);
-        throw error;
+        if (language !== 'auto') transcriptionOptions.language = language;
+        const dictionary = store.get('dictionary', '');
+        if (dictionary.trim()) transcriptionOptions.prompt = dictionary;
+        
+        const transcription = await openai.audio.transcriptions.create(transcriptionOptions);
+        result = typeof transcription === 'string' ? { text: transcription } : transcription;
       }
     } else {
-      // Use normal transcription
-      const transcriptionOptions = {
-        file: fs.createReadStream(tempFile),
-        model: model,
-        response_format: "verbose_json",
-      };
-
-      // Only add language parameter if it's not "auto"
-      if (language !== "auto") {
-        transcriptionOptions.language = language;
+      if (translateMode) {
+        // Groq translation (English output)
+        const translationOptions = {
+          file: fs.createReadStream(tempFile),
+          model: 'whisper-large-v3',
+          response_format: 'text',
+          temperature: 0.0,
+        };
+        const translationResponse = await groq.audio.translations.create(translationOptions);
+        result = typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
+      } else {
+        // Groq transcription (verbose_json for timestamps)
+        const transcriptionOptions = {
+          file: fs.createReadStream(tempFile),
+          model: model,
+          response_format: 'verbose_json',
+        };
+        if (language !== 'auto') transcriptionOptions.language = language;
+        const dictionary = store.get('dictionary', '');
+        if (dictionary.trim()) transcriptionOptions.prompt = dictionary;
+        result = await groq.audio.transcriptions.create(transcriptionOptions);
       }
-
-      // Add dictionary prompt if available
-      const dictionary = store.get("dictionary", "");
-      if (dictionary.trim()) {
-        transcriptionOptions.prompt = dictionary;
-      }
-
-      result = await groq.audio.transcriptions.create(transcriptionOptions);
     }
 
     // Clean up temp file
