@@ -877,7 +877,7 @@ async function performTextInsertion() {
       if (stderr) {
         console.warn("Text insertion stderr:", stderr);
       }
-      console.log("Text insertion completed successfully");
+      // AppleScript executed successfully, but we can't verify if text was actually inserted
       resolve();
     });
   });

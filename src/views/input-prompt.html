@@ -527,7 +527,7 @@
           );
 
           if (transcription && transcription.trim()) {
-            this.typeText(transcription);
+            await this.typeText(transcription);
           } else {
             this.statusText.textContent = "No speech detected";
             setTimeout(() => this.hidePrompt(), 2000);
@@ -607,14 +607,15 @@
             }
           }
         } catch (error) {
-          console.error("Failed to type text:", error);
-          this.statusText.textContent = "Failed to insert text - trying clipboard fallback";
+          console.error("Failed to process text:", error);
+          this.statusText.textContent = "Text processing failed - trying clipboard fallback";
           this.statusText.style.color = "#ff6600";
 
           // Final fallback: copy to clipboard
           try {
             await navigator.clipboard.writeText(text);
             this.statusText.textContent = "Text copied to clipboard - Press Cmd+V to paste";
+            this.statusText.style.color = "#ffaa00";
             setTimeout(() => this.hidePrompt(), 3000);
           } catch (clipboardError) {
             console.error("Failed to copy to clipboard:", clipboardError);
