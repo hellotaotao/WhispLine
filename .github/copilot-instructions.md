@@ -1,58 +1,42 @@
-# WhispLine AI Coding Instructions
+# WhispLine – AI Coding Instructions
 
-This document provides guidance for AI agents working on the WhispLine codebase.
+Concise guidance for AI agents to be productive in this codebase.
 
-## Architecture Overview
+## Big picture
+- Electron tray app for hold-to-record voice dictation. Global hotkeys via `uiohook-napi`: hold Ctrl+Shift to record; Shift+Alt for English output (translate mode).
+- Data flow: hotkey → show `input-prompt.html` → `getUserMedia` + `MediaRecorder` → Blob → `ipcRenderer.invoke("transcribe-audio", buffer, translateMode, mimeType)` → main `transcription-service.js` → provider SDK (Groq/OpenAI) → text → `type-text` with clipboard-based insertion → activity persisted.
 
-WhispLine is an Electron-based voice input application that transcribes speech to text using the Groq API. It runs as a system tray application and uses global hotkeys for voice recording.
+## Key files
+- `src/main.js`: windows/tray lifecycle, hotkeys, and IPC handlers:
+  - transcribe: `ipcMain.handle("transcribe-audio")`
+  - text insertion: `ipcMain.handle("type-text")`
+  - prompt visibility/cleanup: `hide-input-prompt`, `cleanup-microphone`
+- `src/views/input-prompt.html`: recording UI + audio capture. Chooses `mimeType` (prefers `audio/mp4` if supported else `audio/webm;codecs=opus`), accumulates chunks, sends to main.
+- `src/services/transcription-service.js`: writes a temp file in `os.tmpdir()`; picks extension from MIME (`.m4a`/`.webm`/`.wav`), selects model, delegates to provider, cleans up.
+- Providers:
+  - `src/services/groq-transcription.js`: `whisper-large-v3(-turbo)`, uses `groq-sdk` (`audio.transcriptions/translations`).
+  - `src/services/openai-transcription.js`: `whisper-1`, `gpt-4o(-mini)-transcribe`, via `openai` SDK.
+- `src/permission-manager.js`: mic + Accessibility checks (macOS). Text insertion on macOS uses clipboard save/restore and AppleScript Cmd+V.
+- `src/database-manager.js`: persists transcription activity; main notifies `activity-updated`.
 
-### Core Components:
+## Conventions and behavior
+- Settings via `electron-store`: keys like `provider` (default `groq`), `model` (e.g., `whisper-large-v3-turbo`), `language`, `dictionary`, `apiKeyGroq`, `apiKeyOpenAI`.
+- Translate mode forces model: OpenAI → `whisper-1`; Groq → `whisper-large-v3`. Otherwise use stored `model`.
+- Audio is not transcoded; temp-file extension must match MIME. Renderer passes actual `recordingMimeType` with the buffer.
+- IPC is the contract between main and renderers—do not change channel names casually.
 
-- **`src/main.js`**: The Electron main process. It manages the application's lifecycle, windows, system tray, global hotkeys, and IPC channels. This is the central coordination point of the application.
-- **`src/views/*.html`**: The renderer processes for the UI.
-  - `main.html`: The primary (but hidden) application window.
-  - `settings.html`: The user-facing settings panel for API keys and other configurations.
-  - `input-prompt.html`: A borderless overlay window for visualizing audio input during recording.
-- **`src/permission-manager.js`**: A client-side module responsible for handling microphone and accessibility permissions, which are critical for the app's functionality.
-- **`electron-store`**: Used for persistent storage of user settings.
+## Developer workflows
+- Install/run: `npm install`; dev: `npm run dev`; prod: `npm start` (VS Code task: “Start WhispLine”).
+- Build: `npm run build` (or platform-specific scripts if present).
+- macOS permissions reset to re-test flows:
+  - `tccutil reset Accessibility com.tao.WhispLine`
+  - `tccutil reset Microphone com.tao.WhispLine`
 
-### Key Architectural Patterns:
+## Integration notes
+- Audio formats: `audio/mp4` (m4a/AAC) or `audio/webm;codecs=opus` (WebM/Opus) from renderer; both accepted by Groq/OpenAI. Prefer consistent MIME at the recorder to avoid mismatched extensions.
+- Native deps: `uiohook-napi` is native; rebuilds may be needed across platforms.
 
-- **Multi-Window Architecture**: The application uses several specialized windows. The main process is responsible for creating, showing, and hiding these windows in response to user actions (like clicking the tray icon or using a hotkey).
-- **Global Hotkey System**: `uiohook-napi` is used to capture global keyboard events (`Ctrl+Shift` for hold-to-record). This is a native dependency and a key feature.
-- **IPC Communication**: The application relies on `ipcMain.handle()` and `ipcRenderer.invoke()` for communication between the main process and the various renderer windows. For example, the input prompt window is shown and hidden via IPC calls from the main process.
-- **Text Insertion Fallback**: The application attempts to type transcribed text directly. If it lacks the necessary permissions (especially on macOS), it falls back to copying the text to the clipboard.
-
-## Developer Workflows
-
-### Setup and Running
-
-- **Install dependencies**: `npm install`
-- **Run in development mode**: `npm run dev`
-- **Run in production mode**: `npm start`
-
-### Building the Application
-
-- **Build for all platforms**: `npm run build`
-- **Build for a specific platform**:
-  - `npm run build:mac`
-  - `npm run build:win`
-  - `npm run build:linux`
-
-### Debugging Permissions on macOS
-
-To test the permission granting flow repeatedly, you can reset the permissions using these terminal commands:
-
-```bash
-tccutil reset Accessibility com.tao.WhispLine
-tccutil reset Microphone com.tao.WhispLine
-```
-
-## Critical Dependencies
-
-- **`electron`**: The core framework for the application.
-- **`groq-sdk`**: The SDK for interacting with the Groq API for speech-to-text transcription.
-- **`uiohook-napi`**: For global keyboard event listening. This is a native module and may have platform-specific considerations.
-- **`electron-store`**: For persisting user settings.
-
-When working on this codebase, pay close attention to the interactions between the main process and the renderer windows, the global hotkey implementation, and the platform-specific permission handling.
+## When adding features
+- Respect existing IPC channels and window responsibilities. If adding settings, wire through `electron-store` and `settings.html`.
+- For new transcription models, update provider `getSupportedModels()` and ensure `transcription-service` mapping (translate mode) stays coherent.
+- Keep temporary-file handling and cleanup intact; avoid blocking the main thread.

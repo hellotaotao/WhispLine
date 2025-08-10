@@ -65,11 +65,8 @@ npm run dev
 - Transcribed text displays correctly in the application UI and when inserted into other software
 - This is a Windows terminal limitation, not an application code issue
 
-## To Remove FluidInput completely from macOS’s Accessibility and Microphone permission lists, so that the permission granting process can be tested repeatedly.
+## Reset macOS permissions for repeated testing
 ```
-tccutil reset Accessibility com.tao.FluidInput
-tccutil reset Microphone com.tao.FluidInput
-
 tccutil reset Accessibility com.tao.WhispLine
 tccutil reset Microphone com.tao.WhispLine
 ```
@@ -82,4 +79,5 @@ tccutil reset Microphone com.tao.WhispLine
 
 ## License
 
-MIT License
+PolyForm Noncommercial 1.0.0
+https://polyformproject.org/licenses/noncommercial/1.0.0/

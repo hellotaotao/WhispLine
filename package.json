@@ -20,7 +20,7 @@
     "transcription"
   ],
   "author": "Tao",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "devDependencies": {
     "electron": "^37.2.6",
     "electron-builder": "^26.0.12",
