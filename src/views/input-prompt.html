@@ -410,8 +410,19 @@
           this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
 
           // Setup media recorder
+          // Try to use the best supported format, fallback to webm
+          let mimeType = "audio/webm;codecs=opus"; // Default fallback
+          if (MediaRecorder.isTypeSupported("audio/mp4")) {
+            mimeType = "audio/mp4"; // Better compression than WebM, widely supported
+          } else if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+            mimeType = "audio/webm;codecs=opus"; // Good compression, modern browsers
+          }
+          
+          console.log("Using audio format:", mimeType);
+          this.recordingMimeType = mimeType; // Store for later use
+          
           this.mediaRecorder = new MediaRecorder(this.mediaStream, {
-            mimeType: "audio/webm;codecs=opus",
+            mimeType: mimeType,
           });
 
           this.mediaRecorder.ondataavailable = (event) => {
@@ -503,7 +514,7 @@
       async processRecording() {
         try {
           const audioBlob = new Blob(this.audioChunks, {
-            type: "audio/webm",
+            type: this.recordingMimeType || "audio/webm", // Use actual recording format
           });
           const arrayBuffer = await audioBlob.arrayBuffer();
           const audioBuffer = Buffer.from(arrayBuffer);
@@ -511,7 +522,8 @@
           const transcription = await ipcRenderer.invoke(
             "transcribe-audio",
             audioBuffer,
-            this.translateMode
+            this.translateMode,
+            this.recordingMimeType // Pass the actual MIME type
           );
 
           if (transcription && transcription.trim()) {

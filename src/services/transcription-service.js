@@ -25,12 +25,31 @@ class TranscriptionService {
       model,
       language = 'auto',
       prompt = '',
-      translateMode = false
+      translateMode = false,
+      mimeType = 'audio/webm' // Default format
     } = options;
 
-    // Save audio buffer to temporary file
-    const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}.wav`);
+    // Determine file extension based on actual audio format
+    let fileExtension = '.webm'; // Default
+    if (mimeType.includes('mp4')) {
+      fileExtension = '.m4a';
+    } else if (mimeType.includes('webm')) {
+      fileExtension = '.webm';
+    } else if (mimeType.includes('wav')) {
+      fileExtension = '.wav';
+    }
+
+    // Save audio buffer to temporary file with correct extension
+    const tempFile = path.join(os.tmpdir(), `audio_${Date.now()}${fileExtension}`);
     fs.writeFileSync(tempFile, audioBuffer);
+
+    // Debug: log file info
+    const stats = fs.statSync(tempFile);
+    console.log(`📁 Audio file: ${path.basename(tempFile)} (${stats.size} bytes, ${fileExtension.slice(1).toUpperCase()} format)`);
+    
+    // Read first few bytes to check format signature
+    const headerBuffer = audioBuffer.slice(0, 12);
+    console.log(`🔍 File header:`, Array.from(headerBuffer).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
     try {
       // Determine the actual model to use

@@ -743,7 +743,7 @@ ipcMain.handle("cleanup-microphone", () => {
   return true;
 });
 
-ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = false) => {
+ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = false, mimeType = 'audio/webm') => {
   try {
     const provider = store.get("provider", "groq");
     const apiKey = provider === 'openai'
@@ -765,7 +765,8 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
       model,
       language,
       prompt: dictionary,
-      translateMode
+      translateMode,
+      mimeType
     });
 
     // Save successful transcription to database

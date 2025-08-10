@@ -29,10 +29,10 @@ class OpenAITranscriptionService {
       const translationResponse = await this.client.audio.translations.create(translationOptions);
       return typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
     } else {
-      // OpenAI transcriptions - use stable whisper-1 for now
+      // OpenAI transcriptions - support multiple models now
       const transcriptionOptions = {
         file: fs.createReadStream(tempFile),
-        model: 'whisper-1', // Force whisper-1 for stability
+        model: model, // Use the selected model (whisper-1, gpt-4o-transcribe, etc.)
         response_format: 'text',
       };
       
@@ -46,10 +46,9 @@ class OpenAITranscriptionService {
 
   static getSupportedModels() {
     return [
-      'whisper-1'
-      // Note: GPT-4o models may require special access permissions
-      // 'gpt-4o-transcribe',
-      // 'gpt-4o-mini-transcribe'
+      'whisper-1',
+      'gpt-4o-transcribe',
+      'gpt-4o-mini-transcribe'
     ];
   }
 }
