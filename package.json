@@ -1,6 +1,6 @@
 {
   "name": "whisp-line",
-  "version": "1.0.69",
+  "version": "1.0.70",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -44,9 +44,6 @@
       "src/**/*",
       "assets/**/*"
     ],
-    "asarUnpack": [
-      "node_modules/koffi/**"
-    ],
     "mac": {
       "icon": "assets/icon.icns",
       "category": "public.app-category.productivity",
@@ -77,10 +74,16 @@
     },
     "win": {
       "icon": "assets/icon.ico",
-      "target": "nsis"
+      "target": "nsis",
+      "asarUnpack": [
+        "node_modules/koffi/**"
+      ]
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "asarUnpack": [
+        "node_modules/koffi/**"
+      ]
     }
   }
 }
