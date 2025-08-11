@@ -890,6 +890,33 @@ async function loadSettings() {
       updateShortcutDisplays();
     }
 
+    function saveShortcuts() {
+      // Validate shortcuts before saving
+      const transcriptionKeys = currentSettings.shortcuts?.transcription?.keys || [];
+      const translationKeys = currentSettings.shortcuts?.translation?.keys || [];
+      
+      // Check for conflicts
+      if (transcriptionKeys.length > 0 && translationKeys.length > 0) {
+        const transcriptionSet = new Set(transcriptionKeys);
+        const translationSet = new Set(translationKeys);
+        const intersection = [...transcriptionSet].filter(x => translationSet.has(x));
+        
+        if (transcriptionKeys.length === translationKeys.length && intersection.length === transcriptionKeys.length) {
+          alert('Transcription and translation shortcuts cannot be identical. Please choose different combinations.');
+          return;
+        }
+      }
+      
+      // Validate minimum shortcut length
+      if (transcriptionKeys.length === 0 || translationKeys.length === 0) {
+        alert('Both shortcuts must have at least one key. Please record shortcuts for both transcription and translation.');
+        return;
+      }
+      
+      // Close modal and the changes will be saved when the main save button is clicked
+      closeShortcutModal();
+    }
+
     function closeShortcutModal() {
       stopRecording();
       document.getElementById('shortcutModal').classList.remove('active');
@@ -1020,10 +1047,21 @@ async function loadSettings() {
         'Delete': 'Delete',
         'F1': 'F1', 'F2': 'F2', 'F3': 'F3', 'F4': 'F4',
         'F5': 'F5', 'F6': 'F6', 'F7': 'F7', 'F8': 'F8',
-        'F9': 'F9', 'F10': 'F10', 'F11': 'F11', 'F12': 'F12'
+        'F9': 'F9', 'F10': 'F10', 'F11': 'F11', 'F12': 'F12',
+        'ArrowUp': '↑', 'ArrowDown': '↓', 'ArrowLeft': '←', 'ArrowRight': '→'
       };
       
-      return keyMap[e.code] || (e.key.length === 1 ? e.key.toUpperCase() : null);
+      // Map special keys first
+      if (keyMap[e.code]) {
+        return keyMap[e.code];
+      }
+      
+      // For regular keys, use the key if it's a single character
+      if (e.key.length === 1 && e.key.match(/[a-zA-Z0-9]/)) {
+        return e.key.toUpperCase();
+      }
+      
+      return null;
     }
 
     function resetShortcuts() {
@@ -1062,7 +1100,7 @@ async function loadSettings() {
     document.getElementById('changeShortcut').addEventListener('click', openShortcutModal);
     document.getElementById('cancelShortcut').addEventListener('click', closeShortcutModal);
     document.getElementById('resetShortcuts').addEventListener('click', resetShortcuts);
-    document.getElementById('saveShortcuts').addEventListener('click', closeShortcutModal);
+    document.getElementById('saveShortcuts').addEventListener('click', saveShortcuts);
     document.getElementById('recordTranscription').addEventListener('click', () => startRecording('transcription'));
     document.getElementById('recordTranslation').addEventListener('click', () => startRecording('translation'));
 
