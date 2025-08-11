@@ -49,6 +49,22 @@ npm run dev
 npm run build
 ```
 
+## Console Character Encoding (Windows)
+
+On Windows, the console may display non-English characters as garbled text due to PowerShell/CMD output encoding settings.
+
+**Solution**:
+Set UTF-8 encoding in your terminal before running the application:
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+npm run dev
+```
+
+**Note**:
+- This only affects development console output, not application functionality
+- Transcribed text displays correctly in the application UI and when inserted into other software
+- This is a Windows terminal limitation, not an application code issue
+
 ## To Remove FluidInput completely from macOS’s Accessibility and Microphone permission lists, so that the permission granting process can be tested repeatedly.
 ```
 tccutil reset Accessibility com.tao.FluidInput
@@ -67,4 +83,3 @@ tccutil reset Microphone com.tao.WhispLine
 ## License
 
 MIT License
-
