@@ -863,7 +863,7 @@ ipcMain.handle("type-text", async (event, text) => {
           
           return {
             success: true,
-            method: "koffi_sendkeys",
+            method: "koffi_sendinput",
             message: "Text inserted directly via Windows API.",
           };
         } catch (koffiError) {
@@ -873,7 +873,7 @@ ipcMain.handle("type-text", async (event, text) => {
           clipboard.writeText(text);
           return {
             success: true,
-            method: "clipboard_fallback",
+            method: "clipboard",
             message: "Direct text insertion failed, text copied to clipboard. Press Ctrl+V to paste.",
           };
         }
