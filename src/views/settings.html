@@ -231,6 +231,156 @@
       color: #856404;
     }
   .hidden { display: none; }
+
+  /* Shortcut Modal Styles */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+
+  .modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    width: 500px;
+    max-width: 90vw;
+  }
+
+  .modal-header {
+    margin-bottom: 20px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .modal-description {
+    font-size: 14px;
+    color: #666;
+  }
+
+  .shortcut-recorder {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 15px 0;
+    text-align: center;
+  }
+
+  .shortcut-recorder.recording {
+    border-color: #1976d2;
+    background: #e3f2fd;
+  }
+
+  .shortcut-label {
+    font-weight: 500;
+    margin-bottom: 10px;
+    color: #333;
+  }
+
+  .shortcut-display {
+    font-family: monospace;
+    font-size: 16px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    min-height: 20px;
+    color: #333;
+  }
+
+  .shortcut-display.empty {
+    color: #999;
+    font-style: italic;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .btn-record {
+    background: #28a745;
+    color: white;
+  }
+
+  .btn-record:hover {
+    background: #218838;
+  }
+
+  .btn-record.recording {
+    background: #dc3545;
+  }
+
+  .btn-record.recording:hover {
+    background: #c82333;
+  }
+
+  /* Switch styles for checkboxes */
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+  }
+
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 24px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+
+  input:checked + .slider {
+    background-color: #1976d2;
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(26px);
+  }
   </style>
 </head>
 <body>
@@ -253,14 +403,20 @@
       <div class="setting-group">
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Set default keyboard shortcuts</div>
+            <div class="setting-title">Keyboard Shortcuts</div>
             <div class="setting-description">
-              Choose your preferred keyboard shortcuts for voice input.
+              Customize your keyboard shortcuts for voice input and translation.
             </div>
           </div>
           <div class="setting-control">
+            <div style="margin-bottom: 8px;">
+              <strong>Transcription:</strong> <span id="transcriptionShortcut">Ctrl+Shift</span>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <strong>Translation:</strong> <span id="translationShortcut">Shift+Alt</span>
+            </div>
             <button class="btn btn-secondary" id="changeShortcut">
-              Change shortcut
+              Customize Shortcuts
             </button>
           </div>
         </div>
@@ -487,6 +643,36 @@
     </div>
   </div>
 
+  <!-- Shortcut Customization Modal -->
+  <div id="shortcutModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Customize Shortcuts</div>
+        <div class="modal-description">
+          Click "Record" and press your desired key combination. Hold down the keys for at least 1 second.
+        </div>
+      </div>
+      
+      <div class="shortcut-recorder" id="transcriptionRecorder">
+        <div class="shortcut-label">Transcription Shortcut</div>
+        <div class="shortcut-display" id="transcriptionDisplay">Ctrl+Shift</div>
+        <button class="btn btn-record" id="recordTranscription">Record</button>
+      </div>
+      
+      <div class="shortcut-recorder" id="translationRecorder">
+        <div class="shortcut-label">Translation Shortcut</div>
+        <div class="shortcut-display" id="translationDisplay">Shift+Alt</div>
+        <button class="btn btn-record" id="recordTranslation">Record</button>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="cancelShortcut">Cancel</button>
+        <button class="btn btn-secondary" id="resetShortcuts">Reset to Default</button>
+        <button class="btn" id="saveShortcuts">Save</button>
+      </div>
+    </div>
+  </div>
+
   <script>
 const { ipcRenderer } = require("electron");
 
@@ -530,6 +716,12 @@ function toggleApiKeyVisibility(provider) {
 
 let currentSettings = {};
 
+// Shortcut recording state
+let isRecordingShortcut = false;
+let currentRecordingType = null; // 'transcription' or 'translation'
+let recordedKeys = [];
+let recordingTimeout = null;
+
 async function loadSettings() {
   try {
     currentSettings = await ipcRenderer.invoke("get-settings");
@@ -563,12 +755,27 @@ async function loadSettings() {
         autoLaunchCheck.checked = currentSettings.autoLaunch;
         startMinimizedCheck.checked = currentSettings.startMinimized;
 
+        // Update shortcut displays
+        updateShortcutDisplays();
+
         // Check initial permission status
         await checkMicrophonePermissionStatus();
         await checkAccessibilityStatus();
       } catch (error) {
         console.error("Failed to load settings:", error);
       }
+    }
+
+    function updateShortcutDisplays() {
+      const shortcuts = currentSettings.shortcuts || {
+        transcription: { keys: ['Ctrl', 'Shift'], label: 'Ctrl+Shift' },
+        translation: { keys: ['Shift', 'Alt'], label: 'Shift+Alt' }
+      };
+      
+      document.getElementById('transcriptionShortcut').textContent = shortcuts.transcription.label;
+      document.getElementById('translationShortcut').textContent = shortcuts.translation.label;
+      document.getElementById('transcriptionDisplay').textContent = shortcuts.transcription.label;
+      document.getElementById('translationDisplay').textContent = shortcuts.translation.label;
     }
 
     async function checkMicrophonePermissionStatus() {
@@ -660,6 +867,7 @@ async function loadSettings() {
           apiKeyGroq: document.getElementById('apiKeyGroq').value,
           apiKeyOpenAI: document.getElementById('apiKeyOpenAI').value,
           shortcut: currentSettings.shortcut,
+          shortcuts: currentSettings.shortcuts,
           language: document.getElementById('languageSelect').value,
           model: document.getElementById('modelSelect').value,
           microphone: currentSettings.microphone,
@@ -674,6 +882,156 @@ async function loadSettings() {
         console.error("Failed to save settings:", error);
         alert("Failed to save settings. Please try again.");
       }
+    }
+
+    // Shortcut recording functions
+    function openShortcutModal() {
+      document.getElementById('shortcutModal').classList.add('active');
+      updateShortcutDisplays();
+    }
+
+    function closeShortcutModal() {
+      stopRecording();
+      document.getElementById('shortcutModal').classList.remove('active');
+    }
+
+    function startRecording(type) {
+      if (isRecordingShortcut) {
+        stopRecording();
+        return;
+      }
+
+      isRecordingShortcut = true;
+      currentRecordingType = type;
+      recordedKeys = [];
+
+      const button = document.getElementById(type === 'transcription' ? 'recordTranscription' : 'recordTranslation');
+      const recorder = document.getElementById(type === 'transcription' ? 'transcriptionRecorder' : 'translationRecorder');
+      const display = document.getElementById(type === 'transcription' ? 'transcriptionDisplay' : 'translationDisplay');
+
+      button.textContent = 'Stop Recording';
+      button.classList.add('recording');
+      recorder.classList.add('recording');
+      display.textContent = 'Press and hold your key combination...';
+      display.classList.add('empty');
+
+      // Listen for key events
+      document.addEventListener('keydown', handleKeyDown, true);
+      document.addEventListener('keyup', handleKeyUp, true);
+
+      // Auto-stop after 10 seconds
+      recordingTimeout = setTimeout(() => {
+        stopRecording();
+        alert('Recording timed out. Please try again.');
+      }, 10000);
+    }
+
+    function stopRecording() {
+      if (!isRecordingShortcut) return;
+
+      isRecordingShortcut = false;
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keyup', handleKeyUp, true);
+
+      if (recordingTimeout) {
+        clearTimeout(recordingTimeout);
+        recordingTimeout = null;
+      }
+
+      const button = document.getElementById(currentRecordingType === 'transcription' ? 'recordTranscription' : 'recordTranslation');
+      const recorder = document.getElementById(currentRecordingType === 'transcription' ? 'transcriptionRecorder' : 'translationRecorder');
+      const display = document.getElementById(currentRecordingType === 'transcription' ? 'transcriptionDisplay' : 'translationDisplay');
+
+      button.textContent = 'Record';
+      button.classList.remove('recording');
+      recorder.classList.remove('recording');
+      display.classList.remove('empty');
+
+      // If we recorded keys, update the shortcut
+      if (recordedKeys.length > 0) {
+        const label = recordedKeys.join('+');
+        display.textContent = label;
+        
+        // Update the shortcuts in currentSettings
+        if (!currentSettings.shortcuts) {
+          currentSettings.shortcuts = {
+            transcription: { keys: ['Ctrl', 'Shift'], label: 'Ctrl+Shift' },
+            translation: { keys: ['Shift', 'Alt'], label: 'Shift+Alt' }
+          };
+        }
+        
+        currentSettings.shortcuts[currentRecordingType] = {
+          keys: [...recordedKeys],
+          label: label
+        };
+        
+        updateShortcutDisplays();
+      }
+
+      currentRecordingType = null;
+      recordedKeys = [];
+    }
+
+    function handleKeyDown(e) {
+      if (!isRecordingShortcut) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+
+      const keyName = getKeyName(e);
+      if (keyName && !recordedKeys.includes(keyName)) {
+        recordedKeys.push(keyName);
+        
+        const display = document.getElementById(currentRecordingType === 'transcription' ? 'transcriptionDisplay' : 'translationDisplay');
+        display.textContent = recordedKeys.join('+');
+        display.classList.remove('empty');
+      }
+    }
+
+    function handleKeyUp(e) {
+      if (!isRecordingShortcut) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+
+      // If user releases all keys and we have at least one key recorded, finish recording
+      if (recordedKeys.length > 0) {
+        setTimeout(() => {
+          stopRecording();
+        }, 200);
+      }
+    }
+
+    function getKeyName(e) {
+      const keyMap = {
+        'ControlLeft': 'Ctrl',
+        'ControlRight': 'Ctrl',
+        'ShiftLeft': 'Shift',
+        'ShiftRight': 'Shift',
+        'AltLeft': 'Alt',
+        'AltRight': 'Alt',
+        'MetaLeft': 'Cmd',
+        'MetaRight': 'Cmd',
+        'Space': 'Space',
+        'Tab': 'Tab',
+        'Enter': 'Enter',
+        'Escape': 'Escape',
+        'Backspace': 'Backspace',
+        'Delete': 'Delete',
+        'F1': 'F1', 'F2': 'F2', 'F3': 'F3', 'F4': 'F4',
+        'F5': 'F5', 'F6': 'F6', 'F7': 'F7', 'F8': 'F8',
+        'F9': 'F9', 'F10': 'F10', 'F11': 'F11', 'F12': 'F12'
+      };
+      
+      return keyMap[e.code] || (e.key.length === 1 ? e.key.toUpperCase() : null);
+    }
+
+    function resetShortcuts() {
+      currentSettings.shortcuts = {
+        transcription: { keys: ['Ctrl', 'Shift'], label: 'Ctrl+Shift' },
+        translation: { keys: ['Shift', 'Alt'], label: 'Shift+Alt' }
+      };
+      updateShortcutDisplays();
     }
 
     function closeSettings() {
@@ -699,6 +1057,21 @@ async function loadSettings() {
     document
       .getElementById("checkAccessibility")
       .addEventListener("click", recheckAccessibilityPermission);
+
+    // Shortcut modal event listeners
+    document.getElementById('changeShortcut').addEventListener('click', openShortcutModal);
+    document.getElementById('cancelShortcut').addEventListener('click', closeShortcutModal);
+    document.getElementById('resetShortcuts').addEventListener('click', resetShortcuts);
+    document.getElementById('saveShortcuts').addEventListener('click', closeShortcutModal);
+    document.getElementById('recordTranscription').addEventListener('click', () => startRecording('transcription'));
+    document.getElementById('recordTranslation').addEventListener('click', () => startRecording('translation'));
+
+    // Close modal when clicking outside
+    document.getElementById('shortcutModal').addEventListener('click', (e) => {
+      if (e.target.id === 'shortcutModal') {
+        closeShortcutModal();
+      }
+    });
 
     // Sidebar navigation
     document.querySelectorAll(".sidebar-item").forEach((item) => {
