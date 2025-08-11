@@ -19,6 +19,17 @@ const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
 const TranscriptionService = require("./services/transcription-service");
 
+// Import Windows text inserter for Windows platform
+let windowsTextInserter = null;
+if (process.platform === 'win32') {
+  try {
+    windowsTextInserter = require("./windows-text-inserter-koffi");
+    console.log("Windows koffi text inserter loaded");
+  } catch (error) {
+    console.error("Failed to load Windows text inserter:", error);
+  }
+}
+
 const store = new Store();
 const db = new DatabaseManager();
 const permissionManager = new PermissionManager();
@@ -796,7 +807,7 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
 ipcMain.handle("type-text", async (event, text) => {
   try {
     if (process.platform === "darwin") {
-      // Use clipboard method with comprehensive preservation
+      // macOS: Use clipboard method with comprehensive preservation
       const originalClipboardData = await saveCompleteClipboard();
       
       try {
@@ -842,8 +853,40 @@ ipcMain.handle("type-text", async (event, text) => {
           message: "Text copied to clipboard. Press Cmd+V to paste.",
         };
       }
+    } else if (process.platform === "win32") {
+      // Windows: Try koffi text insertion first, fallback to clipboard
+      if (windowsTextInserter) {
+        try {
+          console.log("Attempting Windows text insertion via koffi:", JSON.stringify(text));
+          await windowsTextInserter.insertText(text);
+          
+          return {
+            success: true,
+            method: "koffi_sendkeys",
+            message: "Text inserted directly via Windows API.",
+          };
+        } catch (koffiError) {
+          console.error("Windows koffi text insertion failed:", koffiError);
+          
+          // Fallback to clipboard if koffi fails
+          clipboard.writeText(text);
+          return {
+            success: true,
+            method: "clipboard_fallback",
+            message: "Direct text insertion failed, text copied to clipboard. Press Ctrl+V to paste.",
+          };
+        }
+      } else {
+        // No koffi available, use clipboard
+        clipboard.writeText(text);
+        return {
+          success: true,
+          method: "clipboard",
+          message: "Text copied to clipboard. Press Ctrl+V to paste.",
+        };
+      }
     } else {
-      // For non-macOS platforms, fall back to clipboard
+      // Other platforms: fallback to clipboard
       clipboard.writeText(text);
       return {
         success: true,

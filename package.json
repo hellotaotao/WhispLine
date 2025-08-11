@@ -1,6 +1,6 @@
 {
   "name": "whisp-line",
-  "version": "1.0.67",
+  "version": "1.0.68",
   "description": "Voice input method software built with Electron",
   "main": "src/main.js",
   "scripts": {
@@ -31,9 +31,7 @@
     "electron-store": "^10.1.0",
     "groq-sdk": "^0.30.0",
     "openai": "^4.57.0",
-    "uiohook-napi": "^1.5.4"
-  },
-  "optionalDependencies": {
+    "uiohook-napi": "^1.5.4",
     "koffi": "^2.13.0"
   },
   "build": {
@@ -45,6 +43,9 @@
     "files": [
       "src/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
     ],
     "mac": {
       "icon": "assets/icon.icns",
