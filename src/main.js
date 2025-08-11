@@ -243,7 +243,7 @@ function positionInputPromptOnActiveDisplay(offsetBottom = 100) {
 
 function createTray() {
   try {
-    tray = new Tray(path.join(__dirname, "../assets/tray-icon.png"));
+    tray = new Tray(path.join(__dirname, "../assets/icon.png"));
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -531,8 +531,9 @@ function cleanupOrphanedProcesses() {
 
 
 app.whenReady().then(async () => {
-  // Set macOS Dock icon (useful in development)
+  // Set platform-specific icons
   if (process.platform === 'darwin') {
+    // Set macOS Dock icon (useful in development)
     try {
       app.dock.setIcon(path.join(__dirname, '../assets/icon.png'));
     } catch (e) {
