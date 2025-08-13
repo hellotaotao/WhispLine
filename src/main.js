@@ -162,6 +162,9 @@ function createSettingsWindow() {
     },
     resizable: false,
     show: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
   });
 
   settingsWindow.loadFile(path.join(__dirname, "views/settings.html"));

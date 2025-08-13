@@ -16,7 +16,7 @@
 
     .container {
       display: flex;
-      height: 100vh;
+      height: calc(100vh - 40px);
     }
 
     .sidebar {
@@ -173,6 +173,56 @@
       background: #e0e0e0;
     }
 
+    /* Custom title bar styles */
+    .title-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 20px;
+      -webkit-app-region: drag;
+    }
+
+    .title-bar-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .title-bar-controls {
+      display: flex;
+      align-items: center;
+      -webkit-app-region: no-drag;
+    }
+
+    .title-bar-close {
+      width: 30px;
+      height: 30px;
+      border: none;
+      background: transparent;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s;
+    }
+
+    .title-bar-close:hover {
+      background: #ff6b6b;
+      color: white;
+    }
+
+    .title-bar-close .material-icons {
+      font-size: 18px;
+    }
+
+    .container {
+      height: calc(100vh - 40px);
+    }
+
     .input {
       padding: 8px 12px;
       border: 1px solid #ddd;
@@ -234,6 +284,14 @@
   </style>
 </head>
 <body>
+  <div class="title-bar">
+    <div class="title-bar-title">Settings - WhispLine</div>
+    <div class="title-bar-controls">
+      <button class="title-bar-close" onclick="closeSettings()">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+  </div>
   <div class="container">
     <div class="sidebar">
       <div class="sidebar-section">
