@@ -75,10 +75,66 @@ let tray;
 let hookStarted = false; // Track if hook is started
 let accessibilityWatchdog = null; // Low-frequency permission watchdog (macOS only)
 
-// Key state tracking for hotkey combination
-let ctrlPressed = false;
-let shiftPressed = false;
-let altPressed = false;
+// Helper function to map key names to UiohookKey values
+function getUiohookKey(keyName) {
+  const keyMap = {
+    'Ctrl': [UiohookKey.Ctrl, UiohookKey.CtrlR],
+    'Shift': [UiohookKey.Shift, UiohookKey.ShiftR],
+    'Alt': [UiohookKey.Alt, UiohookKey.AltR],
+    'Cmd': [UiohookKey.Cmd, UiohookKey.CmdR],
+    'Meta': [UiohookKey.Cmd, UiohookKey.CmdR], // Alias for Cmd
+    'Space': [UiohookKey.Space],
+    'Tab': [UiohookKey.Tab],
+    'Enter': [UiohookKey.Enter],
+    'Escape': [UiohookKey.Escape],
+    'Backspace': [UiohookKey.Backspace],
+    'Delete': [UiohookKey.Delete],
+    'F1': [UiohookKey.F1],
+    'F2': [UiohookKey.F2],
+    'F3': [UiohookKey.F3],
+    'F4': [UiohookKey.F4],
+    'F5': [UiohookKey.F5],
+    'F6': [UiohookKey.F6],
+    'F7': [UiohookKey.F7],
+    'F8': [UiohookKey.F8],
+    'F9': [UiohookKey.F9],
+    'F10': [UiohookKey.F10],
+    'F11': [UiohookKey.F11],
+    'F12': [UiohookKey.F12],
+    '↑': [UiohookKey.Up],
+    '↓': [UiohookKey.Down],
+    '←': [UiohookKey.Left],
+    '→': [UiohookKey.Right],
+    // Support alphanumeric keys
+    'A': [UiohookKey.A], 'B': [UiohookKey.B], 'C': [UiohookKey.C], 'D': [UiohookKey.D],
+    'E': [UiohookKey.E], 'F': [UiohookKey.F], 'G': [UiohookKey.G], 'H': [UiohookKey.H],
+    'I': [UiohookKey.I], 'J': [UiohookKey.J], 'K': [UiohookKey.K], 'L': [UiohookKey.L],
+    'M': [UiohookKey.M], 'N': [UiohookKey.N], 'O': [UiohookKey.O], 'P': [UiohookKey.P],
+    'Q': [UiohookKey.Q], 'R': [UiohookKey.R], 'S': [UiohookKey.S], 'T': [UiohookKey.T],
+    'U': [UiohookKey.U], 'V': [UiohookKey.V], 'W': [UiohookKey.W], 'X': [UiohookKey.X],
+    'Y': [UiohookKey.Y], 'Z': [UiohookKey.Z],
+    '0': [UiohookKey.Digit0], '1': [UiohookKey.Digit1], '2': [UiohookKey.Digit2],
+    '3': [UiohookKey.Digit3], '4': [UiohookKey.Digit4], '5': [UiohookKey.Digit5],
+    '6': [UiohookKey.Digit6], '7': [UiohookKey.Digit7], '8': [UiohookKey.Digit8],
+    '9': [UiohookKey.Digit9]
+  };
+  return keyMap[keyName] || [];
+}
+
+// Helper function to check if a shortcut combination is currently pressed
+function isShortcutPressed(shortcutKeys, pressedKeys) {
+  if (!Array.isArray(shortcutKeys) || shortcutKeys.length === 0) {
+    return false;
+  }
+  
+  return shortcutKeys.every(keyName => {
+    const uiohookKeys = getUiohookKey(keyName);
+    return uiohookKeys.length > 0 && uiohookKeys.some(uiohookKey => pressedKeys.has(uiohookKey));
+  });
+}
+
+// Key state tracking for custom hotkey combinations
+let pressedKeys = new Set();
 let isRecording = false;
 
 // Set up permission manager event listeners
@@ -306,54 +362,47 @@ async function setupGlobalHotkeys() {
     // Register keyboard event listeners (with defensive try/catch)
     uIOhook.on("keydown", (e) => {
       try {
-      // Ctrl key (left or right)
-      if (e.keycode === UiohookKey.Ctrl || e.keycode === UiohookKey.CtrlR) {
-        ctrlPressed = true;
-      }
-      // Shift key (left or right)
-      if (e.keycode === UiohookKey.Shift || e.keycode === UiohookKey.ShiftR) {
-        shiftPressed = true;
-      }
-      // Alt key (left or right)
-      if (e.keycode === UiohookKey.Alt || e.keycode === UiohookKey.AltR) {
-        altPressed = true;
-      }
+        // Track all pressed keys
+        pressedKeys.add(e.keycode);
 
-      // Start recording when Ctrl+Shift OR Shift+Alt are pressed
-      if (!isRecording) {
-        let shouldStartRecording = false;
-        let translateMode = false;
-        
-        // Ctrl+Shift for normal transcription
-        if (ctrlPressed && shiftPressed) {
-          shouldStartRecording = true;
-          translateMode = false;
-        }
-        // Shift+Alt for English translation
-        else if (shiftPressed && altPressed) {
-          shouldStartRecording = true;
-          translateMode = true;
-        }
-        
-        if (shouldStartRecording) {
-          // Check microphone permission before starting recording
-          permissionManager.checkAndRequestMicrophonePermission().then(hasPermission => {
-            if (hasPermission) {
-              isRecording = true;
-              if (inputPromptWindow) {
-                // Reposition to the active display before showing
-                positionInputPromptOnActiveDisplay(100);
-                inputPromptWindow.showInactive();
-                inputPromptWindow.webContents.send("start-recording", translateMode);
+        // Get current shortcuts configuration
+        const shortcuts = store.get("shortcuts", DEFAULT_SHORTCUTS);
+
+        // Check if we should start recording
+        if (!isRecording) {
+          let shouldStartRecording = false;
+          let translateMode = false;
+          
+          // Check transcription shortcut
+          if (isShortcutPressed(shortcuts.transcription.keys, pressedKeys)) {
+            shouldStartRecording = true;
+            translateMode = false;
+          }
+          // Check translation shortcut
+          else if (isShortcutPressed(shortcuts.translation.keys, pressedKeys)) {
+            shouldStartRecording = true;
+            translateMode = true;
+          }
+          
+          if (shouldStartRecording) {
+            // Check microphone permission before starting recording
+            permissionManager.checkAndRequestMicrophonePermission().then(hasPermission => {
+              if (hasPermission) {
+                isRecording = true;
+                if (inputPromptWindow) {
+                  // Reposition to the active display before showing
+                  positionInputPromptOnActiveDisplay(100);
+                  inputPromptWindow.showInactive();
+                  inputPromptWindow.webContents.send("start-recording", translateMode);
+                }
+              } else {
+                console.log("Recording cancelled due to lack of microphone permission");
               }
-            } else {
-              console.log("Recording cancelled due to lack of microphone permission");
-            }
-          }).catch(error => {
-            console.error("Error checking microphone permission:", error);
-          });
+            }).catch(error => {
+              console.error("Error checking microphone permission:", error);
+            });
+          }
         }
-      }
       } catch (handlerErr) {
         console.error("uIOhook keydown handler error:", handlerErr);
       }
@@ -361,24 +410,20 @@ async function setupGlobalHotkeys() {
 
     uIOhook.on("keyup", (e) => {
       try {
-      // Ctrl key released
-      if (e.keycode === UiohookKey.Ctrl || e.keycode === UiohookKey.CtrlR) {
-        ctrlPressed = false;
-      }
-      // Shift key released
-      if (e.keycode === UiohookKey.Shift || e.keycode === UiohookKey.ShiftR) {
-        shiftPressed = false;
-      }
-      // Alt key released
-      if (e.keycode === UiohookKey.Alt || e.keycode === UiohookKey.AltR) {
-        altPressed = false;
-      }
+        // Remove key from pressed keys set
+        pressedKeys.delete(e.keycode);
 
-      // Stop recording when neither Ctrl+Shift nor Shift+Alt is pressed
-      if (isRecording && !( (ctrlPressed && shiftPressed) || (shiftPressed && altPressed) )) {
-        isRecording = false;
-        inputPromptWindow?.webContents.send("stop-recording");
-      }
+        // Stop recording when neither shortcut combination is pressed
+        if (isRecording) {
+          const shortcuts = store.get("shortcuts", DEFAULT_SHORTCUTS);
+          const transcriptionPressed = isShortcutPressed(shortcuts.transcription.keys, pressedKeys);
+          const translationPressed = isShortcutPressed(shortcuts.translation.keys, pressedKeys);
+          
+          if (!transcriptionPressed && !translationPressed) {
+            isRecording = false;
+            inputPromptWindow?.webContents.send("stop-recording");
+          }
+        }
       } catch (handlerErr) {
         console.error("uIOhook keyup handler error:", handlerErr);
       }
@@ -461,6 +506,9 @@ function stopGlobalHotkeys() {
     try {
       console.log("Stopping global hotkey listener...");
 
+      // Clear pressed keys state
+      pressedKeys.clear();
+
       // Remove all listeners first
       uIOhook.removeAllListeners();
 
@@ -480,6 +528,9 @@ function stopGlobalHotkeys() {
     } catch (error) {
       console.error("Failed to stop global hotkeys:", error);
       hookStarted = false;
+
+      // Clear pressed keys state even on failure
+      pressedKeys.clear();
 
       // Clear watchdog even on failure path
       if (accessibilityWatchdog) {
@@ -684,13 +735,27 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
+// Default shortcut configurations
+const DEFAULT_SHORTCUTS = {
+  transcription: {
+    keys: ['Ctrl', 'Shift'],
+    label: 'Ctrl+Shift'
+  },
+  translation: {
+    keys: ['Shift', 'Alt'],
+    label: 'Shift+Alt'
+  }
+};
+
 // IPC handlers
 ipcMain.handle("get-settings", () => {
+  const shortcuts = store.get("shortcuts", DEFAULT_SHORTCUTS);
   return {
     apiKey: store.get("apiKey", ""),
     apiKeyGroq: store.get("apiKeyGroq", store.get("apiKey", "")),
     apiKeyOpenAI: store.get("apiKeyOpenAI", ""),
-    shortcut: "Ctrl+Shift (hold down)", // Fixed hotkey, not customizable
+    shortcut: `${shortcuts.transcription.label} (transcription), ${shortcuts.translation.label} (translation)`,
+    shortcuts: shortcuts,
     language: store.get("language", "auto"),
     model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
@@ -718,6 +783,16 @@ ipcMain.handle("save-settings", async (event, settings) => {
   store.set("startMinimized", settings.startMinimized);
   store.set("provider", settings.provider || "groq");
 
+  // Store shortcuts if provided
+  if (settings.shortcuts) {
+    store.set("shortcuts", settings.shortcuts);
+    console.log("Shortcuts updated:", settings.shortcuts);
+    
+    // Restart hotkeys with new shortcuts
+    await stopGlobalHotkeys();
+    await setupGlobalHotkeys();
+  }
+
   // Clear transcription service cache when settings change (especially API keys)
   clearTranscriptionServiceCache();
 
@@ -733,9 +808,6 @@ ipcMain.handle("save-settings", async (event, settings) => {
   } catch (error) {
     console.error("Failed to update auto-launch setting:", error);
   }
-
-  // Note: uiohook doesn't need re-registration like globalShortcut
-  // The hotkey combination is hardcoded to Ctrl+Shift
 
   return true;
 });
@@ -997,6 +1069,43 @@ ipcMain.handle("save-dictionary", async (event, text) => {
   } catch (error) {
     console.error("Error saving dictionary:", error);
     throw error;
+  }
+});
+
+// Validate shortcuts IPC handler
+ipcMain.handle("validate-shortcuts", async (event, shortcuts) => {
+  try {
+    // Ensure shortcuts have the correct structure
+    if (!shortcuts || typeof shortcuts !== 'object') {
+      return { valid: false, error: "Invalid shortcuts format" };
+    }
+    
+    if (!shortcuts.transcription || !shortcuts.translation) {
+      return { valid: false, error: "Missing transcription or translation shortcut" };
+    }
+    
+    if (!Array.isArray(shortcuts.transcription.keys) || !Array.isArray(shortcuts.translation.keys)) {
+      return { valid: false, error: "Shortcut keys must be arrays" };
+    }
+    
+    if (shortcuts.transcription.keys.length === 0 || shortcuts.translation.keys.length === 0) {
+      return { valid: false, error: "Shortcuts must have at least one key" };
+    }
+    
+    // Check for identical shortcuts
+    const transcriptionSet = new Set(shortcuts.transcription.keys);
+    const translationSet = new Set(shortcuts.translation.keys);
+    const intersection = [...transcriptionSet].filter(x => translationSet.has(x));
+    
+    if (shortcuts.transcription.keys.length === shortcuts.translation.keys.length && 
+        intersection.length === shortcuts.transcription.keys.length) {
+      return { valid: false, error: "Transcription and translation shortcuts cannot be identical" };
+    }
+    
+    return { valid: true };
+  } catch (error) {
+    console.error("Error validating shortcuts:", error);
+    return { valid: false, error: "Validation error: " + error.message };
   }
 });
 
