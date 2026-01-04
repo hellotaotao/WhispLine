@@ -1,5 +1,7 @@
 const { ipcRenderer } = require("electron");
 
+const SHORT_PRESS_THRESHOLD_MS = 500;
+
 class VoiceInputPrompt {
   constructor() {
     this.isRecording = false;
@@ -11,6 +13,10 @@ class VoiceInputPrompt {
     this.analyser = null;
     this.dataArray = null;
     this.animationId = null;
+    this.starting = false;
+    this.stopRequested = false;
+    this.recordingStartedAt = null;
+    this.cancelledShortPress = false;
 
     this.promptElement = document.getElementById("inputPrompt");
     this.promptText = document.getElementById("promptText");
@@ -34,17 +40,18 @@ class VoiceInputPrompt {
   setupEventListeners() {
     // Listen for start recording from main process
     ipcRenderer.on("start-recording", async (event, translateMode = false) => {
-      if (!this.isRecording) {
-        this.translateMode = translateMode;
-        await this.startRecording();
+      if (this.isRecording || this.starting) {
+        return;
       }
+      this.stopRequested = false;
+      this.translateMode = translateMode;
+      await this.startRecording();
     });
 
     // Listen for stop recording from main process
     ipcRenderer.on("stop-recording", () => {
-      if (this.isRecording) {
-        this.stopRecording();
-      }
+      this.stopRequested = true;
+      this.stopRecording();
     });
 
     // Listen for cleanup microphone signal
@@ -76,15 +83,15 @@ class VoiceInputPrompt {
   }
 
   async startRecording() {
-    if (this.isRecording) return;
+    if (this.isRecording || this.starting) return;
 
+    this.starting = true;
     try {
       // Show prompt immediately
       this.promptElement.classList.add("visible");
       this.promptText.textContent = "Starting recording...";
       this.statusText.textContent = "";
 
-      this.isRecording = true;
       this.audioChunks = [];
 
       // Update UI for recording state
@@ -99,7 +106,7 @@ class VoiceInputPrompt {
 
       // Create media stream directly using getUserMedia
       // In Electron, system-level permissions are handled by main process
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 44100,
           channelCount: 1,
@@ -108,6 +115,15 @@ class VoiceInputPrompt {
           autoGainControl: true
         }
       });
+
+      if (this.stopRequested) {
+        this.mediaStream = stream;
+        this.cleanup();
+        this.hidePrompt();
+        return;
+      }
+
+      this.mediaStream = stream;
 
       // Setup audio context for visualization
       this.audioContext = new (window.AudioContext ||
@@ -148,32 +164,52 @@ class VoiceInputPrompt {
       };
 
       this.mediaRecorder.start();
+      this.recordingStartedAt = Date.now();
+      this.cancelledShortPress = false;
+      this.isRecording = true;
       this.startWaveAnimation();
+
+      if (this.stopRequested) {
+        this.stopRecording();
+      }
     } catch (error) {
       console.error("Error starting recording:", error);
       await this.handleRecordingError(error);
+    } finally {
+      this.starting = false;
     }
   }
 
   stopRecording() {
-    if (!this.isRecording) return;
+    if (!this.isRecording) {
+      return;
+    }
 
     this.isRecording = false;
-    this.promptText.textContent = "Processing...";
-    this.statusText.textContent = "Transcribing audio...";
+    const elapsedMs = this.recordingStartedAt
+      ? Date.now() - this.recordingStartedAt
+      : 0;
+    const isShortPress = elapsedMs <= SHORT_PRESS_THRESHOLD_MS;
+    this.cancelledShortPress = isShortPress;
 
-    // Stop media recorder
+    if (isShortPress) {
+      this.promptText.textContent = "Cancelled";
+      this.statusText.textContent = "";
+    } else {
+      this.promptText.textContent = "Processing...";
+      this.statusText.textContent = "Transcribing audio...";
+    }
+
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.stop();
     }
 
-    // Force cleanup of media stream and tracks
-    this.cleanup();
-
+    this.cleanup({ preserveAudioChunks: true });
     this.stopWaveAnimation();
   }
 
-  cleanup() {
+  cleanup(options = {}) {
+    const { preserveAudioChunks = false } = options;
     console.log('Starting microphone cleanup...');
     
     // Stop all media tracks
@@ -204,7 +240,9 @@ class VoiceInputPrompt {
     // Clean up media recorder
     if (this.mediaRecorder) {
       console.log('Cleaning up media recorder...');
-      this.mediaRecorder = null;
+      if (!preserveAudioChunks) {
+        this.mediaRecorder = null;
+      }
     }
 
     // Clean up analyser
@@ -218,13 +256,32 @@ class VoiceInputPrompt {
     }
 
     // Reset audio chunks
-    this.audioChunks = [];
+    if (!preserveAudioChunks) {
+      this.audioChunks = [];
+    }
     
     console.log('Microphone cleanup completed');
   }
 
   async processRecording() {
     try {
+      if (this.cancelledShortPress) {
+        this.cancelledShortPress = false;
+        this.recordingStartedAt = null;
+        this.audioChunks = [];
+        this.statusText.textContent = "Cancelled";
+        this.statusText.style.color = "#ffaa00";
+        setTimeout(() => this.hidePrompt(), 300);
+        return;
+      }
+      if (!this.audioChunks.length) {
+        console.warn('No audio chunks captured; skipping transcription request');
+        this.statusText.textContent = "No audio captured";
+        this.statusText.style.color = "#ffaa00";
+        setTimeout(() => this.hidePrompt(), 1500);
+        return;
+      }
+
       const audioBlob = new Blob(this.audioChunks, {
         type: this.recordingMimeType || "audio/webm", // Use actual recording format
       });
@@ -398,6 +455,10 @@ class VoiceInputPrompt {
 
     // Reset recording state
     this.isRecording = false;
+    this.stopRequested = false;
+    this.starting = false;
+    this.recordingStartedAt = null;
+    this.cancelledShortPress = false;
 
     setTimeout(() => {
       ipcRenderer.invoke("hide-input-prompt");
