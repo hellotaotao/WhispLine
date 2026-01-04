@@ -322,36 +322,59 @@ async function setupGlobalHotkeys() {
       // Start recording when Ctrl+Shift OR Shift+Alt are pressed
       if (!isRecording) {
         let shouldStartRecording = false;
-        let translateMode = false;
-        
+
         // Ctrl+Shift for normal transcription
         if (ctrlPressed && shiftPressed) {
           shouldStartRecording = true;
-          translateMode = false;
         }
         // Shift+Alt for English translation
         else if (shiftPressed && altPressed) {
           shouldStartRecording = true;
-          translateMode = true;
         }
         
         if (shouldStartRecording) {
           // Check microphone permission before starting recording
-          permissionManager.checkAndRequestMicrophonePermission().then(hasPermission => {
-            if (hasPermission) {
+          permissionManager
+            .checkAndRequestMicrophonePermission()
+            .then((hasPermission) => {
+              if (!hasPermission) {
+                console.log("Recording cancelled due to lack of microphone permission");
+                return;
+              }
+
+              // Re-evaluate the shortcut state in case the user released keys while waiting
+              let comboActive = false;
+              let currentTranslateMode = false;
+
+              if (ctrlPressed && shiftPressed) {
+                comboActive = true;
+                currentTranslateMode = false;
+              } else if (shiftPressed && altPressed) {
+                comboActive = true;
+                currentTranslateMode = true;
+              }
+
+              if (!comboActive) {
+                console.log("Recording cancelled because shortcut was released before activation");
+                return;
+              }
+
+              if (isRecording) {
+                // Another recording was already started while waiting for permission
+                return;
+              }
+
               isRecording = true;
               if (inputPromptWindow) {
                 // Reposition to the active display before showing
                 positionInputPromptOnActiveDisplay(100);
                 inputPromptWindow.showInactive();
-                inputPromptWindow.webContents.send("start-recording", translateMode);
+                inputPromptWindow.webContents.send("start-recording", currentTranslateMode);
               }
-            } else {
-              console.log("Recording cancelled due to lack of microphone permission");
-            }
-          }).catch(error => {
-            console.error("Error checking microphone permission:", error);
-          });
+            })
+            .catch((error) => {
+              console.error("Error checking microphone permission:", error);
+            });
         }
       }
       } catch (handlerErr) {
