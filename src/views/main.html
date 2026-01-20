@@ -207,37 +207,64 @@
       const container = document.getElementById('activity-container');
       if (!container) return;
 
-      if (activities.length === 0) {
-        container.innerHTML = '<p>No recent activity</p>';
+      if (!Array.isArray(activities) || activities.length === 0) {
+        const empty = document.createElement('p');
+        empty.textContent = 'No recent activity';
+        container.replaceChildren(empty);
         return;
       }
 
-      let html = '<div class="section-header"><h4>RECENT</h4></div>';
-      activities.forEach((activity) => {
-        const time = new Date(activity.timestamp).toLocaleTimeString('en-US', { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true 
-        });
-        
-        // Guard against undefined/null text
-        const rawText = (activity.text ?? '').toString();
-        const safeAttr = rawText.replace(/'/g, "\\'");
-        
-        html += `
-          <div class="activity-item">
-            <div class="activity-content">
-              <div class="activity-time">${time}</div>
-              <div class="activity-text">${rawText}</div>
-            </div>
-            <button class="copy-btn" onclick="copyToClipboard('${safeAttr}', this)" title="Copy text">
-              <span class="material-icons">content_copy</span>
-            </button>
-          </div>
-        `;
-      });
+      container.replaceChildren();
 
-      container.innerHTML = html;
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      const headerTitle = document.createElement('h4');
+      headerTitle.textContent = 'RECENT';
+      header.appendChild(headerTitle);
+      container.appendChild(header);
+
+      activities.forEach((activity) => {
+        const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        const rawText = (activity.text ?? '').toString();
+
+        const item = document.createElement('div');
+        item.className = 'activity-item';
+
+        const content = document.createElement('div');
+        content.className = 'activity-content';
+
+        const timeEl = document.createElement('div');
+        timeEl.className = 'activity-time';
+        timeEl.textContent = time;
+
+        const textEl = document.createElement('div');
+        textEl.className = 'activity-text';
+        textEl.textContent = rawText;
+
+        const button = document.createElement('button');
+        button.className = 'copy-btn';
+        button.type = 'button';
+        button.title = 'Copy text';
+        button.addEventListener('click', () => {
+          copyToClipboard(rawText, button);
+        });
+
+        const icon = document.createElement('span');
+        icon.className = 'material-icons';
+        icon.textContent = 'content_copy';
+
+        content.appendChild(timeEl);
+        content.appendChild(textEl);
+        button.appendChild(icon);
+        item.appendChild(content);
+        item.appendChild(button);
+        container.appendChild(item);
+      });
     }
 
     function exploreUseCases() {
