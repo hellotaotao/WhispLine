@@ -354,6 +354,13 @@ class VoiceInputPrompt {
           this.statusText.style.color = "#00ff00";
           // Hide prompt immediately after successful insertion on Windows
           this.hidePrompt();
+        } else if (result.method === "cgevent_unicode") {
+          // macOS CGEvent Unicode method
+          console.log("Text inserted via CGEvent:", text);
+          this.statusText.textContent = result.message || "Text inserted";
+          this.statusText.style.color = "#00ff00";
+          // Hide prompt immediately after successful insertion
+          this.hidePrompt();
         } else if (result.method === "clipboard_textinsert") {
           console.log("Text inserted successfully:", text);
           this.statusText.textContent = result.message || "Text inserted automatically";

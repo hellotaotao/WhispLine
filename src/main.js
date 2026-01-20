@@ -19,14 +19,28 @@ const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
 const TranscriptionService = require("./services/transcription-service");
 
-// Import Windows text inserter for Windows platform
+// Import platform-specific text inserters
 let windowsTextInserter = null;
+let macosTextInserter = null;
+
 if (process.platform === 'win32') {
   try {
     windowsTextInserter = require("./windows-text-inserter-koffi");
     console.log("Windows koffi text inserter loaded");
   } catch (error) {
     console.error("Failed to load Windows text inserter:", error);
+  }
+} else if (process.platform === 'darwin') {
+  try {
+    macosTextInserter = require("./macos-text-inserter-koffi");
+    if (macosTextInserter.isAvailable()) {
+      console.log("macOS CGEvent text inserter loaded and available");
+    } else {
+      console.warn("macOS CGEvent text inserter loaded but not available");
+      macosTextInserter = null;
+    }
+  } catch (error) {
+    console.error("Failed to load macOS text inserter:", error);
   }
 }
 
@@ -834,7 +848,24 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
 ipcMain.handle("type-text", async (event, text) => {
   try {
     if (process.platform === "darwin") {
-      // macOS: Use clipboard method with comprehensive preservation
+      // macOS: Try CGEvent direct Unicode insertion first
+      if (macosTextInserter) {
+        try {
+          console.log("Attempting macOS text insertion via CGEvent:", JSON.stringify(text.substring(0, 50)) + (text.length > 50 ? '...' : ''));
+          await macosTextInserter.insertText(text);
+          
+          return {
+            success: true,
+            method: "cgevent_unicode",
+            message: "Text inserted directly via macOS CGEvent.",
+          };
+        } catch (cgEventError) {
+          console.error("macOS CGEvent text insertion failed, falling back to clipboard:", cgEventError);
+          // Fall through to clipboard method
+        }
+      }
+      
+      // Fallback: Use clipboard method with comprehensive preservation
       const originalClipboardData = await saveCompleteClipboard();
       
       try {
