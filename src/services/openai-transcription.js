@@ -15,7 +15,8 @@ class OpenAITranscriptionService {
       model = 'whisper-1',
       language = 'auto',
       prompt = '',
-      translateMode = false
+      translateMode = false,
+      signal
     } = options;
 
     if (translateMode) {
@@ -26,7 +27,7 @@ class OpenAITranscriptionService {
         response_format: 'text',
       };
       
-      const translationResponse = await this.client.audio.translations.create(translationOptions);
+      const translationResponse = await this.client.audio.translations.create(translationOptions, { signal });
       return typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
     } else {
       // OpenAI transcriptions - support multiple models now
@@ -39,7 +40,7 @@ class OpenAITranscriptionService {
       if (language !== 'auto') transcriptionOptions.language = language;
       if (prompt.trim()) transcriptionOptions.prompt = prompt;
       
-      const transcription = await this.client.audio.transcriptions.create(transcriptionOptions);
+      const transcription = await this.client.audio.transcriptions.create(transcriptionOptions, { signal });
       return typeof transcription === 'string' ? { text: transcription } : transcription;
     }
   }

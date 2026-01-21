@@ -27,6 +27,7 @@ A voice input method software built with Electron that allows you to dictate tex
 4. Speak into your microphone while holding the keys
 5. Release the keys to stop recording and transcribe
 6. Text will be automatically typed into the active application
+7. Press Escape to cancel recording or in-progress transcription
 
 ## Configuration
 

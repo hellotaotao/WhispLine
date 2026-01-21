@@ -26,7 +26,8 @@ class TranscriptionService {
       language = 'auto',
       prompt = '',
       translateMode = false,
-      mimeType = 'audio/webm' // Default format
+      mimeType = 'audio/webm', // Default format
+      signal
     } = options;
 
     // Determine file extension based on actual audio format
@@ -64,7 +65,8 @@ class TranscriptionService {
         model: actualModel,
         language,
         prompt,
-        translateMode
+        translateMode,
+        signal
       });
 
       console.log(`✅ ${translateMode ? 'Translation' : 'Transcription'} completed: "${result.text}"`);

@@ -76,6 +76,38 @@ function clearTranscriptionServiceCache() {
   console.log('Transcription service cache cleared');
 }
 
+function createCancellationError() {
+  const error = new Error("TRANSCRIPTION_CANCELLED");
+  error.name = "TranscriptionCancelledError";
+  return error;
+}
+
+function isCancellationError(error) {
+  if (!error) return false;
+  if (error.name === "AbortError" || error.name === "TranscriptionCancelledError") {
+    return true;
+  }
+  if (error.cause && error.cause.name === "AbortError") {
+    return true;
+  }
+  if (typeof error.message === "string" && error.message.includes("TRANSCRIPTION_CANCELLED")) {
+    return true;
+  }
+  return false;
+}
+
+function cancelActiveTranscription(reason = "user") {
+  if (!activeTranscription) {
+    return false;
+  }
+  activeTranscription.cancelled = true;
+  activeTranscription.cancelReason = reason;
+  if (activeTranscription.abortController) {
+    activeTranscription.abortController.abort();
+  }
+  return true;
+}
+
 // Auto-launch setup
 const autoLauncher = new AutoLaunch({
   name: 'WhispLine',
@@ -94,6 +126,8 @@ let ctrlPressed = false;
 let shiftPressed = false;
 let altPressed = false;
 let isRecording = false;
+let activeTranscription = null;
+let transcriptionRequestId = 0;
 
 // Set up permission manager event listeners
 permissionManager.on('accessibility-permission-changed', (data) => {
@@ -331,6 +365,17 @@ async function setupGlobalHotkeys() {
       // Alt key (left or right)
       if (e.keycode === UiohookKey.Alt || e.keycode === UiohookKey.AltR) {
         altPressed = true;
+      }
+
+      if (e.keycode === UiohookKey.Escape) {
+        if (isRecording || activeTranscription) {
+          isRecording = false;
+          if (inputPromptWindow && inputPromptWindow.webContents) {
+            inputPromptWindow.webContents.send("cancel-recording");
+          }
+          cancelActiveTranscription("user");
+        }
+        return;
       }
 
       // Start recording when Ctrl+Shift OR Shift+Alt are pressed
@@ -795,8 +840,24 @@ ipcMain.handle("cleanup-microphone", () => {
   return true;
 });
 
+ipcMain.handle("cancel-transcription", () => {
+  return cancelActiveTranscription("user");
+});
+
 ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = false, mimeType = 'audio/webm') => {
+  const requestId = ++transcriptionRequestId;
+  const abortController = new AbortController();
+  const currentTranscription = {
+    id: requestId,
+    abortController,
+    cancelled: false,
+    cancelReason: null,
+  };
+  activeTranscription = currentTranscription;
   try {
+    if (currentTranscription.cancelled) {
+      throw createCancellationError();
+    }
     const provider = store.get("provider", "groq");
     const apiKey = provider === 'openai'
       ? (store.get("apiKeyOpenAI", store.get("apiKey", "")))
@@ -818,8 +879,13 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
       language,
       prompt: dictionary,
       translateMode,
-      mimeType
+      mimeType,
+      signal: abortController.signal
     });
+
+    if (currentTranscription.cancelled) {
+      throw createCancellationError();
+    }
 
     // Save successful transcription to database
     db.addActivity(resultText, true);
@@ -831,6 +897,10 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
 
     return resultText;
   } catch (error) {
+    if (currentTranscription.cancelled || isCancellationError(error)) {
+      console.log(`${translateMode ? 'Translation' : 'Transcription'} cancelled by user`);
+      throw createCancellationError();
+    }
     console.error(`${translateMode ? 'Translation' : 'Transcription'} error:`, error);
     
     // Save failed transcription to database
@@ -842,6 +912,10 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
     }
     
     throw error;
+  } finally {
+    if (activeTranscription && activeTranscription.id === requestId) {
+      activeTranscription = null;
+    }
   }
 });
 

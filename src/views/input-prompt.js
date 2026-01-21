@@ -17,6 +17,8 @@ class VoiceInputPrompt {
     this.stopRequested = false;
     this.recordingStartedAt = null;
     this.cancelledShortPress = false;
+    this.cancelInProgress = false;
+    this.transcriptionInProgress = false;
 
     this.promptElement = document.getElementById("inputPrompt");
     this.promptText = document.getElementById("promptText");
@@ -54,6 +56,10 @@ class VoiceInputPrompt {
       this.stopRecording();
     });
 
+    ipcRenderer.on("cancel-recording", () => {
+      this.cancelRecording();
+    });
+
     // Listen for cleanup microphone signal
     ipcRenderer.on("cleanup-microphone", () => {
       console.log("Received cleanup signal from main process");
@@ -71,8 +77,8 @@ class VoiceInputPrompt {
 
     // ESC key to cancel recording when window is focused
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && this.isRecording) {
-        this.stopRecording();
+      if (e.key === "Escape") {
+        this.cancelRecording();
       }
     });
 
@@ -190,9 +196,10 @@ class VoiceInputPrompt {
       ? Date.now() - this.recordingStartedAt
       : 0;
     const isShortPress = elapsedMs <= SHORT_PRESS_THRESHOLD_MS;
-    this.cancelledShortPress = isShortPress;
+    const shouldCancel = this.cancelledShortPress || this.cancelInProgress || isShortPress;
+    this.cancelledShortPress = shouldCancel;
 
-    if (isShortPress) {
+    if (shouldCancel) {
       this.promptText.textContent = "Cancelled";
       this.statusText.textContent = "";
     } else {
@@ -206,6 +213,36 @@ class VoiceInputPrompt {
 
     this.cleanup({ preserveAudioChunks: true });
     this.stopWaveAnimation();
+  }
+
+  cancelRecording() {
+    if (this.cancelInProgress) {
+      return;
+    }
+    this.cancelInProgress = true;
+    this.stopRequested = true;
+
+    if (this.transcriptionInProgress) {
+      ipcRenderer.invoke("cancel-transcription").catch(() => {});
+      this.promptText.textContent = "Cancelled";
+      this.statusText.textContent = "";
+      this.cleanup();
+      this.stopWaveAnimation();
+      setTimeout(() => this.hidePrompt(), 300);
+      return;
+    }
+
+    if (this.isRecording) {
+      this.cancelledShortPress = true;
+      this.stopRecording();
+      return;
+    }
+
+    this.promptText.textContent = "Cancelled";
+    this.statusText.textContent = "";
+    this.cleanup();
+    this.stopWaveAnimation();
+    setTimeout(() => this.hidePrompt(), 300);
   }
 
   cleanup(options = {}) {
@@ -265,6 +302,7 @@ class VoiceInputPrompt {
 
   async processRecording() {
     try {
+      this.transcriptionInProgress = true;
       if (this.cancelledShortPress) {
         this.cancelledShortPress = false;
         this.recordingStartedAt = null;
@@ -303,9 +341,21 @@ class VoiceInputPrompt {
       }
     } catch (error) {
       console.error("Transcription error:", error);
-      this.statusText.textContent =
-        "Transcription failed - please try again";
-      setTimeout(() => this.hidePrompt(), 3000);
+      const isCancelled =
+        error &&
+        (error.name === "TranscriptionCancelledError" ||
+          (typeof error.message === "string" && error.message.includes("TRANSCRIPTION_CANCELLED")));
+      if (isCancelled) {
+        this.statusText.textContent = "Cancelled";
+        this.statusText.style.color = "#ffaa00";
+        setTimeout(() => this.hidePrompt(), 300);
+      } else {
+        this.statusText.textContent =
+          "Transcription failed - please try again";
+        setTimeout(() => this.hidePrompt(), 3000);
+      }
+    } finally {
+      this.transcriptionInProgress = false;
     }
   }
 
@@ -466,6 +516,8 @@ class VoiceInputPrompt {
     this.starting = false;
     this.recordingStartedAt = null;
     this.cancelledShortPress = false;
+    this.cancelInProgress = false;
+    this.transcriptionInProgress = false;
 
     setTimeout(() => {
       ipcRenderer.invoke("hide-input-prompt");

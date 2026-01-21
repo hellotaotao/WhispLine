@@ -11,7 +11,8 @@ class GroqTranscriptionService {
       model = 'whisper-large-v3-turbo',
       language = 'auto',
       prompt = '',
-      translateMode = false
+      translateMode = false,
+      signal
     } = options;
 
     if (translateMode) {
@@ -23,7 +24,7 @@ class GroqTranscriptionService {
         temperature: 0.0,
       };
       
-      const translationResponse = await this.client.audio.translations.create(translationOptions);
+      const translationResponse = await this.client.audio.translations.create(translationOptions, { signal });
       return typeof translationResponse === 'string' ? { text: translationResponse } : translationResponse;
     } else {
       // Groq transcription (verbose_json for timestamps)
@@ -36,7 +37,7 @@ class GroqTranscriptionService {
       if (language !== 'auto') transcriptionOptions.language = language;
       if (prompt.trim()) transcriptionOptions.prompt = prompt;
       
-      return await this.client.audio.transcriptions.create(transcriptionOptions);
+      return await this.client.audio.transcriptions.create(transcriptionOptions, { signal });
     }
   }
 
