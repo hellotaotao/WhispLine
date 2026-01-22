@@ -159,6 +159,19 @@ function broadcastShortcutUpdate() {
   }
 }
 
+function broadcastUiLanguageUpdate(language) {
+  const payload = { language };
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send("ui-language-updated", payload);
+  }
+  if (inputPromptWindow && inputPromptWindow.webContents) {
+    inputPromptWindow.webContents.send("ui-language-updated", payload);
+  }
+  if (settingsWindow && settingsWindow.webContents) {
+    settingsWindow.webContents.send("ui-language-updated", payload);
+  }
+}
+
 function createCancellationError() {
   const error = new Error("TRANSCRIPTION_CANCELLED");
   error.name = "TranscriptionCancelledError";
@@ -865,6 +878,7 @@ ipcMain.handle("get-settings", () => {
     shortcut: recordShortcut,
     translateShortcut: TRANSLATE_SHORTCUT,
     language: store.get("language", "auto"),
+    uiLanguage: store.get("uiLanguage", "auto"),
     model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
     autoLaunch: store.get("autoLaunch", false),
@@ -888,6 +902,7 @@ ipcMain.handle("save-settings", async (event, settings) => {
     store.set("shortcut", recordShortcut);
   }
   store.set("language", settings.language);
+  store.set("uiLanguage", settings.uiLanguage || "auto");
   store.set("model", settings.model);
   store.set("microphone", settings.microphone);
   store.set("autoLaunch", settings.autoLaunch);
@@ -899,6 +914,7 @@ ipcMain.handle("save-settings", async (event, settings) => {
 
   // Notify renderers about updated shortcuts
   broadcastShortcutUpdate();
+  broadcastUiLanguageUpdate(store.get("uiLanguage", "auto"));
 
   // Handle auto-launch setting
   try {

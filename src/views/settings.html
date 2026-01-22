@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Settings - WhispLine</title>
+  <title data-i18n="settings.title">Settings - WhispLine</title>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="settings.css">
 </head>
 <body>
   <div class="title-bar">
-    <div class="title-bar-title">Settings - WhispLine</div>
+    <div class="title-bar-title" data-i18n="settings.title">Settings - WhispLine</div>
     <div class="title-bar-controls">
       <button class="title-bar-close" onclick="closeSettings()">
         <span class="material-icons">close</span>
@@ -19,14 +19,14 @@
   <div class="container">
     <div class="sidebar">
       <div class="sidebar-section">
-        <div class="sidebar-title">Settings</div>
+        <div class="sidebar-title" data-i18n="settings.sidebarTitle">Settings</div>
         <div class="sidebar-item active" data-section="defaults">
           <span class="sidebar-item-icon material-icons">settings</span>
-          General
+          <span data-i18n="settings.section.general">General</span>
         </div>
         <div class="sidebar-item" data-section="models">
           <span class="sidebar-item-icon material-icons">tune</span>
-          Models
+          <span data-i18n="settings.section.models">Models</span>
         </div>
       </div>
     </div>
@@ -35,13 +35,13 @@
       <div class="setting-group">
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Recording shortcut</div>
-            <div class="setting-description">
+            <div class="setting-title" data-i18n="settings.recordingShortcut.title">Recording shortcut</div>
+            <div class="setting-description" data-i18n="settings.recordingShortcut.description">
               Choose your preferred hold-to-record shortcut. Translation stays Shift + Alt.
             </div>
           </div>
           <div class="setting-control">
-            <select class="input shortcut-select" id="shortcutSelect" title="Select recording shortcut">
+            <select class="input shortcut-select" id="shortcutSelect" title="Select recording shortcut" data-i18n="settings.recordingShortcut.selectTitle" data-i18n-attr="title">
               <option value="Ctrl+Shift">Ctrl + Shift</option>
               <option value="Ctrl+Alt">Ctrl + Alt</option>
               <option value="Ctrl+Shift+Alt">Ctrl + Shift + Alt</option>
@@ -52,16 +52,16 @@
 
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Accessibility Permission</div>
-            <div class="setting-description">
+            <div class="setting-title" data-i18n="settings.accessibility.title">Accessibility Permission</div>
+            <div class="setting-description" data-i18n="settings.accessibility.description">
               Required for global hotkeys and automatic text insertion.
             </div>
           </div>
           <div class="setting-control">
             <div id="accessibilityStatus" class="permission-status">
-              Checking...
+              <span data-i18n="settings.permission.checking">Checking...</span>
             </div>
-            <button class="btn btn-secondary" id="checkAccessibility">
+            <button class="btn btn-secondary" id="checkAccessibility" data-i18n="settings.checkPermission">
               Check Permission
             </button>
           </div>
@@ -69,16 +69,16 @@
 
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Microphone Permission</div>
-            <div class="setting-description">
+            <div class="setting-title" data-i18n="settings.microphone.title">Microphone Permission</div>
+            <div class="setting-description" data-i18n="settings.microphone.description">
               Current status of microphone access permission.
             </div>
           </div>
           <div class="setting-control">
             <div id="permissionStatus" class="permission-status">
-              Checking...
+              <span data-i18n="settings.permission.checking">Checking...</span>
             </div>
-            <button class="btn btn-secondary" id="checkPermission">
+            <button class="btn btn-secondary" id="checkPermission" data-i18n="settings.checkPermission">
               Check Permission
             </button>
           </div>
@@ -86,14 +86,30 @@
 
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Set default language</div>
-            <div class="setting-description">
+            <div class="setting-title" data-i18n="settings.uiLanguage.title">Interface language</div>
+            <div class="setting-description" data-i18n="settings.uiLanguage.description">
+              Choose the language used in the app UI.
+            </div>
+          </div>
+          <div class="setting-control">
+            <select class="input language-select" id="uiLanguageSelect" title="Select interface language" data-i18n="settings.uiLanguage.selectTitle" data-i18n-attr="title">
+              <option value="auto" data-i18n="settings.uiLanguage.auto">Auto (System)</option>
+              <option value="en" data-i18n="settings.uiLanguage.english">English</option>
+              <option value="zh" data-i18n="settings.uiLanguage.chinese">中文 (简体)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-title" data-i18n="settings.transcriptionLanguage.title">Set default language</div>
+            <div class="setting-description" data-i18n="settings.transcriptionLanguage.description">
               Choose the default language for voice transcription.
             </div>
           </div>
           <div class="setting-control">
-            <select class="input language-select" id="languageSelect" title="Select default language for transcription">
-              <option value="auto">Auto-detect</option>
+            <select class="input language-select" id="languageSelect" title="Select default language for transcription" data-i18n="settings.transcriptionLanguage.selectTitle" data-i18n-attr="title">
+              <option value="auto" data-i18n="settings.transcriptionLanguage.auto">Auto-detect</option>
               <option value="en">English</option>
               <option value="zh">中文 (Chinese)</option>
               <option value="ja">日本語 (Japanese)</option>
@@ -181,14 +197,14 @@
         <!-- Merged start options into General settings -->
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Start with system</div>
-            <div class="setting-description">
+            <div class="setting-title" data-i18n="settings.autoLaunch.title">Start with system</div>
+            <div class="setting-description" data-i18n="settings.autoLaunch.description">
               Automatically start WhispLine when your computer starts up.
             </div>
           </div>
           <div class="setting-control">
             <label class="switch">
-              <input type="checkbox" id="autoLaunchCheck" aria-label="Start with system">
+              <input type="checkbox" id="autoLaunchCheck" aria-label="Start with system" data-i18n="settings.autoLaunch.aria" data-i18n-attr="aria-label">
               <span class="slider"></span>
             </label>
           </div>
@@ -196,14 +212,14 @@
 
         <div class="setting-item" id="startMinimizedItem">
           <div class="setting-info">
-            <div class="setting-title">Start minimized</div>
-            <div class="setting-description">
+            <div class="setting-title" data-i18n="settings.startMinimized.title">Start minimized</div>
+            <div class="setting-description" data-i18n="settings.startMinimized.description">
               When starting with system, hide the main window and run in the background.
             </div>
           </div>
           <div class="setting-control">
             <label class="switch">
-              <input type="checkbox" id="startMinimizedCheck" aria-label="Start minimized">
+              <input type="checkbox" id="startMinimizedCheck" aria-label="Start minimized" data-i18n="settings.startMinimized.aria" data-i18n-attr="aria-label">
               <span class="slider"></span>
             </label>
           </div>
@@ -215,13 +231,13 @@
         <div class="setting-group">
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-title">API Provider</div>
-              <div class="setting-description">
+              <div class="setting-title" data-i18n="settings.apiProvider.title">API Provider</div>
+              <div class="setting-description" data-i18n="settings.apiProvider.description">
                 Choose transcription API service.
               </div>
             </div>
             <div class="setting-control">
-              <select class="input provider-select" id="providerSelect" title="Select API provider">
+              <select class="input provider-select" id="providerSelect" title="Select API provider" data-i18n="settings.apiProvider.selectTitle" data-i18n-attr="title">
                 <option value="groq">Groq</option>
                 <option value="openai">OpenAI</option>
               </select>
@@ -230,26 +246,26 @@
 
           <div class="setting-item" id="apiKeyGroup">
             <div class="setting-info">
-              <div class="setting-title">API Key</div>
-              <div class="setting-description" id="apiKeyHelp">
+              <div class="setting-title" data-i18n="settings.apiKey.title">API Key</div>
+              <div class="setting-description" id="apiKeyHelp" data-i18n="settings.apiKey.description">
                 Enter your API key for selected provider.
               </div>
             </div>
             <div class="setting-control">
-              <input type="text" class="input api-key-input hidden" id="apiKeyGroq" placeholder="Groq API key" />
-              <input type="text" class="input api-key-input hidden" id="apiKeyOpenAI" placeholder="OpenAI API key" />
+              <input type="text" class="input api-key-input hidden" id="apiKeyGroq" placeholder="Groq API key" data-i18n="settings.apiKey.groqPlaceholder" data-i18n-attr="placeholder" />
+              <input type="text" class="input api-key-input hidden" id="apiKeyOpenAI" placeholder="OpenAI API key" data-i18n="settings.apiKey.openaiPlaceholder" data-i18n-attr="placeholder" />
             </div>
           </div>
 
           <div class="setting-item" id="modelSelectGroup">
             <div class="setting-info">
-              <div class="setting-title">Model Selection</div>
-              <div class="setting-description">
+              <div class="setting-title" data-i18n="settings.model.title">Model Selection</div>
+              <div class="setting-description" data-i18n="settings.model.description">
                 Select transcription model.
               </div>
             </div>
             <div class="setting-control">
-              <select class="input model-select" id="modelSelect" title="Select transcription model">
+              <select class="input model-select" id="modelSelect" title="Select transcription model" data-i18n="settings.model.selectTitle" data-i18n-attr="title">
                 <option value="whisper-large-v3">Whisper Large V3 (Standard)</option>
                 <option value="whisper-large-v3-turbo">Whisper Large V3 Turbo (Faster)</option>
               </select>
@@ -264,13 +280,14 @@
 
       <div class="save-section">
         <button class="btn btn-secondary" onclick="closeSettings()">
-          Cancel
+          <span data-i18n="settings.cancel">Cancel</span>
         </button>
-        <button class="btn" onclick="saveSettings()">Save</button>
+        <button class="btn" onclick="saveSettings()" data-i18n="settings.save">Save</button>
       </div>
     </div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 const { ipcRenderer } = require("electron");
+const { initI18n, setLanguage, applyI18n, t } = window.WhispLineI18n;
 
 // Define available models per API provider
 const modelOptions = {
@@ -43,6 +44,7 @@ let currentSettings = {};
 async function loadSettings() {
   try {
     currentSettings = await ipcRenderer.invoke("get-settings");
+    initI18n(currentSettings.uiLanguage);
     // Initialize provider and models
     const providerSelect = document.getElementById("providerSelect");
     providerSelect.value = currentSettings.provider || "groq";
@@ -67,6 +69,21 @@ async function loadSettings() {
       shortcutSelect.value = hasOption ? shortcutValue : "Ctrl+Shift";
     }
 
+    const uiLanguageSelect = document.getElementById("uiLanguageSelect");
+    if (uiLanguageSelect) {
+      const uiLanguageValue = currentSettings.uiLanguage || "auto";
+      const hasOption = Array.from(uiLanguageSelect.options).some(
+        (opt) => opt.value === uiLanguageValue
+      );
+      uiLanguageSelect.value = hasOption ? uiLanguageValue : "auto";
+      uiLanguageSelect.addEventListener("change", () => {
+        setLanguage(uiLanguageSelect.value);
+        applyI18n(document);
+        checkMicrophonePermissionStatus();
+        checkAccessibilityStatus();
+      });
+    }
+
     // Set the selected language
     const languageSelect = document.getElementById("languageSelect");
     if (currentSettings.language) {
@@ -89,6 +106,7 @@ async function loadSettings() {
     setupShortcutSync();
   } catch (error) {
     console.error("Failed to load settings:", error);
+    initI18n("auto");
   }
 }
 
@@ -111,7 +129,7 @@ function setupShortcutSync() {
 async function checkMicrophonePermissionStatus() {
   try {
     const statusElement = document.getElementById("permissionStatus");
-    statusElement.textContent = "Checking...";
+    statusElement.textContent = t("settings.permission.checking");
     statusElement.className = "permission-status";
 
     // Check system-level microphone permission through main process
@@ -122,17 +140,17 @@ async function checkMicrophonePermissionStatus() {
     ) {
       // For macOS, we rely on main process to check system permission
       // Since Electron apps don't need browser-level permission
-      statusElement.textContent = "✅ Available (Electron app)";
+      statusElement.textContent = t("settings.permission.availableElectron");
       statusElement.className = "permission-status granted";
     } else {
       // For other platforms
-      statusElement.textContent = "✅ Available";
+      statusElement.textContent = t("settings.permission.available");
       statusElement.className = "permission-status granted";
     }
   } catch (error) {
     console.error("Failed to check microphone permission:", error);
     const statusElement = document.getElementById("permissionStatus");
-    statusElement.textContent = "❌ Error checking permission";
+    statusElement.textContent = t("settings.permission.error");
     statusElement.className = "permission-status denied";
   }
 }
@@ -140,7 +158,7 @@ async function checkMicrophonePermissionStatus() {
 async function checkAccessibilityStatus() {
   try {
     const statusElement = document.getElementById("accessibilityStatus");
-    statusElement.textContent = "Checking...";
+    statusElement.textContent = t("settings.permission.checking");
     statusElement.className = "permission-status";
 
     const result = await ipcRenderer.invoke(
@@ -149,13 +167,13 @@ async function checkAccessibilityStatus() {
 
     let statusText, statusClass;
     if (result.granted) {
-      statusText = "✅ Accessibility permission granted";
+      statusText = t("settings.accessibility.granted");
       statusClass = "granted";
     } else if (result.status === "not_required") {
-      statusText = "✅ Not required on this platform";
+      statusText = t("settings.accessibility.notRequired");
       statusClass = "granted";
     } else {
-      statusText = "❌ Accessibility permission denied";
+      statusText = t("settings.accessibility.denied");
       statusClass = "denied";
     }
 
@@ -164,7 +182,7 @@ async function checkAccessibilityStatus() {
   } catch (error) {
     console.error("Failed to check accessibility permission:", error);
     const statusElement = document.getElementById("accessibilityStatus");
-    statusElement.textContent = "❌ Error checking permission";
+    statusElement.textContent = t("settings.permission.error");
     statusElement.className = "permission-status denied";
   }
 }
@@ -172,7 +190,7 @@ async function checkAccessibilityStatus() {
 async function recheckAccessibilityPermission() {
   try {
     const statusElement = document.getElementById("accessibilityStatus");
-    statusElement.textContent = "Rechecking...";
+    statusElement.textContent = t("settings.accessibility.rechecking");
     statusElement.className = "permission-status";
 
     const result = await ipcRenderer.invoke(
@@ -181,10 +199,10 @@ async function recheckAccessibilityPermission() {
 
     let statusText, statusClass;
     if (result.granted) {
-      statusText = "✅ Accessibility permission granted";
+      statusText = t("settings.accessibility.granted");
       statusClass = "granted";
     } else {
-      statusText = "❌ Accessibility permission denied";
+      statusText = t("settings.accessibility.denied");
       statusClass = "denied";
     }
 
@@ -193,7 +211,7 @@ async function recheckAccessibilityPermission() {
   } catch (error) {
     console.error("Failed to recheck accessibility permission:", error);
     const statusElement = document.getElementById("accessibilityStatus");
-    statusElement.textContent = "❌ Error checking permission";
+    statusElement.textContent = t("settings.permission.error");
     statusElement.className = "permission-status denied";
   }
 }
@@ -206,6 +224,7 @@ async function saveSettings() {
       apiKeyOpenAI: document.getElementById("apiKeyOpenAI").value,
       shortcut: document.getElementById("shortcutSelect").value,
       language: document.getElementById("languageSelect").value,
+      uiLanguage: document.getElementById("uiLanguageSelect").value,
       model: document.getElementById("modelSelect").value,
       microphone: currentSettings.microphone,
       autoLaunch: document.getElementById("autoLaunchCheck").checked,
@@ -217,7 +236,7 @@ async function saveSettings() {
     window.close();
   } catch (error) {
     console.error("Failed to save settings:", error);
-    alert("Failed to save settings. Please try again.");
+    alert(t("settings.saveError"));
   }
 }
 

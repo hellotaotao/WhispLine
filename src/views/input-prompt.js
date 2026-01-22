@@ -1,4 +1,5 @@
 const { ipcRenderer } = require("electron");
+const { initI18n, setLanguage, applyI18n, t } = window.WhispLineI18n;
 
 const SHORT_PRESS_THRESHOLD_MS = 500;
 
@@ -50,6 +51,15 @@ class VoiceInputPrompt {
       const recordShortcut = payload.recordShortcut || "Ctrl+Shift";
       const translateShortcut = payload.translateShortcut || "Shift+Alt";
       this.updateShortcutHint(recordShortcut, translateShortcut);
+    });
+
+    ipcRenderer.on("ui-language-updated", (event, payload) => {
+      if (!payload) {
+        return;
+      }
+      setLanguage(payload.language);
+      applyI18n(document);
+      this.updateShortcutHint(this.recordShortcut, this.translateShortcut);
     });
 
     // Listen for start recording from main process
@@ -112,6 +122,7 @@ class VoiceInputPrompt {
       );
     } catch (error) {
       console.error("Failed to load shortcut hint settings:", error);
+      this.updateShortcutHint(this.recordShortcut, this.translateShortcut);
     }
   }
 
@@ -135,7 +146,10 @@ class VoiceInputPrompt {
     this.translateShortcut = safeTranslateShortcut;
     const recordLabel = this.formatShortcutLabel(safeRecordShortcut);
     const translateLabel = this.formatShortcutLabel(safeTranslateShortcut);
-    this.promptText.textContent = `Hold ${recordLabel} to dictate, ${translateLabel} for English`;
+    this.promptText.textContent = t("inputPrompt.hint", {
+      record: recordLabel,
+      translate: translateLabel,
+    });
   }
 
   async startRecording() {
@@ -145,7 +159,7 @@ class VoiceInputPrompt {
     try {
       // Show prompt immediately
       this.promptElement.classList.add("visible");
-      this.promptText.textContent = "Starting recording...";
+      this.promptText.textContent = t("inputPrompt.starting");
       this.statusText.textContent = "";
 
       this.audioChunks = [];
@@ -153,12 +167,11 @@ class VoiceInputPrompt {
       // Update UI for recording state
       this.promptElement.classList.add("recording");
       if (this.translateMode) {
-        this.promptText.textContent = "Listening (English output)...";
+        this.promptText.textContent = t("inputPrompt.listeningEnglish");
       } else {
-        this.promptText.textContent = "Listening...";
+        this.promptText.textContent = t("inputPrompt.listening");
       }
-      this.statusText.innerHTML =
-        'Recording <div class="recording-dot"></div>';
+      this.statusText.innerHTML = `${t("inputPrompt.recording")} <div class="recording-dot"></div>`;
 
       // Create media stream directly using getUserMedia
       // In Electron, system-level permissions are handled by main process
@@ -250,11 +263,11 @@ class VoiceInputPrompt {
     this.cancelledShortPress = shouldCancel;
 
     if (shouldCancel) {
-      this.promptText.textContent = "Cancelled";
+      this.promptText.textContent = t("inputPrompt.cancelled");
       this.statusText.textContent = "";
     } else {
-      this.promptText.textContent = "Processing...";
-      this.statusText.textContent = "Transcribing audio...";
+      this.promptText.textContent = t("inputPrompt.processing");
+      this.statusText.textContent = t("inputPrompt.transcribing");
     }
 
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
@@ -274,7 +287,7 @@ class VoiceInputPrompt {
 
     if (this.transcriptionInProgress) {
       ipcRenderer.invoke("cancel-transcription").catch(() => {});
-      this.promptText.textContent = "Cancelled";
+      this.promptText.textContent = t("inputPrompt.cancelled");
       this.statusText.textContent = "";
       this.cleanup();
       this.stopWaveAnimation();
@@ -288,7 +301,7 @@ class VoiceInputPrompt {
       return;
     }
 
-    this.promptText.textContent = "Cancelled";
+    this.promptText.textContent = t("inputPrompt.cancelled");
     this.statusText.textContent = "";
     this.cleanup();
     this.stopWaveAnimation();
@@ -357,14 +370,14 @@ class VoiceInputPrompt {
         this.cancelledShortPress = false;
         this.recordingStartedAt = null;
         this.audioChunks = [];
-        this.statusText.textContent = "Cancelled";
+        this.statusText.textContent = t("inputPrompt.cancelled");
         this.statusText.style.color = "#ffaa00";
         setTimeout(() => this.hidePrompt(), 300);
         return;
       }
       if (!this.audioChunks.length) {
         console.warn('No audio chunks captured; skipping transcription request');
-        this.statusText.textContent = "No audio captured";
+        this.statusText.textContent = t("inputPrompt.noAudio");
         this.statusText.style.color = "#ffaa00";
         setTimeout(() => this.hidePrompt(), 1500);
         return;
@@ -386,7 +399,7 @@ class VoiceInputPrompt {
       if (transcription && transcription.trim()) {
         await this.typeText(transcription);
       } else {
-        this.statusText.textContent = "No speech detected";
+        this.statusText.textContent = t("inputPrompt.noSpeech");
         setTimeout(() => this.hidePrompt(), 2000);
       }
     } catch (error) {
@@ -396,12 +409,11 @@ class VoiceInputPrompt {
         (error.name === "TranscriptionCancelledError" ||
           (typeof error.message === "string" && error.message.includes("TRANSCRIPTION_CANCELLED")));
       if (isCancelled) {
-        this.statusText.textContent = "Cancelled";
+        this.statusText.textContent = t("inputPrompt.cancelled");
         this.statusText.style.color = "#ffaa00";
         setTimeout(() => this.hidePrompt(), 300);
       } else {
-        this.statusText.textContent =
-          "Transcription failed - please try again";
+        this.statusText.textContent = t("inputPrompt.transcriptionFailed");
         setTimeout(() => this.hidePrompt(), 3000);
       }
     } finally {
@@ -415,23 +427,23 @@ class VoiceInputPrompt {
     // Force cleanup of resources
     this.cleanup();
 
-    let errorMessage = "Recording failed";
+    let errorMessageKey = "inputPrompt.recordingFailed";
 
     if (
       error.name === "NotAllowedError" ||
       error.name === "PermissionDeniedError"
     ) {
-      errorMessage = "Microphone permission denied";
+      errorMessageKey = "inputPrompt.permissionDenied";
     } else if (error.name === "NotFoundError") {
-      errorMessage = "No microphone found";
+      errorMessageKey = "inputPrompt.noMicrophone";
     } else if (error.name === "NotReadableError") {
-      errorMessage = "Microphone is busy";
+      errorMessageKey = "inputPrompt.microphoneBusy";
     } else if (error.name === "OverconstrainedError") {
-      errorMessage = "Microphone settings not supported";
+      errorMessageKey = "inputPrompt.microphoneUnsupported";
     }
 
-    this.promptText.textContent = errorMessage;
-    this.statusText.textContent = "Please check your microphone settings";
+    this.promptText.textContent = t(errorMessageKey);
+    this.statusText.textContent = t("inputPrompt.checkMicrophone");
 
     setTimeout(() => this.hidePrompt(), 3000);
   }
@@ -440,33 +452,39 @@ class VoiceInputPrompt {
     // Send the transcribed text to the active application
     try {
       const result = await ipcRenderer.invoke("type-text", text);
+      const pasteShortcut = this.getPasteShortcutLabel();
 
       if (result.success) {
         if (result.method === "direct_typing") {
           console.log("Text typed directly:", text);
-          this.statusText.textContent = "Text typed directly";
+          this.statusText.textContent = t("inputPrompt.textTypedDirect");
           this.statusText.style.color = "#00ff00";
           setTimeout(() => this.hidePrompt(), 1500);
         } else if (result.method === "koffi_sendinput") {
           // Windows SendInput method
           console.log("Text inserted via SendInput:", text);
-          this.statusText.textContent = result.message || "Text inserted";
+          this.statusText.textContent = t("inputPrompt.textInserted");
           this.statusText.style.color = "#00ff00";
           // Hide prompt immediately after successful insertion on Windows
           this.hidePrompt();
         } else if (result.method === "cgevent_unicode") {
           // macOS CGEvent Unicode method
           console.log("Text inserted via CGEvent:", text);
-          this.statusText.textContent = result.message || "Text inserted";
+          this.statusText.textContent = t("inputPrompt.textInserted");
           this.statusText.style.color = "#00ff00";
           // Hide prompt immediately after successful insertion
           this.hidePrompt();
         } else if (result.method === "clipboard_textinsert") {
           console.log("Text inserted successfully:", text);
-          this.statusText.textContent = result.message || "Text inserted automatically";
+          const isPartial =
+            typeof result.message === "string" &&
+            result.message.includes("partially restored");
+          this.statusText.textContent = isPartial
+            ? t("inputPrompt.textInsertedPartial")
+            : t("inputPrompt.textInsertedAuto");
           
           // Different colors based on message complexity
-          if (result.message && result.message.includes("partially restored")) {
+          if (isPartial) {
             this.statusText.style.color = "#ffaa00"; // Orange for partial restoration
           } else {
             this.statusText.style.color = "#00ff00"; // Green for full restoration
@@ -476,29 +494,43 @@ class VoiceInputPrompt {
           this.hidePrompt();
         } else if (result.method === "clipboard") {
           console.log("Text copied to clipboard:", text);
-          this.statusText.textContent = result.message || "Text copied - Press Cmd+V to paste";
+          this.statusText.textContent = t("inputPrompt.textCopied", {
+            shortcut: pasteShortcut,
+          });
           this.statusText.style.color = "#ffaa00";
           setTimeout(() => this.hidePrompt(), 3000);
+        } else {
+          this.statusText.textContent = result.message || t("inputPrompt.textInserted");
+          this.statusText.style.color = "#00ff00";
+          this.hidePrompt();
         }
       }
     } catch (error) {
       console.error("Failed to process text:", error);
-      this.statusText.textContent = "Text processing failed - trying clipboard fallback";
+      this.statusText.textContent = t("inputPrompt.textProcessingFailed");
       this.statusText.style.color = "#ff6600";
 
       // Final fallback: copy to clipboard
       try {
+        const pasteShortcut = this.getPasteShortcutLabel();
         await navigator.clipboard.writeText(text);
-        this.statusText.textContent = "Text copied to clipboard - Press Cmd+V to paste";
+        this.statusText.textContent = t("inputPrompt.textCopiedFallback", {
+          shortcut: pasteShortcut,
+        });
         this.statusText.style.color = "#ffaa00";
         setTimeout(() => this.hidePrompt(), 3000);
       } catch (clipboardError) {
         console.error("Failed to copy to clipboard:", clipboardError);
-        this.statusText.textContent = "Error: Could not process text";
+        this.statusText.textContent = t("inputPrompt.errorCouldNotProcess");
         this.statusText.style.color = "#ff0000";
         setTimeout(() => this.hidePrompt(), 3000);
       }
     }
+  }
+
+  getPasteShortcutLabel() {
+    const isMac = window.navigator?.platform?.includes("Mac");
+    return isMac ? "Cmd+V" : "Ctrl+V";
   }
 
   startWaveAnimation() {
@@ -577,5 +609,15 @@ class VoiceInputPrompt {
 
 // Initialize when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
-  new VoiceInputPrompt();
+  const initialize = async () => {
+    try {
+      const settings = await ipcRenderer.invoke("get-settings");
+      initI18n(settings?.uiLanguage);
+    } catch (error) {
+      console.error("Failed to load UI language settings:", error);
+      initI18n("auto");
+    }
+    new VoiceInputPrompt();
+  };
+  initialize();
 });

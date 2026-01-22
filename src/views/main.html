@@ -13,7 +13,7 @@
       <div class="header">
         <div class="logo">WhispLine</div>
         <div class="subline">
-          <div class="badge">Basic</div>
+          <div class="badge" data-i18n="app.plan.basic">Basic</div>
           <div id="appVersion" class="app-version">v-</div>
         </div>
       </div>
@@ -22,44 +22,45 @@
     <div class="sidebar-nav">
       <button class="nav-item active" onclick="showPage('home')">
         <span class="nav-item-icon material-icons">home</span>
-        <span>Home</span>
+        <span data-i18n="sidebar.home">Home</span>
       </button>
       <button class="nav-item" onclick="showPage('dictionary')">
         <span class="nav-item-icon material-icons">book</span>
-        <span>Dictionary</span>
+        <span data-i18n="sidebar.dictionary">Dictionary</span>
       </button>
       <button class="nav-item">
         <span class="nav-item-icon material-icons">note</span>
-        <span>Notes</span>
+        <span data-i18n="sidebar.notes">Notes</span>
       </button>
     </div>
 
     <div class="sidebar-footer">
       <div class="upgrade-section">
         <div class="upgrade-title">
-          <span class="material-icons upgrade-icon">workspace_premium</span>Upgrade to pro
+          <span class="material-icons upgrade-icon">workspace_premium</span>
+          <span data-i18n="upgrade.title">Upgrade to pro</span>
         </div>
-        <div class="upgrade-description">
+        <div class="upgrade-description" data-i18n="upgrade.description">
           Upgrade for unlimited dictation and other pro features
         </div>
-        <button class="learn-more-btn">Learn more</button>
+        <button class="learn-more-btn" data-i18n="upgrade.learnMore">Learn more</button>
       </div>
 
       <button class="nav-item" onclick="openSettings()">
         <span class="nav-item-icon material-icons">settings</span>
-        <span>Settings</span>
+        <span data-i18n="sidebar.settings">Settings</span>
       </button>
       <button class="nav-item">
         <span class="nav-item-icon material-icons">group_add</span>
-        <span>Add your team</span>
+        <span data-i18n="sidebar.addTeam">Add your team</span>
       </button>
       <button class="nav-item">
         <span class="nav-item-icon material-icons">person_add</span>
-        <span>Refer a friend</span>
+        <span data-i18n="sidebar.referFriend">Refer a friend</span>
       </button>
       <button class="nav-item">
         <span class="nav-item-icon material-icons">help</span>
-        <span>Help</span>
+        <span data-i18n="sidebar.help">Help</span>
       </button>
     </div>
   </div>
@@ -68,20 +69,20 @@
     <!-- Home Page -->
     <div id="home-page" class="page active">
       <div class="feature-section">
-        <div class="feature-title">Voice dictation in any app</div>
+        <div class="feature-title" data-i18n="home.featureTitle">Voice dictation in any app</div>
         <div class="feature-description" id="recordShortcutHint">
           Hold down Ctrl + Shift and speak into any textbox.
         </div>
         <div class="feature-description" id="translateShortcutHint">
           Hold down Shift + Alt to translate spoken text to English.
         </div>
-        <button class="btn" onclick="exploreUseCases()">
+        <button class="btn" onclick="exploreUseCases()" data-i18n="home.explore">
           Explore use cases
         </button>
       </div>
 
       <div class="recent-activity">
-        <h3>Recent activity</h3>
+        <h3 data-i18n="home.recentActivity">Recent activity</h3>
         <div id="activity-container">
           <!-- Activities will be loaded here -->
         </div>
@@ -91,41 +92,54 @@
     <!-- Dictionary Page -->
     <div id="dictionary-page" class="page">
       <div class="welcome">
-        <h1>Dictionary</h1>
-        <p>Add custom words and phrases to improve transcription accuracy</p>
+        <h1 data-i18n="dictionary.title">Dictionary</h1>
+        <p data-i18n="dictionary.subtitle">Add custom words and phrases to improve transcription accuracy</p>
       </div>
 
       <div class="dictionary-section">
         <div class="dictionary-form">
-          <label for="dictionary-text">Custom Dictionary Prompt:</label>
+          <label for="dictionary-text" data-i18n="dictionary.label">Custom Dictionary Prompt:</label>
           <textarea 
             id="dictionary-text" 
             placeholder="Enter custom words, phrases, or context to help improve transcription accuracy. For example: 'Technical terms: API, JSON, OAuth, WebSocket'"
+            data-i18n="dictionary.placeholder"
+            data-i18n-attr="placeholder"
             rows="8"
           ></textarea>
           <div class="dictionary-actions">
-            <button class="btn" onclick="saveDictionary()">Save Dictionary</button>
+            <button class="btn" onclick="saveDictionary()" data-i18n="dictionary.save">Save Dictionary</button>
           </div>
         </div>
 
         <div class="dictionary-help">
-          <h3>How to use the Dictionary</h3>
+          <h3 data-i18n="dictionary.helpTitle">How to use the Dictionary</h3>
           <ul>
-            <li>Add technical terms, proper nouns, or domain-specific vocabulary</li>
-            <li>Include context or examples for better recognition</li>
-            <li>Use clear, descriptive language</li>
-            <li>This content will be sent as a prompt to improve transcription accuracy</li>
+            <li data-i18n="dictionary.helpItem1">Add technical terms, proper nouns, or domain-specific vocabulary</li>
+            <li data-i18n="dictionary.helpItem2">Include context or examples for better recognition</li>
+            <li data-i18n="dictionary.helpItem3">Use clear, descriptive language</li>
+            <li data-i18n="dictionary.helpItem4">This content will be sent as a prompt to improve transcription accuracy</li>
           </ul>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="i18n.js"></script>
   <script>
     const { ipcRenderer } = require("electron");
+    const { initI18n, setLanguage, applyI18n, t, getLocale } = window.WhispLineI18n;
+    let lastRecordShortcut = 'Ctrl+Shift';
+    let lastTranslateShortcut = 'Shift+Alt';
 
     // Load activities when page loads
     document.addEventListener('DOMContentLoaded', async () => {
+      let settings = null;
+      try {
+        settings = await ipcRenderer.invoke("get-settings");
+      } catch (error) {
+        console.error('Failed to load settings for i18n:', error);
+      }
+      initI18n(settings?.uiLanguage);
       await loadActivities();
       await loadDictionary();
       await loadShortcutHints();
@@ -153,6 +167,14 @@
         if (!payload) return;
         updateShortcutHints(payload.recordShortcut, payload.translateShortcut);
       });
+
+      ipcRenderer.on('ui-language-updated', async (event, payload) => {
+        if (!payload) return;
+        setLanguage(payload.language);
+        applyI18n(document);
+        updateShortcutHints(lastRecordShortcut, lastTranslateShortcut);
+        await loadActivities();
+      });
     });
 
     async function loadShortcutHints() {
@@ -161,6 +183,7 @@
         updateShortcutHints(settings.shortcut, settings.translateShortcut);
       } catch (error) {
         console.error('Failed to load shortcuts:', error);
+        updateShortcutHints('Ctrl+Shift', 'Shift+Alt');
       }
     }
 
@@ -176,12 +199,14 @@
       const translateHint = document.getElementById('translateShortcutHint');
       const recordLabel = formatShortcutLabel(recordShortcut || 'Ctrl+Shift');
       const translateLabel = formatShortcutLabel(translateShortcut || 'Shift+Alt');
+      lastRecordShortcut = recordShortcut || lastRecordShortcut;
+      lastTranslateShortcut = translateShortcut || lastTranslateShortcut;
 
       if (recordHint) {
-        recordHint.textContent = `Hold down ${recordLabel} and speak into any textbox.`;
+        recordHint.textContent = t('home.recordHint', { shortcut: recordLabel });
       }
       if (translateHint) {
-        translateHint.textContent = `Hold down ${translateLabel} to translate spoken text to English.`;
+        translateHint.textContent = t('home.translateHint', { shortcut: translateLabel });
       }
     }
 
@@ -220,13 +245,13 @@
         // Show some feedback
         const button = document.querySelector('.dictionary-actions .btn');
         const originalText = button.textContent;
-        button.textContent = 'Saved!';
+        button.textContent = t('dictionary.saved');
         setTimeout(() => {
           button.textContent = originalText;
         }, 2000);
       } catch (error) {
         console.error("Error saving dictionary:", error);
-        alert('Error saving dictionary: ' + error.message);
+        alert(t('dictionary.saveError', { message: error.message }));
       }
     }
 
@@ -245,7 +270,7 @@
 
       if (!Array.isArray(activities) || activities.length === 0) {
         const empty = document.createElement('p');
-        empty.textContent = 'No recent activity';
+        empty.textContent = t('home.noActivity');
         container.replaceChildren(empty);
         return;
       }
@@ -255,15 +280,16 @@
       const header = document.createElement('div');
       header.className = 'section-header';
       const headerTitle = document.createElement('h4');
-      headerTitle.textContent = 'RECENT';
+      headerTitle.textContent = t('home.recentHeader');
       header.appendChild(headerTitle);
       container.appendChild(header);
 
       activities.forEach((activity) => {
-        const time = new Date(activity.timestamp).toLocaleTimeString('en-US', {
+        const locale = getLocale();
+        const time = new Date(activity.timestamp).toLocaleTimeString(locale, {
           hour: '2-digit',
           minute: '2-digit',
-          hour12: true
+          hour12: locale === 'en-US'
         });
 
         const rawText = (activity.text ?? '').toString();
@@ -285,7 +311,7 @@
         const button = document.createElement('button');
         button.className = 'copy-btn';
         button.type = 'button';
-        button.title = 'Copy text';
+        button.title = t('activity.copyTitle');
         button.addEventListener('click', () => {
           copyToClipboard(rawText, button);
         });
