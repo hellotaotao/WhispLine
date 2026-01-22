@@ -19,6 +19,8 @@ class VoiceInputPrompt {
     this.cancelledShortPress = false;
     this.cancelInProgress = false;
     this.transcriptionInProgress = false;
+    this.recordShortcut = "Ctrl+Shift";
+    this.translateShortcut = "Shift+Alt";
 
     this.promptElement = document.getElementById("inputPrompt");
     this.promptText = document.getElementById("promptText");
@@ -28,6 +30,7 @@ class VoiceInputPrompt {
 
     this.createWaveBars();
     this.setupEventListeners();
+    this.syncShortcutFromSettings();
   }
 
   createWaveBars() {
@@ -40,6 +43,15 @@ class VoiceInputPrompt {
   }
 
   setupEventListeners() {
+    ipcRenderer.on("shortcut-updated", (event, payload) => {
+      if (!payload) {
+        return;
+      }
+      const recordShortcut = payload.recordShortcut || "Ctrl+Shift";
+      const translateShortcut = payload.translateShortcut || "Shift+Alt";
+      this.updateShortcutHint(recordShortcut, translateShortcut);
+    });
+
     // Listen for start recording from main process
     ipcRenderer.on("start-recording", async (event, translateMode = false) => {
       if (this.isRecording || this.starting) {
@@ -86,6 +98,44 @@ class VoiceInputPrompt {
     window.addEventListener("beforeunload", () => {
       this.cleanup();
     });
+  }
+
+  async syncShortcutFromSettings() {
+    try {
+      const settings = await ipcRenderer.invoke("get-settings");
+      if (!settings) {
+        return;
+      }
+      this.updateShortcutHint(
+        settings.shortcut || "Ctrl+Shift",
+        settings.translateShortcut || "Shift+Alt"
+      );
+    } catch (error) {
+      console.error("Failed to load shortcut hint settings:", error);
+    }
+  }
+
+  formatShortcutLabel(shortcut) {
+    if (typeof shortcut !== "string") {
+      return "";
+    }
+    const label = shortcut.replace(/\+/g, " + ");
+    const isMac = window.navigator?.platform?.includes("Mac");
+    return isMac ? label.replace(/Alt/g, "Option") : label;
+  }
+
+  updateShortcutHint(recordShortcut, translateShortcut) {
+    if (!this.promptText) {
+      return;
+    }
+    const safeRecordShortcut = recordShortcut || this.recordShortcut || "Ctrl+Shift";
+    const safeTranslateShortcut =
+      translateShortcut || this.translateShortcut || "Shift+Alt";
+    this.recordShortcut = safeRecordShortcut;
+    this.translateShortcut = safeTranslateShortcut;
+    const recordLabel = this.formatShortcutLabel(safeRecordShortcut);
+    const translateLabel = this.formatShortcutLabel(safeTranslateShortcut);
+    this.promptText.textContent = `Hold ${recordLabel} to dictate, ${translateLabel} for English`;
   }
 
   async startRecording() {
@@ -505,7 +555,7 @@ class VoiceInputPrompt {
     
     this.promptElement.classList.remove("visible", "recording");
     this.transcriptionText.classList.remove("visible");
-    this.promptText.textContent = "Hold Ctrl + Shift to dictate, Shift + Alt for English";
+    this.updateShortcutHint(this.recordShortcut, this.translateShortcut);
     this.statusText.textContent = "";
     this.statusText.style.color = "";
     this.transcriptionText.textContent = "";

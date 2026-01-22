@@ -58,6 +58,15 @@ async function loadSettings() {
       currentSettings.apiKeyGroq || currentSettings.apiKey || "";
     apiKeyOpenAI.value = currentSettings.apiKeyOpenAI || "";
 
+    const shortcutSelect = document.getElementById("shortcutSelect");
+    if (shortcutSelect) {
+      const shortcutValue = currentSettings.shortcut || "Ctrl+Shift";
+      const hasOption = Array.from(shortcutSelect.options).some(
+        (opt) => opt.value === shortcutValue
+      );
+      shortcutSelect.value = hasOption ? shortcutValue : "Ctrl+Shift";
+    }
+
     // Set the selected language
     const languageSelect = document.getElementById("languageSelect");
     if (currentSettings.language) {
@@ -77,9 +86,26 @@ async function loadSettings() {
     // Check initial permission status
     await checkMicrophonePermissionStatus();
     await checkAccessibilityStatus();
+    setupShortcutSync();
   } catch (error) {
     console.error("Failed to load settings:", error);
   }
+}
+
+function setupShortcutSync() {
+  ipcRenderer.on("shortcut-updated", (event, payload) => {
+    if (!payload || !payload.recordShortcut) {
+      return;
+    }
+    const shortcutSelect = document.getElementById("shortcutSelect");
+    if (!shortcutSelect) {
+      return;
+    }
+    const hasOption = Array.from(shortcutSelect.options).some(
+      (opt) => opt.value === payload.recordShortcut
+    );
+    shortcutSelect.value = hasOption ? payload.recordShortcut : "Ctrl+Shift";
+  });
 }
 
 async function checkMicrophonePermissionStatus() {
@@ -178,7 +204,7 @@ async function saveSettings() {
     const settings = {
       apiKeyGroq: document.getElementById("apiKeyGroq").value,
       apiKeyOpenAI: document.getElementById("apiKeyOpenAI").value,
-      shortcut: currentSettings.shortcut,
+      shortcut: document.getElementById("shortcutSelect").value,
       language: document.getElementById("languageSelect").value,
       model: document.getElementById("modelSelect").value,
       microphone: currentSettings.microphone,

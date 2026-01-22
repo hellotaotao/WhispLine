@@ -35,15 +35,17 @@
       <div class="setting-group">
         <div class="setting-item">
           <div class="setting-info">
-            <div class="setting-title">Set default keyboard shortcuts</div>
+            <div class="setting-title">Recording shortcut</div>
             <div class="setting-description">
-              Choose your preferred keyboard shortcuts for voice input.
+              Choose your preferred hold-to-record shortcut. Translation stays Shift + Alt.
             </div>
           </div>
           <div class="setting-control">
-            <button class="btn btn-secondary" id="changeShortcut">
-              Change shortcut
-            </button>
+            <select class="input shortcut-select" id="shortcutSelect" title="Select recording shortcut">
+              <option value="Ctrl+Shift">Ctrl + Shift</option>
+              <option value="Ctrl+Alt">Ctrl + Alt</option>
+              <option value="Ctrl+Shift+Alt">Ctrl + Shift + Alt</option>
+            </select>
           </div>
         </div>
 
@@ -52,7 +54,7 @@
           <div class="setting-info">
             <div class="setting-title">Accessibility Permission</div>
             <div class="setting-description">
-              Required for global hotkeys (Ctrl+Shift) and automatic text insertion.
+              Required for global hotkeys and automatic text insertion.
             </div>
           </div>
           <div class="setting-control">
@@ -219,7 +221,7 @@
               </div>
             </div>
             <div class="setting-control">
-              <select class="input provider-select" id="providerSelect">
+              <select class="input provider-select" id="providerSelect" title="Select API provider">
                 <option value="groq">Groq</option>
                 <option value="openai">OpenAI</option>
               </select>

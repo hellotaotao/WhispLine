@@ -237,6 +237,10 @@ body {
   width: 250px;
 }
 
+.shortcut-select {
+  width: 200px;
+}
+
 .api-key-input {
   font-family: monospace;
   letter-spacing: 1px;

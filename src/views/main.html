@@ -69,11 +69,11 @@
     <div id="home-page" class="page active">
       <div class="feature-section">
         <div class="feature-title">Voice dictation in any app</div>
-        <div class="feature-description">
+        <div class="feature-description" id="recordShortcutHint">
           Hold down Ctrl + Shift and speak into any textbox.
         </div>
-        <div class="feature-description">
-          Hold down Option + Shift to translate spoken text to English.
+        <div class="feature-description" id="translateShortcutHint">
+          Hold down Shift + Alt to translate spoken text to English.
         </div>
         <button class="btn" onclick="exploreUseCases()">
           Explore use cases
@@ -128,6 +128,7 @@
     document.addEventListener('DOMContentLoaded', async () => {
       await loadActivities();
       await loadDictionary();
+      await loadShortcutHints();
       
       // Load app version into sidebar footer
       try {
@@ -147,7 +148,42 @@
       ipcRenderer.on('accessibility-permission-changed', (event, data) => {
         showNotification(data.message, data.granted ? 'success' : 'warning');
       });
+
+      ipcRenderer.on('shortcut-updated', (event, payload) => {
+        if (!payload) return;
+        updateShortcutHints(payload.recordShortcut, payload.translateShortcut);
+      });
     });
+
+    async function loadShortcutHints() {
+      try {
+        const settings = await ipcRenderer.invoke('get-settings');
+        updateShortcutHints(settings.shortcut, settings.translateShortcut);
+      } catch (error) {
+        console.error('Failed to load shortcuts:', error);
+      }
+    }
+
+    function formatShortcutLabel(shortcut) {
+      if (!shortcut) return '';
+      const isMac = window.navigator?.platform?.includes('Mac');
+      const label = shortcut.replace(/\+/g, ' + ');
+      return isMac ? label.replace(/Alt/g, 'Option') : label;
+    }
+
+    function updateShortcutHints(recordShortcut, translateShortcut) {
+      const recordHint = document.getElementById('recordShortcutHint');
+      const translateHint = document.getElementById('translateShortcutHint');
+      const recordLabel = formatShortcutLabel(recordShortcut || 'Ctrl+Shift');
+      const translateLabel = formatShortcutLabel(translateShortcut || 'Shift+Alt');
+
+      if (recordHint) {
+        recordHint.textContent = `Hold down ${recordLabel} and speak into any textbox.`;
+      }
+      if (translateHint) {
+        translateHint.textContent = `Hold down ${translateLabel} to translate spoken text to English.`;
+      }
+    }
 
     // Page switching
     function showPage(pageId) {

@@ -45,6 +45,16 @@ if (process.platform === 'win32') {
 }
 
 const store = new Store();
+const DEFAULT_RECORD_SHORTCUT = "Ctrl+Shift";
+const TRANSLATE_SHORTCUT = "Shift+Alt";
+const MODIFIER_ORDER = ["Ctrl", "Shift", "Alt"];
+const MODIFIER_ALIASES = {
+  ctrl: "Ctrl",
+  control: "Ctrl",
+  shift: "Shift",
+  alt: "Alt",
+  option: "Alt",
+};
 const db = new DatabaseManager();
 const permissionManager = new PermissionManager();
 const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
@@ -74,6 +84,79 @@ function getTranscriptionService(provider, apiKey) {
 function clearTranscriptionServiceCache() {
   transcriptionServiceCache.clear();
   console.log('Transcription service cache cleared');
+}
+
+function extractShortcutModifiers(value) {
+  if (typeof value !== "string") {
+    return [];
+  }
+  const tokens = value.split(/[^a-zA-Z]+/).filter(Boolean);
+  const modifiers = new Set();
+  for (const token of tokens) {
+    const mapped = MODIFIER_ALIASES[token.toLowerCase()];
+    if (mapped) {
+      modifiers.add(mapped);
+    }
+  }
+  return Array.from(modifiers);
+}
+
+function parseShortcut(shortcut) {
+  if (typeof shortcut !== "string") {
+    return null;
+  }
+  const modifiers = extractShortcutModifiers(shortcut);
+  const ordered = MODIFIER_ORDER.filter((modifier) => modifiers.includes(modifier));
+  if (ordered.length < 2) {
+    return null;
+  }
+  return {
+    ctrl: ordered.includes("Ctrl"),
+    shift: ordered.includes("Shift"),
+    alt: ordered.includes("Alt"),
+    label: ordered.join("+"),
+  };
+}
+
+function normalizeRecordShortcut(value) {
+  const parsed = parseShortcut(value);
+  if (!parsed) {
+    return DEFAULT_RECORD_SHORTCUT;
+  }
+  if (parsed.label === TRANSLATE_SHORTCUT) {
+    return DEFAULT_RECORD_SHORTCUT;
+  }
+  return parsed.label;
+}
+
+function isShortcutActive(shortcut) {
+  const parsed = parseShortcut(shortcut);
+  if (!parsed) {
+    return false;
+  }
+  return (!parsed.ctrl || ctrlPressed) &&
+    (!parsed.shift || shiftPressed) &&
+    (!parsed.alt || altPressed);
+}
+
+function buildShortcutPayload() {
+  return {
+    recordShortcut,
+    translateShortcut: TRANSLATE_SHORTCUT,
+  };
+}
+
+function broadcastShortcutUpdate() {
+  const payload = buildShortcutPayload();
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send("shortcut-updated", payload);
+  }
+  if (inputPromptWindow && inputPromptWindow.webContents) {
+    inputPromptWindow.webContents.send("shortcut-updated", payload);
+  }
+  if (settingsWindow && settingsWindow.webContents) {
+    settingsWindow.webContents.send("shortcut-updated", payload);
+  }
 }
 
 function createCancellationError() {
@@ -128,6 +211,9 @@ let altPressed = false;
 let isRecording = false;
 let activeTranscription = null;
 let transcriptionRequestId = 0;
+let recordShortcut = normalizeRecordShortcut(
+  store.get("shortcut", DEFAULT_RECORD_SHORTCUT)
+);
 
 // Set up permission manager event listeners
 permissionManager.on('accessibility-permission-changed', (data) => {
@@ -169,6 +255,10 @@ function createMainWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "views/main.html"));
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents.send("shortcut-updated", buildShortcutPayload());
+  });
 
   mainWindow.on("close", (event) => {
     if (!app.isQuitting) {
@@ -235,6 +325,7 @@ function createSettingsWindow() {
 
   settingsWindow.once("ready-to-show", () => {
     settingsWindow.show();
+    settingsWindow.webContents.send("shortcut-updated", buildShortcutPayload());
   });
 }
 
@@ -274,6 +365,9 @@ function createInputPromptWindow() {
   });
 
   inputPromptWindow.loadFile(path.join(__dirname, "views/input-prompt.html"));
+  inputPromptWindow.webContents.on("did-finish-load", () => {
+    inputPromptWindow.webContents.send("shortcut-updated", buildShortcutPayload());
+  });
 }
 
 // Position Input Prompt on the display where the user is currently active (by cursor)
@@ -378,20 +472,12 @@ async function setupGlobalHotkeys() {
         return;
       }
 
-      // Start recording when Ctrl+Shift OR Shift+Alt are pressed
+      // Start recording when the configured shortcut or translation shortcut is pressed
       if (!isRecording) {
-        let shouldStartRecording = false;
+        const recordShortcutActive = isShortcutActive(recordShortcut);
+        const translateShortcutActive = isShortcutActive(TRANSLATE_SHORTCUT);
 
-        // Ctrl+Shift for normal transcription
-        if (ctrlPressed && shiftPressed) {
-          shouldStartRecording = true;
-        }
-        // Shift+Alt for English translation
-        else if (shiftPressed && altPressed) {
-          shouldStartRecording = true;
-        }
-        
-        if (shouldStartRecording) {
+        if (recordShortcutActive || translateShortcutActive) {
           // Check microphone permission before starting recording
           permissionManager
             .checkAndRequestMicrophonePermission()
@@ -404,11 +490,13 @@ async function setupGlobalHotkeys() {
               // Re-evaluate the shortcut state in case the user released keys while waiting
               let comboActive = false;
               let currentTranslateMode = false;
+              const recordActiveNow = isShortcutActive(recordShortcut);
+              const translateActiveNow = isShortcutActive(TRANSLATE_SHORTCUT);
 
-              if (ctrlPressed && shiftPressed) {
+              if (recordActiveNow) {
                 comboActive = true;
                 currentTranslateMode = false;
-              } else if (shiftPressed && altPressed) {
+              } else if (translateActiveNow) {
                 comboActive = true;
                 currentTranslateMode = true;
               }
@@ -456,8 +544,10 @@ async function setupGlobalHotkeys() {
         altPressed = false;
       }
 
-      // Stop recording when neither Ctrl+Shift nor Shift+Alt is pressed
-      if (isRecording && !( (ctrlPressed && shiftPressed) || (shiftPressed && altPressed) )) {
+      // Stop recording when neither the record nor translation shortcut is pressed
+      const recordShortcutActive = isShortcutActive(recordShortcut);
+      const translateShortcutActive = isShortcutActive(TRANSLATE_SHORTCUT);
+      if (isRecording && !(recordShortcutActive || translateShortcutActive)) {
         isRecording = false;
         inputPromptWindow?.webContents.send("stop-recording");
       }
@@ -772,7 +862,8 @@ ipcMain.handle("get-settings", () => {
     apiKey: store.get("apiKey", ""),
     apiKeyGroq: store.get("apiKeyGroq", store.get("apiKey", "")),
     apiKeyOpenAI: store.get("apiKeyOpenAI", ""),
-    shortcut: "Ctrl+Shift (hold down)", // Fixed hotkey, not customizable
+    shortcut: recordShortcut,
+    translateShortcut: TRANSLATE_SHORTCUT,
     language: store.get("language", "auto"),
     model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
@@ -792,7 +883,10 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   // Keep legacy apiKey synchronized with currently selected provider's key
   store.set("apiKey", settings.provider === 'openai' ? (settings.apiKeyOpenAI || '') : (settings.apiKeyGroq || ''));
-  store.set("shortcut", settings.shortcut);
+  if (typeof settings.shortcut === "string") {
+    recordShortcut = normalizeRecordShortcut(settings.shortcut);
+    store.set("shortcut", recordShortcut);
+  }
   store.set("language", settings.language);
   store.set("model", settings.model);
   store.set("microphone", settings.microphone);
@@ -802,6 +896,9 @@ ipcMain.handle("save-settings", async (event, settings) => {
 
   // Clear transcription service cache when settings change (especially API keys)
   clearTranscriptionServiceCache();
+
+  // Notify renderers about updated shortcuts
+  broadcastShortcutUpdate();
 
   // Handle auto-launch setting
   try {
@@ -817,7 +914,7 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
 
   // Note: uiohook doesn't need re-registration like globalShortcut
-  // The hotkey combination is hardcoded to Ctrl+Shift
+  // The hotkey combination is handled dynamically
 
   return true;
 });
