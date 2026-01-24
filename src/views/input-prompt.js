@@ -38,7 +38,13 @@ class VoiceInputPrompt {
     this.recordingStartedAt = null;
     this.cancelledShortPress = false;
     this.cancelInProgress = false;
-    this.transcriptionInProgress = false;
+    this.transcriptionInProgressCount = 0;
+    this.recordingSessionId = 0;
+    this.activeRecordingSession = null;
+    this.pendingInsertionOrder = [];
+    this.pendingInsertionsById = new Map();
+    this.isFlushingInsertQueue = false;
+    this.recordingTimerId = null;
     this.recordShortcut = DEFAULT_RECORD_SHORTCUT;
     this.translateShortcut = DEFAULT_TRANSLATE_SHORTCUT;
 
@@ -180,6 +186,142 @@ class VoiceInputPrompt {
     });
   }
 
+  formatDuration(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  getReadyInsertionCount() {
+    let count = 0;
+    for (const sessionId of this.pendingInsertionOrder) {
+      if (this.pendingInsertionsById.has(sessionId)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  updateStatusText() {
+    if (!this.statusText) {
+      return;
+    }
+
+    if (this.isFlushingInsertQueue) {
+      const readyCount = Math.max(1, this.getReadyInsertionCount());
+      this.statusText.textContent = t("inputPrompt.insertingCount", {
+        count: readyCount,
+      });
+      this.statusText.style.color = "var(--status-success)";
+      return;
+    }
+
+    if (this.isRecording) {
+      const duration = this.formatDuration(
+        Date.now() - (this.recordingStartedAt || Date.now())
+      );
+      let status = t("inputPrompt.recordingWithDuration", { duration });
+      if (this.transcriptionInProgressCount > 0) {
+        status += `${t("inputPrompt.statusSeparator")}${t(
+          "inputPrompt.transcribingCount",
+          { count: this.transcriptionInProgressCount }
+        )}`;
+      }
+      this.statusText.textContent = status;
+      this.statusText.style.color = "";
+      return;
+    }
+
+    if (this.transcriptionInProgressCount > 0) {
+      this.statusText.textContent = t("inputPrompt.transcribingCount", {
+        count: this.transcriptionInProgressCount,
+      });
+      this.statusText.style.color = "";
+      return;
+    }
+
+    this.statusText.textContent = "";
+    this.statusText.style.color = "";
+  }
+
+  startRecordingTimer() {
+    this.stopRecordingTimer();
+    this.updateStatusText();
+    this.recordingTimerId = setInterval(() => {
+      if (!this.isRecording) {
+        return;
+      }
+      this.updateStatusText();
+    }, 200);
+  }
+
+  stopRecordingTimer() {
+    if (this.recordingTimerId) {
+      clearInterval(this.recordingTimerId);
+      this.recordingTimerId = null;
+    }
+  }
+
+  removePendingInsertion(sessionId) {
+    this.pendingInsertionsById.delete(sessionId);
+    this.pendingInsertionOrder = this.pendingInsertionOrder.filter(
+      (id) => id !== sessionId
+    );
+  }
+
+  storeTranscriptionResult(sessionId, transcription) {
+    this.pendingInsertionsById.set(sessionId, transcription);
+    this.transcriptionText.textContent = transcription;
+    this.transcriptionText.classList.add("visible");
+  }
+
+  async flushPendingInsertions() {
+    if (this.isFlushingInsertQueue || this.isRecording || this.starting) {
+      return;
+    }
+
+    if (!this.pendingInsertionOrder.length) {
+      return;
+    }
+
+    const nextId = this.pendingInsertionOrder[0];
+    if (!this.pendingInsertionsById.has(nextId)) {
+      return;
+    }
+
+    this.isFlushingInsertQueue = true;
+    this.updateStatusText();
+
+    try {
+      while (this.pendingInsertionOrder.length) {
+        const nextId = this.pendingInsertionOrder[0];
+        const text = this.pendingInsertionsById.get(nextId);
+        if (!text) {
+          break;
+        }
+        await this.typeText(text, { suppressUi: true });
+        this.pendingInsertionsById.delete(nextId);
+        this.pendingInsertionOrder.shift();
+      }
+    } finally {
+      this.isFlushingInsertQueue = false;
+    }
+
+    if (!this.isRecording && !this.starting && !this.pendingInsertionOrder.length) {
+      this.statusText.textContent = t("inputPrompt.textInserted");
+      this.statusText.style.color = "var(--status-success)";
+      setTimeout(() => this.hidePrompt(), 1200);
+    } else {
+      this.updateStatusText();
+    }
+  }
+
+  clearPendingInsertions() {
+    this.pendingInsertionOrder = [];
+    this.pendingInsertionsById.clear();
+  }
+
   async startRecording() {
     if (this.isRecording || this.starting) return;
 
@@ -189,8 +331,10 @@ class VoiceInputPrompt {
       this.promptElement.classList.add("visible");
       this.promptText.textContent = t("inputPrompt.starting");
       this.statusText.textContent = "";
-
-      this.audioChunks = [];
+      if (!this.pendingInsertionOrder.length && this.transcriptionInProgressCount === 0) {
+        this.transcriptionText.textContent = "";
+        this.transcriptionText.classList.remove("visible");
+      }
 
       // Create media stream directly using getUserMedia
       // In Electron, system-level permissions are handled by main process
@@ -220,7 +364,6 @@ class VoiceInputPrompt {
       } else {
         this.promptText.textContent = t("inputPrompt.listening");
       }
-      this.statusText.innerHTML = `${t("inputPrompt.recording")} <div class="recording-dot"></div>`;
 
       // Setup audio context for visualization
       this.audioContext = new (window.AudioContext ||
@@ -244,6 +387,18 @@ class VoiceInputPrompt {
       }
       
       console.log("Using audio format:", mimeType);
+      // Keep per-recording state so overlapping recordings don't clobber each other.
+      const sessionId = ++this.recordingSessionId;
+      const recordingSession = {
+        id: sessionId,
+        chunks: [],
+        mimeType: mimeType,
+        translateMode: this.translateMode,
+        cancelledShortPress: false,
+      };
+      this.activeRecordingSession = recordingSession;
+      this.pendingInsertionOrder.push(sessionId);
+      this.audioChunks = recordingSession.chunks;
       this.recordingMimeType = mimeType; // Store for later use
       
       this.mediaRecorder = new MediaRecorder(this.mediaStream, {
@@ -252,12 +407,12 @@ class VoiceInputPrompt {
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
+          recordingSession.chunks.push(event.data);
         }
       };
 
       this.mediaRecorder.onstop = () => {
-        this.processRecording();
+        this.processRecording(recordingSession);
       };
 
       this.mediaRecorder.start();
@@ -265,12 +420,16 @@ class VoiceInputPrompt {
       this.cancelledShortPress = false;
       this.isRecording = true;
       this.startWaveAnimation();
+      this.startRecordingTimer();
 
       if (this.stopRequested) {
         this.stopRecording();
       }
     } catch (error) {
       console.error("Error starting recording:", error);
+      if (this.activeRecordingSession) {
+        this.removePendingInsertion(this.activeRecordingSession.id);
+      }
       await this.handleRecordingError(error);
     } finally {
       this.starting = false;
@@ -283,16 +442,22 @@ class VoiceInputPrompt {
     }
 
     this.isRecording = false;
+    this.stopRecordingTimer();
     const elapsedMs = this.recordingStartedAt
       ? Date.now() - this.recordingStartedAt
       : 0;
     const isShortPress = elapsedMs <= SHORT_PRESS_THRESHOLD_MS;
     const shouldCancel = this.cancelledShortPress || this.cancelInProgress || isShortPress;
     this.cancelledShortPress = shouldCancel;
+    if (this.activeRecordingSession) {
+      this.activeRecordingSession.cancelledShortPress = shouldCancel;
+    }
 
     if (shouldCancel) {
       this.promptText.textContent = t("inputPrompt.cancelled");
       this.statusText.textContent = "";
+      this.transcriptionText.textContent = "";
+      this.transcriptionText.classList.remove("visible");
     } else {
       this.promptText.textContent = t("inputPrompt.processing");
       this.statusText.textContent = t("inputPrompt.transcribing");
@@ -304,6 +469,7 @@ class VoiceInputPrompt {
 
     this.cleanup({ preserveAudioChunks: true });
     this.stopWaveAnimation();
+    this.flushPendingInsertions();
   }
 
   cancelRecording() {
@@ -312,8 +478,10 @@ class VoiceInputPrompt {
     }
     this.cancelInProgress = true;
     this.stopRequested = true;
+    this.stopRecordingTimer();
+    this.clearPendingInsertions();
 
-    if (this.transcriptionInProgress) {
+    if (this.transcriptionInProgressCount > 0) {
       ipcRenderer.invoke("cancel-transcription").catch(() => {});
       this.promptText.textContent = t("inputPrompt.cancelled");
       this.statusText.textContent = "";
@@ -397,28 +565,49 @@ class VoiceInputPrompt {
     logMicrophoneCleanup("Microphone cleanup completed");
   }
 
-  async processRecording() {
+  async processRecording(recordingSession) {
+    if (!recordingSession) {
+      console.warn("Missing recording session; skipping transcription.");
+      return;
+    }
+
+    const {
+      id: sessionId,
+      chunks,
+      mimeType,
+      translateMode,
+      cancelledShortPress,
+    } = recordingSession;
+    const allowUi = sessionId === this.recordingSessionId && !this.isRecording && !this.starting;
+
+    this.transcriptionInProgressCount += 1;
+    this.updateStatusText();
     try {
-      this.transcriptionInProgress = true;
-      if (this.cancelledShortPress) {
-        this.cancelledShortPress = false;
-        this.recordingStartedAt = null;
-        this.audioChunks = [];
-        this.statusText.textContent = t("inputPrompt.cancelled");
-        this.statusText.style.color = "var(--status-warning)";
-        setTimeout(() => this.hidePrompt(), 300);
+      if (cancelledShortPress) {
+        this.removePendingInsertion(sessionId);
+        if (allowUi) {
+          this.cancelledShortPress = false;
+          this.recordingStartedAt = null;
+          this.audioChunks = [];
+          this.statusText.textContent = t("inputPrompt.cancelled");
+          this.statusText.style.color = "var(--status-warning)";
+          setTimeout(() => this.hidePrompt(), 300);
+        }
         return;
       }
-      if (!this.audioChunks.length) {
-        console.warn('No audio chunks captured; skipping transcription request');
-        this.statusText.textContent = t("inputPrompt.noAudio");
-        this.statusText.style.color = "var(--status-warning)";
-        setTimeout(() => this.hidePrompt(), 1500);
+      if (!chunks.length) {
+        console.warn("No audio chunks captured; skipping transcription request");
+        this.removePendingInsertion(sessionId);
+        if (allowUi) {
+          this.statusText.textContent = t("inputPrompt.noAudio");
+          this.statusText.style.color = "var(--status-warning)";
+          setTimeout(() => this.hidePrompt(), 1500);
+        }
         return;
       }
 
-      const audioBlob = new Blob(this.audioChunks, {
-        type: this.recordingMimeType || "audio/webm", // Use actual recording format
+      const audioBlob = new Blob(chunks, {
+        type: mimeType || "audio/webm", // Use actual recording format
       });
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = Buffer.from(arrayBuffer);
@@ -426,37 +615,48 @@ class VoiceInputPrompt {
       const transcription = await ipcRenderer.invoke(
         "transcribe-audio",
         audioBuffer,
-        this.translateMode,
-        this.recordingMimeType // Pass the actual MIME type
+        translateMode,
+        mimeType // Pass the actual MIME type
       );
 
       if (transcription && transcription.trim()) {
-        await this.typeText(transcription);
+        this.storeTranscriptionResult(sessionId, transcription);
+        this.updateStatusText();
+        await this.flushPendingInsertions();
       } else {
-        this.statusText.textContent = t("inputPrompt.noSpeech");
-        setTimeout(() => this.hidePrompt(), 2000);
+        this.removePendingInsertion(sessionId);
+        if (allowUi) {
+          this.statusText.textContent = t("inputPrompt.noSpeech");
+          setTimeout(() => this.hidePrompt(), 2000);
+        }
       }
     } catch (error) {
       console.error("Transcription error:", error);
+      this.removePendingInsertion(sessionId);
       const isCancelled =
         error &&
         (error.name === "TranscriptionCancelledError" ||
           (typeof error.message === "string" && error.message.includes("TRANSCRIPTION_CANCELLED")));
-      if (isCancelled) {
-        this.statusText.textContent = t("inputPrompt.cancelled");
-        this.statusText.style.color = "var(--status-warning)";
-        setTimeout(() => this.hidePrompt(), 300);
-      } else {
-        this.statusText.textContent = t("inputPrompt.transcriptionFailed");
-        setTimeout(() => this.hidePrompt(), 3000);
+      if (allowUi) {
+        if (isCancelled) {
+          this.statusText.textContent = t("inputPrompt.cancelled");
+          this.statusText.style.color = "var(--status-warning)";
+          setTimeout(() => this.hidePrompt(), 300);
+        } else {
+          this.statusText.textContent = t("inputPrompt.transcriptionFailed");
+          setTimeout(() => this.hidePrompt(), 3000);
+        }
       }
     } finally {
-      this.transcriptionInProgress = false;
+      this.transcriptionInProgressCount = Math.max(0, this.transcriptionInProgressCount - 1);
+      this.updateStatusText();
+      await this.flushPendingInsertions();
     }
   }
 
   async handleRecordingError(error) {
     this.isRecording = false;
+    this.stopRecordingTimer();
 
     // Force cleanup of resources
     this.cleanup();
@@ -482,39 +682,48 @@ class VoiceInputPrompt {
     setTimeout(() => this.hidePrompt(), 3000);
   }
 
-  async handleTextProcessingFailure(text, messageOverride) {
+  async handleTextProcessingFailure(text, messageOverride, options = {}) {
+    const { suppressUi = false } = options;
     const fallbackMessage =
       typeof messageOverride === "string" && messageOverride.trim()
         ? messageOverride
         : t("inputPrompt.textProcessingFailed");
-    this.statusText.textContent = fallbackMessage;
-    this.statusText.style.color = "var(--status-warning-strong)";
+
+    if (!suppressUi) {
+      this.statusText.textContent = fallbackMessage;
+      this.statusText.style.color = "var(--status-warning-strong)";
+    }
 
     // Final fallback: copy to clipboard
     try {
       const pasteShortcut = this.getPasteShortcutLabel();
       await navigator.clipboard.writeText(text);
-      this.statusText.textContent = t("inputPrompt.textCopiedFallback", {
-        shortcut: pasteShortcut,
-      });
-      this.statusText.style.color = "var(--status-warning)";
-      setTimeout(() => this.hidePrompt(), 3000);
+      if (!suppressUi) {
+        this.statusText.textContent = t("inputPrompt.textCopiedFallback", {
+          shortcut: pasteShortcut,
+        });
+        this.statusText.style.color = "var(--status-warning)";
+        setTimeout(() => this.hidePrompt(), 3000);
+      }
     } catch (clipboardError) {
       console.error("Failed to copy to clipboard:", clipboardError);
-      this.statusText.textContent = t("inputPrompt.errorCouldNotProcess");
-      this.statusText.style.color = "var(--status-danger)";
-      setTimeout(() => this.hidePrompt(), 3000);
+      if (!suppressUi) {
+        this.statusText.textContent = t("inputPrompt.errorCouldNotProcess");
+        this.statusText.style.color = "var(--status-danger)";
+        setTimeout(() => this.hidePrompt(), 3000);
+      }
     }
   }
 
-  async typeText(text) {
+  async typeText(text, options = {}) {
     // Send the transcribed text to the active application
     try {
+      const { suppressUi = false } = options;
       const result = await ipcRenderer.invoke("type-text", text);
 
       if (!result || !result.success) {
         console.warn("Text processing failed in main process:", result);
-        await this.handleTextProcessingFailure(text, result?.message);
+        await this.handleTextProcessingFailure(text, result?.message, { suppressUi });
         return;
       }
 
@@ -522,56 +731,68 @@ class VoiceInputPrompt {
 
       if (result.method === "direct_typing") {
         console.log("Text typed directly:", text);
-        this.statusText.textContent = t("inputPrompt.textTypedDirect");
-        this.statusText.style.color = "var(--status-success)";
-        setTimeout(() => this.hidePrompt(), 1500);
+        if (!suppressUi) {
+          this.statusText.textContent = t("inputPrompt.textTypedDirect");
+          this.statusText.style.color = "var(--status-success)";
+          setTimeout(() => this.hidePrompt(), 1500);
+        }
       } else if (result.method === "koffi_sendinput") {
         // Windows SendInput method
         console.log("Text inserted via SendInput:", text);
-        this.statusText.textContent = t("inputPrompt.textInserted");
-        this.statusText.style.color = "var(--status-success)";
-        // Hide prompt immediately after successful insertion on Windows
-        this.hidePrompt();
+        if (!suppressUi) {
+          this.statusText.textContent = t("inputPrompt.textInserted");
+          this.statusText.style.color = "var(--status-success)";
+          // Hide prompt immediately after successful insertion on Windows
+          this.hidePrompt();
+        }
       } else if (result.method === "cgevent_unicode") {
         // macOS CGEvent Unicode method
         console.log("Text inserted via CGEvent:", text);
-        this.statusText.textContent = t("inputPrompt.textInserted");
-        this.statusText.style.color = "var(--status-success)";
-        // Hide prompt immediately after successful insertion
-        this.hidePrompt();
+        if (!suppressUi) {
+          this.statusText.textContent = t("inputPrompt.textInserted");
+          this.statusText.style.color = "var(--status-success)";
+          // Hide prompt immediately after successful insertion
+          this.hidePrompt();
+        }
       } else if (result.method === "clipboard_textinsert") {
         console.log("Text inserted successfully:", text);
         const isPartial =
           typeof result.message === "string" &&
           result.message.includes("partially restored");
-        this.statusText.textContent = isPartial
-          ? t("inputPrompt.textInsertedPartial")
-          : t("inputPrompt.textInsertedAuto");
+        if (!suppressUi) {
+          this.statusText.textContent = isPartial
+            ? t("inputPrompt.textInsertedPartial")
+            : t("inputPrompt.textInsertedAuto");
 
-        // Different colors based on message complexity
-        if (isPartial) {
-          this.statusText.style.color = "var(--status-warning)"; // Orange for partial restoration
-        } else {
-          this.statusText.style.color = "var(--status-success)"; // Green for full restoration
+          // Different colors based on message complexity
+          if (isPartial) {
+            this.statusText.style.color = "var(--status-warning)"; // Orange for partial restoration
+          } else {
+            this.statusText.style.color = "var(--status-success)"; // Green for full restoration
+          }
+
+          // Close immediately after successful insertion
+          this.hidePrompt();
         }
-
-        // Close immediately after successful insertion
-        this.hidePrompt();
       } else if (result.method === "clipboard") {
         console.log("Text copied to clipboard:", text);
-        this.statusText.textContent = t("inputPrompt.textCopied", {
-          shortcut: pasteShortcut,
-        });
-        this.statusText.style.color = "var(--status-warning)";
-        setTimeout(() => this.hidePrompt(), 3000);
+        if (!suppressUi) {
+          this.statusText.textContent = t("inputPrompt.textCopied", {
+            shortcut: pasteShortcut,
+          });
+          this.statusText.style.color = "var(--status-warning)";
+          setTimeout(() => this.hidePrompt(), 3000);
+        }
       } else {
-        this.statusText.textContent = result.message || t("inputPrompt.textInserted");
-        this.statusText.style.color = "var(--status-success)";
-        this.hidePrompt();
+        if (!suppressUi) {
+          this.statusText.textContent = result.message || t("inputPrompt.textInserted");
+          this.statusText.style.color = "var(--status-success)";
+          this.hidePrompt();
+        }
       }
     } catch (error) {
       console.error("Failed to process text:", error);
-      await this.handleTextProcessingFailure(text);
+      await this.handleTextProcessingFailure(text, null, options);
     }
   }
 
@@ -631,6 +852,9 @@ class VoiceInputPrompt {
   hidePrompt() {
     // Force cleanup of any remaining resources
     this.cleanup();
+    this.stopRecordingTimer();
+    this.clearPendingInsertions();
+    this.isFlushingInsertQueue = false;
     
     this.promptElement.classList.remove("visible", "recording");
     this.transcriptionText.classList.remove("visible");
@@ -646,7 +870,6 @@ class VoiceInputPrompt {
     this.recordingStartedAt = null;
     this.cancelledShortPress = false;
     this.cancelInProgress = false;
-    this.transcriptionInProgress = false;
 
     setTimeout(() => {
       ipcRenderer.invoke("hide-input-prompt");

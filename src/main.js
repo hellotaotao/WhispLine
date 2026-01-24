@@ -47,6 +47,7 @@ if (process.platform === 'win32') {
 const store = new Store();
 const DEFAULT_RECORD_SHORTCUT = "Ctrl+Shift";
 const TRANSLATE_SHORTCUT = "Shift+Alt";
+const STOP_RECORDING_DEBOUNCE_MS = 250;
 const MODIFIER_ORDER = ["Ctrl", "Shift", "Alt"];
 const MODIFIER_ALIASES = {
   ctrl: "Ctrl",
@@ -137,6 +138,29 @@ function isShortcutActive(shortcut) {
   return (!parsed.ctrl || ctrlPressed) &&
     (!parsed.shift || shiftPressed) &&
     (!parsed.alt || altPressed);
+}
+
+function clearStopRecordingDebounce() {
+  if (stopRecordingDebounceTimer) {
+    clearTimeout(stopRecordingDebounceTimer);
+    stopRecordingDebounceTimer = null;
+  }
+}
+
+function scheduleStopRecording() {
+  clearStopRecordingDebounce();
+  stopRecordingDebounceTimer = setTimeout(() => {
+    if (!isRecording) {
+      return;
+    }
+    const recordShortcutActive = isShortcutActive(recordShortcut);
+    const translateShortcutActive = isShortcutActive(TRANSLATE_SHORTCUT);
+    if (recordShortcutActive || translateShortcutActive) {
+      return;
+    }
+    isRecording = false;
+    inputPromptWindow?.webContents.send("stop-recording");
+  }, STOP_RECORDING_DEBOUNCE_MS);
 }
 
 function buildShortcutPayload() {
@@ -235,6 +259,7 @@ let ctrlPressed = false;
 let shiftPressed = false;
 let altPressed = false;
 let isRecording = false;
+let stopRecordingDebounceTimer = null;
 let activeTranscription = null;
 let transcriptionRequestId = 0;
 let recordShortcut = normalizeRecordShortcut(
@@ -487,8 +512,17 @@ async function setupGlobalHotkeys() {
         altPressed = true;
       }
 
+      if (isRecording) {
+        const recordShortcutActive = isShortcutActive(recordShortcut);
+        const translateShortcutActive = isShortcutActive(TRANSLATE_SHORTCUT);
+        if (recordShortcutActive || translateShortcutActive) {
+          clearStopRecordingDebounce();
+        }
+      }
+
       if (e.keycode === UiohookKey.Escape) {
         if (isRecording || activeTranscription) {
+          clearStopRecordingDebounce();
           isRecording = false;
           if (inputPromptWindow && inputPromptWindow.webContents) {
             inputPromptWindow.webContents.send("cancel-recording");
@@ -504,6 +538,7 @@ async function setupGlobalHotkeys() {
         const translateShortcutActive = isShortcutActive(TRANSLATE_SHORTCUT);
 
         if (recordShortcutActive || translateShortcutActive) {
+          clearStopRecordingDebounce();
           // Check microphone permission before starting recording
           permissionManager
             .checkAndRequestMicrophonePermission()
@@ -574,8 +609,9 @@ async function setupGlobalHotkeys() {
       const recordShortcutActive = isShortcutActive(recordShortcut);
       const translateShortcutActive = isShortcutActive(TRANSLATE_SHORTCUT);
       if (isRecording && !(recordShortcutActive || translateShortcutActive)) {
-        isRecording = false;
-        inputPromptWindow?.webContents.send("stop-recording");
+        scheduleStopRecording();
+      } else if (recordShortcutActive || translateShortcutActive) {
+        clearStopRecordingDebounce();
       }
       } catch (handlerErr) {
         console.error("uIOhook keyup handler error:", handlerErr);
@@ -661,6 +697,7 @@ function stopGlobalHotkeys() {
 
       // Remove all listeners first
       uIOhook.removeAllListeners();
+      clearStopRecordingDebounce();
 
       // Then stop the hook
       uIOhook.stop();
