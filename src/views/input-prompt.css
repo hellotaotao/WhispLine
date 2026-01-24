@@ -1,3 +1,101 @@
+:root {
+  --prompt-bg: linear-gradient(135deg, rgba(30, 35, 50, 0.95), rgba(45, 50, 70, 0.95));
+  --prompt-bg-recording: linear-gradient(135deg, rgba(35, 40, 80, 0.95), rgba(50, 55, 100, 0.95));
+  --prompt-border: none;
+  --prompt-shadow: 0 8px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --prompt-shadow-recording: 0 0 30px rgba(99, 102, 241, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(99, 102, 241, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --prompt-shadow-hover: 0 12px 30px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --prompt-shadow-recording-hover: 0 0 40px rgba(99, 102, 241, 0.4),
+    0 12px 30px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(99, 102, 241, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  --prompt-breathe-shadow-start: 0 8px 20px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --prompt-breathe-shadow-end: 0 12px 30px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --prompt-text: #ffffff;
+  --prompt-text-muted: rgba(255, 255, 255, 0.9);
+  --prompt-text-secondary: rgba(255, 255, 255, 0.7);
+  --prompt-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --prompt-accent: #6366f1;
+  --prompt-accent-deep: #4f46e5;
+  --prompt-accent-bright: #8b5cf6;
+  --prompt-accent-shadow: rgba(99, 102, 241, 0.4);
+  --wave-bar-shadow: 0 0 6px rgba(99, 102, 241, 0.2);
+  --wave-bar-shadow-active: 0 0 8px rgba(99, 102, 241, 0.4);
+  --mic-glow-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  --mic-glow-shadow-strong: 0 0 20px rgba(99, 102, 241, 0.8);
+  --prompt-transcription-bg: linear-gradient(135deg, rgba(20, 25, 40, 0.9), rgba(35, 45, 65, 0.9));
+  --prompt-transcription-border: rgba(255, 255, 255, 0.1);
+  --prompt-transcription-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --recording-dot-start: #f59e0b;
+  --recording-dot-end: #d97706;
+  --recording-dot-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+  --recording-dot-shadow-strong: 0 0 16px rgba(245, 158, 11, 0.8);
+  --status-success: #00ff00;
+  --status-warning: #ffaa00;
+  --status-warning-strong: #ff6600;
+  --status-danger: #ff0000;
+}
+
+:root[data-theme="elegant"] {
+  --prompt-bg: linear-gradient(135deg, rgba(248, 245, 240, 0.96), rgba(233, 241, 236, 0.96));
+  --prompt-bg-recording: linear-gradient(135deg, rgba(240, 236, 228, 0.98), rgba(224, 236, 231, 0.98));
+  --prompt-border: 1px solid rgba(32, 40, 36, 0.12);
+  --prompt-shadow: 0 10px 26px rgba(25, 33, 30, 0.18),
+    0 0 0 1px rgba(40, 52, 46, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --prompt-shadow-recording: 0 0 28px rgba(68, 115, 109, 0.28),
+    0 10px 26px rgba(25, 33, 30, 0.18),
+    0 0 0 1px rgba(68, 115, 109, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --prompt-shadow-hover: 0 14px 32px rgba(25, 33, 30, 0.2),
+    0 0 0 1px rgba(40, 52, 46, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --prompt-shadow-recording-hover: 0 0 34px rgba(68, 115, 109, 0.35),
+    0 14px 32px rgba(25, 33, 30, 0.2),
+    0 0 0 1px rgba(68, 115, 109, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --prompt-breathe-shadow-start: 0 10px 26px rgba(25, 33, 30, 0.18),
+    0 0 0 1px rgba(40, 52, 46, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --prompt-breathe-shadow-end: 0 14px 32px rgba(25, 33, 30, 0.2),
+    0 0 0 1px rgba(40, 52, 46, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --prompt-text: #1f2a2a;
+  --prompt-text-muted: rgba(31, 42, 42, 0.82);
+  --prompt-text-secondary: rgba(31, 42, 42, 0.7);
+  --prompt-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --prompt-accent: #4c7b75;
+  --prompt-accent-deep: #3d6a65;
+  --prompt-accent-bright: #7fa9a2;
+  --prompt-accent-shadow: rgba(76, 123, 117, 0.35);
+  --wave-bar-shadow: 0 0 6px rgba(76, 123, 117, 0.25);
+  --wave-bar-shadow-active: 0 0 8px rgba(76, 123, 117, 0.4);
+  --mic-glow-shadow: 0 0 10px rgba(76, 123, 117, 0.35);
+  --mic-glow-shadow-strong: 0 0 18px rgba(76, 123, 117, 0.5);
+  --prompt-transcription-bg: linear-gradient(135deg, rgba(247, 244, 239, 0.98), rgba(232, 240, 235, 0.98));
+  --prompt-transcription-border: rgba(40, 52, 46, 0.12);
+  --prompt-transcription-shadow: 0 6px 16px rgba(25, 33, 30, 0.12);
+  --recording-dot-start: #c99b5a;
+  --recording-dot-end: #a97433;
+  --recording-dot-shadow: 0 0 8px rgba(201, 155, 90, 0.4);
+  --recording-dot-shadow-strong: 0 0 14px rgba(201, 155, 90, 0.6);
+  --status-success: #3e7d64;
+  --status-warning: #b9844c;
+  --status-warning-strong: #a86b3f;
+  --status-danger: #b45a4d;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -10,15 +108,12 @@ body {
 .input-prompt {
   width: 360px;
   height: 80px;
-  background: linear-gradient(135deg, rgba(30, 35, 50, 0.95), rgba(45, 50, 70, 0.95));
+  background: var(--prompt-bg);
   border-radius: 16px;
   -webkit-backdrop-filter: blur(25px);
   backdrop-filter: blur(25px);
-  border: none;
-  box-shadow: 
-    0 8px 20px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: var(--prompt-border);
+  box-shadow: var(--prompt-shadow);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,12 +133,8 @@ body {
 
 .input-prompt.recording {
   height: 90px;
-  box-shadow: 
-    0 0 30px rgba(99, 102, 241, 0.3),
-    0 8px 20px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(99, 102, 241, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  background: linear-gradient(135deg, rgba(35, 40, 80, 0.95), rgba(50, 55, 100, 0.95));
+  box-shadow: var(--prompt-shadow-recording);
+  background: var(--prompt-bg-recording);
 }
 
 .left-section {
@@ -70,12 +161,12 @@ body {
 }
 
 .prompt-text {
-  color: white;
+  color: var(--prompt-text-muted);
   font-size: 14px;
   font-weight: 500;
-  opacity: 0.9;
+  opacity: 1;
   transition: all 0.3s ease;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--prompt-text-shadow);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -92,28 +183,28 @@ body {
 
 .wave-bar {
   width: 3px;
-  background: linear-gradient(to top, #6366f1, #4f46e5);
+  background: linear-gradient(to top, var(--prompt-accent), var(--prompt-accent-deep));
   border-radius: 2px;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0.4;
-  box-shadow: 0 0 6px rgba(99, 102, 241, 0.2);
+  box-shadow: var(--wave-bar-shadow);
 }
 
 .wave-bar.active {
   opacity: 1;
-  background: linear-gradient(to top, #6366f1, #8b5cf6);
-  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+  background: linear-gradient(to top, var(--prompt-accent), var(--prompt-accent-bright));
+  box-shadow: var(--wave-bar-shadow-active);
 }
 
 .status-text {
-  color: white;
+  color: var(--prompt-text-secondary);
   font-size: 11px;
   font-weight: 400;
   opacity: 0.7;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--prompt-text-shadow);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -122,8 +213,8 @@ body {
 .microphone-icon {
   font-size: 24px;
   opacity: 0.9;
-  color: #6366f1;
-  text-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+  color: var(--prompt-accent);
+  text-shadow: 0 0 8px var(--prompt-accent-shadow);
   transition: all 0.3s ease;
   position: relative;
   flex-shrink: 0;
@@ -136,11 +227,11 @@ body {
 @keyframes micGlow {
   0%, 100% { 
     transform: scale(1);
-    text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+    text-shadow: var(--mic-glow-shadow);
   }
   50% { 
     transform: scale(1.05);
-    text-shadow: 0 0 20px rgba(99, 102, 241, 0.8);
+    text-shadow: var(--mic-glow-shadow-strong);
   }
 }
 
@@ -164,28 +255,28 @@ body {
 .recording-dot {
   width: 10px;
   height: 10px;
-  background: linear-gradient(45deg, #f59e0b, #d97706);
+  background: linear-gradient(45deg, var(--recording-dot-start), var(--recording-dot-end));
   border-radius: 50%;
   margin-left: 8px;
   animation: recordingPulse 1.2s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+  box-shadow: var(--recording-dot-shadow);
 }
 
 @keyframes recordingPulse {
   0% {
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    box-shadow: var(--recording-dot-shadow);
   }
   50% {
     opacity: 0.7;
     transform: scale(1.2);
-    box-shadow: 0 0 16px rgba(245, 158, 11, 0.8);
+    box-shadow: var(--recording-dot-shadow-strong);
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+    box-shadow: var(--recording-dot-shadow);
   }
 }
 
@@ -195,21 +286,21 @@ body {
   left: 0;
   right: 0;
   margin-top: 8px;
-  color: white;
+  color: var(--prompt-text);
   font-size: 13px;
   font-weight: 500;
   text-align: center;
   padding: 8px 16px;
-  background: linear-gradient(135deg, rgba(20, 25, 40, 0.9), rgba(35, 45, 65, 0.9));
+  background: var(--prompt-transcription-bg);
   border-radius: 12px;
   -webkit-backdrop-filter: blur(15px);
   backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--prompt-transcription-border);
+  box-shadow: var(--prompt-transcription-shadow);
   word-wrap: break-word;
   opacity: 0;
   transition: opacity 0.4s ease;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--prompt-text-shadow);
   line-height: 1.3;
 }
 
@@ -220,18 +311,11 @@ body {
 /* Enhanced hover effect */
 .input-prompt:hover {
   transform: translateY(-1px) scale(1.01);
-  box-shadow: 
-    0 12px 30px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: var(--prompt-shadow-hover);
 }
 
 .input-prompt.recording:hover {
-  box-shadow: 
-    0 0 40px rgba(99, 102, 241, 0.4),
-    0 12px 30px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(99, 102, 241, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: var(--prompt-shadow-recording-hover);
 }
 
 /* Subtle animation for non-recording state */
@@ -241,15 +325,9 @@ body {
 
 @keyframes breathe {
   0%, 100% { 
-    box-shadow: 
-      0 8px 20px rgba(0, 0, 0, 0.3),
-      0 0 0 1px rgba(255, 255, 255, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: var(--prompt-breathe-shadow-start);
   }
   50% { 
-    box-shadow: 
-      0 12px 30px rgba(0, 0, 0, 0.35),
-      0 0 0 1px rgba(255, 255, 255, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    box-shadow: var(--prompt-breathe-shadow-end);
   }
 }

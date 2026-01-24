@@ -1,6 +1,8 @@
 const { ipcRenderer } = require("electron");
 const { initI18n, setLanguage, applyI18n, t } = window.WhispLineI18n;
 
+const themeOptions = new Set(["midnight", "elegant"]);
+
 // Define available models per API provider
 const modelOptions = {
   groq: [
@@ -39,12 +41,22 @@ function toggleApiKeyVisibility(provider) {
   }
 }
 
+function resolveTheme(value) {
+  return themeOptions.has(value) ? value : "elegant";
+}
+
+function applyTheme(value) {
+  const resolved = resolveTheme(value);
+  document.documentElement.setAttribute("data-theme", resolved);
+}
+
 let currentSettings = {};
 
 async function loadSettings() {
   try {
     currentSettings = await ipcRenderer.invoke("get-settings");
     initI18n(currentSettings.uiLanguage);
+    applyTheme(currentSettings.uiTheme);
     // Initialize provider and models
     const providerSelect = document.getElementById("providerSelect");
     providerSelect.value = currentSettings.provider || "groq";
@@ -84,6 +96,18 @@ async function loadSettings() {
       });
     }
 
+    const themeSelect = document.getElementById("themeSelect");
+    if (themeSelect) {
+      const themeValue = resolveTheme(currentSettings.uiTheme);
+      const hasOption = Array.from(themeSelect.options).some(
+        (opt) => opt.value === themeValue
+      );
+      themeSelect.value = hasOption ? themeValue : "elegant";
+      themeSelect.addEventListener("change", () => {
+        applyTheme(themeSelect.value);
+      });
+    }
+
     // Set the selected language
     const languageSelect = document.getElementById("languageSelect");
     if (currentSettings.language) {
@@ -107,6 +131,7 @@ async function loadSettings() {
   } catch (error) {
     console.error("Failed to load settings:", error);
     initI18n("auto");
+    applyTheme("elegant");
   }
 }
 
@@ -219,12 +244,14 @@ async function recheckAccessibilityPermission() {
 async function saveSettings() {
   try {
     const provider = document.getElementById("providerSelect").value;
+    const themeSelect = document.getElementById("themeSelect");
     const settings = {
       apiKeyGroq: document.getElementById("apiKeyGroq").value,
       apiKeyOpenAI: document.getElementById("apiKeyOpenAI").value,
       shortcut: document.getElementById("shortcutSelect").value,
       language: document.getElementById("languageSelect").value,
       uiLanguage: document.getElementById("uiLanguageSelect").value,
+      uiTheme: resolveTheme(themeSelect ? themeSelect.value : "elegant"),
       model: document.getElementById("modelSelect").value,
       microphone: currentSettings.microphone,
       autoLaunch: document.getElementById("autoLaunchCheck").checked,
@@ -263,6 +290,15 @@ document
 document
   .getElementById("checkAccessibility")
   .addEventListener("click", recheckAccessibilityPermission);
+
+ipcRenderer.on("ui-theme-updated", (event, payload) => {
+  if (!payload) return;
+  applyTheme(payload.theme);
+  const themeSelect = document.getElementById("themeSelect");
+  if (themeSelect) {
+    themeSelect.value = resolveTheme(payload.theme);
+  }
+});
 
 // Sidebar navigation
 document.querySelectorAll(".sidebar-item").forEach((item) => {

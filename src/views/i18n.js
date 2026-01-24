@@ -88,6 +88,15 @@
           english: "English",
           chinese: "中文 (简体)",
         },
+        theme: {
+          title: "Theme",
+          description: "Choose the visual style of the app.",
+          selectTitle: "Select interface theme",
+          option: {
+            midnight: "Midnight",
+            elegant: "Elegant",
+          },
+        },
         transcriptionLanguage: {
           title: "Set default language",
           description: "Choose the default language for voice transcription.",
@@ -241,6 +250,15 @@
           auto: "自动（系统）",
           english: "English",
           chinese: "中文（简体）",
+        },
+        theme: {
+          title: "主题风格",
+          description: "选择应用界面的视觉风格。",
+          selectTitle: "选择界面主题",
+          option: {
+            midnight: "午夜",
+            elegant: "雅致",
+          },
         },
         transcriptionLanguage: {
           title: "设置默认语言",

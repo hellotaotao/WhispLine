@@ -1,12 +1,100 @@
 /* WhispLine Main Page Styles */
 
+:root {
+  --app-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --app-text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.8);
+  --text-soft: rgba(255, 255, 255, 0.6);
+  --sidebar-bg: rgba(0, 0, 0, 0.2);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --badge-bg: rgba(255, 255, 255, 0.2);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-subtle: rgba(255, 255, 255, 0.05);
+  --panel-bg-strong: rgba(255, 255, 255, 0.12);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --panel-border-strong: rgba(255, 255, 255, 0.2);
+  --nav-item-color: rgba(255, 255, 255, 0.8);
+  --nav-item-hover-bg: rgba(255, 255, 255, 0.1);
+  --nav-item-active-bg: rgba(255, 255, 255, 0.15);
+  --button-bg: rgba(255, 255, 255, 0.2);
+  --button-hover-bg: rgba(255, 255, 255, 0.3);
+  --button-secondary-bg: rgba(255, 255, 255, 0.1);
+  --button-secondary-border: rgba(255, 255, 255, 0.2);
+  --button-secondary-hover: rgba(255, 255, 255, 0.2);
+  --input-bg: rgba(255, 255, 255, 0.08);
+  --input-border: rgba(255, 255, 255, 0.15);
+  --input-border-focus: rgba(255, 255, 255, 0.3);
+  --input-placeholder: rgba(255, 255, 255, 0.5);
+  --item-hover-bg: rgba(255, 255, 255, 0.05);
+  --copy-btn-bg: rgba(255, 255, 255, 0.1);
+  --copy-btn-bg-hover: rgba(255, 255, 255, 0.2);
+  --copy-btn-color: rgba(255, 255, 255, 0.7);
+  --permission-bg: rgba(255, 255, 255, 0.1);
+  --permission-border: rgba(255, 255, 255, 0.2);
+  --permission-bg-hover: rgba(255, 255, 255, 0.2);
+  --permission-granted-bg: rgba(76, 175, 80, 0.8);
+  --permission-granted-border: rgba(76, 175, 80, 1);
+  --permission-denied-bg: rgba(244, 67, 54, 0.8);
+  --permission-denied-border: rgba(244, 67, 54, 1);
+  --permission-unknown-bg: rgba(255, 193, 7, 0.8);
+  --permission-unknown-border: rgba(255, 193, 7, 1);
+  --status-success: #4caf50;
+  --status-warning: #ff9800;
+  --status-info: #2196f3;
+  --status-danger: #f44336;
+}
+
+:root[data-theme="elegant"] {
+  --app-bg: linear-gradient(135deg, #f6f1ea 0%, #e4ece7 100%);
+  --app-text: #1f2626;
+  --text-muted: rgba(31, 38, 38, 0.72);
+  --text-soft: rgba(31, 38, 38, 0.55);
+  --sidebar-bg: rgba(255, 255, 255, 0.7);
+  --sidebar-border: rgba(35, 44, 42, 0.08);
+  --badge-bg: rgba(61, 111, 104, 0.16);
+  --panel-bg: rgba(255, 255, 255, 0.66);
+  --panel-bg-subtle: rgba(255, 255, 255, 0.5);
+  --panel-bg-strong: rgba(255, 255, 255, 0.78);
+  --panel-border: rgba(31, 38, 38, 0.08);
+  --panel-border-strong: rgba(31, 38, 38, 0.18);
+  --nav-item-color: rgba(31, 38, 38, 0.75);
+  --nav-item-hover-bg: rgba(61, 111, 104, 0.08);
+  --nav-item-active-bg: rgba(61, 111, 104, 0.16);
+  --button-bg: rgba(61, 111, 104, 0.18);
+  --button-hover-bg: rgba(61, 111, 104, 0.28);
+  --button-secondary-bg: rgba(61, 111, 104, 0.08);
+  --button-secondary-border: rgba(61, 111, 104, 0.2);
+  --button-secondary-hover: rgba(61, 111, 104, 0.16);
+  --input-bg: rgba(255, 255, 255, 0.72);
+  --input-border: rgba(31, 38, 38, 0.12);
+  --input-border-focus: rgba(61, 111, 104, 0.35);
+  --input-placeholder: rgba(31, 38, 38, 0.45);
+  --item-hover-bg: rgba(61, 111, 104, 0.06);
+  --copy-btn-bg: rgba(61, 111, 104, 0.1);
+  --copy-btn-bg-hover: rgba(61, 111, 104, 0.2);
+  --copy-btn-color: rgba(31, 38, 38, 0.65);
+  --permission-bg: rgba(255, 255, 255, 0.75);
+  --permission-border: rgba(31, 38, 38, 0.12);
+  --permission-bg-hover: rgba(255, 255, 255, 0.85);
+  --permission-granted-bg: rgba(89, 140, 108, 0.8);
+  --permission-granted-border: rgba(89, 140, 108, 0.9);
+  --permission-denied-bg: rgba(189, 84, 74, 0.85);
+  --permission-denied-border: rgba(189, 84, 74, 0.95);
+  --permission-unknown-bg: rgba(196, 150, 83, 0.85);
+  --permission-unknown-border: rgba(196, 150, 83, 0.95);
+  --status-success: #4f8f74;
+  --status-warning: #c28a4a;
+  --status-info: #4c7aa1;
+  --status-danger: #b65a4a;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
   margin: 0;
   padding: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: var(--app-bg);
+  color: var(--app-text);
   height: 100vh;
   box-sizing: border-box;
   display: flex;
@@ -36,7 +124,7 @@ body {
 }
 
 .badge {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--badge-bg);
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 12px;
@@ -52,7 +140,7 @@ body {
 .app-version {
   margin-top: 14px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-soft);
 }
 
 /* Override when inside subline */
@@ -77,29 +165,29 @@ body {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--permission-bg);
+  border: 1px solid var(--permission-border);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .permission-indicator:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--permission-bg-hover);
 }
 
 .permission-indicator.granted {
-  background: rgba(76, 175, 80, 0.8);
-  border-color: rgba(76, 175, 80, 1);
+  background: var(--permission-granted-bg);
+  border-color: var(--permission-granted-border);
 }
 
 .permission-indicator.denied {
-  background: rgba(244, 67, 54, 0.8);
-  border-color: rgba(244, 67, 54, 1);
+  background: var(--permission-denied-bg);
+  border-color: var(--permission-denied-border);
 }
 
 .permission-indicator.unknown {
-  background: rgba(255, 193, 7, 0.8);
-  border-color: rgba(255, 193, 7, 1);
+  background: var(--permission-unknown-bg);
+  border-color: var(--permission-unknown-border);
 }
 
 .stats {
@@ -112,14 +200,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--panel-bg);
   padding: 8px 12px;
   border-radius: 20px;
   font-size: 14px;
 }
 
 .feature-section {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--panel-bg);
   border-radius: 12px;
   padding: 30px;
   margin-bottom: 30px;
@@ -137,22 +225,22 @@ body {
 }
 
 .btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--button-bg);
   border: none;
   padding: 12px 24px;
   border-radius: 8px;
-  color: white;
+  color: var(--app-text);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--button-hover-bg);
 }
 
 .upgrade-section {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--panel-bg);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 20px;
@@ -175,11 +263,11 @@ body {
 }
 
 .learn-more-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--button-bg);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
-  color: white;
+  color: var(--app-text);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -187,7 +275,7 @@ body {
 }
 
 .learn-more-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--button-hover-bg);
 }
 
 .activity-item {
@@ -195,12 +283,12 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 15px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--panel-border);
   transition: background-color 0.2s;
 }
 
 .activity-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--item-hover-bg);
   border-radius: 8px;
   margin: 0 -10px;
   padding: 15px 10px;
@@ -230,11 +318,11 @@ body {
 }
 
 .copy-btn {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--copy-btn-bg);
   border: none;
   border-radius: 6px;
   padding: 8px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--copy-btn-color);
   cursor: pointer;
   transition: all 0.2s;
   opacity: 0;
@@ -248,8 +336,8 @@ body {
 }
 
 .copy-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
+  background: var(--copy-btn-bg-hover);
+  color: var(--app-text);
 }
 
 .copy-btn .material-icons {
@@ -258,11 +346,11 @@ body {
 
 .sidebar {
   width: 240px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--sidebar-bg);
   padding: 20px 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid var(--sidebar-border);
 }
 
 .sidebar-header {
@@ -275,7 +363,7 @@ body {
 
 .sidebar-footer {
   padding: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--sidebar-border);
   margin-top: auto;
 }
 
@@ -283,7 +371,7 @@ body {
 .app-version {
   margin-top: 14px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-soft);
 }
 
 .nav-item {
@@ -291,7 +379,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--nav-item-color);
   text-decoration: none;
   font-size: 14px;
   cursor: pointer;
@@ -303,13 +391,13 @@ body {
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: var(--nav-item-hover-bg);
+  color: var(--app-text);
 }
 
 .nav-item.active {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
+  background: var(--nav-item-active-bg);
+  color: var(--app-text);
 }
 
 .nav-item-icon {
@@ -346,7 +434,7 @@ body {
 .section-header h4 {
   font-size: 12px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-soft);
   margin: 0;
   letter-spacing: 1px;
 }
@@ -378,10 +466,10 @@ body {
 }
 
 .dictionary-form {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--panel-bg-subtle);
   padding: 30px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--panel-border);
 }
 
 .dictionary-form label {
@@ -393,9 +481,9 @@ body {
 
 .dictionary-form textarea {
   width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: white;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--app-text);
   padding: 20px;
   border-radius: 8px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -407,13 +495,13 @@ body {
 }
 
 .dictionary-form textarea::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--input-placeholder);
 }
 
 .dictionary-form textarea:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--input-border-focus);
+  background: var(--panel-bg-strong);
 }
 
 .dictionary-actions {
@@ -423,10 +511,10 @@ body {
 }
 
 .dictionary-help {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--panel-bg-subtle);
   padding: 30px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--panel-border);
 }
 
 .dictionary-help h3 {
@@ -448,9 +536,9 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  background: var(--button-secondary-bg);
+  border: 1px solid var(--button-secondary-border);
+  color: var(--app-text);
   padding: 10px 20px;
   border-radius: 6px;
   font-size: 14px;
@@ -459,7 +547,7 @@ body {
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--button-secondary-hover);
 }
 
 .upgrade-icon {

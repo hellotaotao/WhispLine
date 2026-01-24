@@ -2,6 +2,15 @@ const { ipcRenderer } = require("electron");
 const { initI18n, setLanguage, applyI18n, t } = window.WhispLineI18n;
 
 const SHORT_PRESS_THRESHOLD_MS = 500;
+const themeOptions = new Set(["midnight", "elegant"]);
+
+function resolveTheme(value) {
+  return themeOptions.has(value) ? value : "elegant";
+}
+
+function applyTheme(value) {
+  document.documentElement.setAttribute("data-theme", resolveTheme(value));
+}
 
 class VoiceInputPrompt {
   constructor() {
@@ -60,6 +69,13 @@ class VoiceInputPrompt {
       setLanguage(payload.language);
       applyI18n(document);
       this.updateShortcutHint(this.recordShortcut, this.translateShortcut);
+    });
+
+    ipcRenderer.on("ui-theme-updated", (event, payload) => {
+      if (!payload) {
+        return;
+      }
+      applyTheme(payload.theme);
     });
 
     // Listen for start recording from main process
@@ -371,14 +387,14 @@ class VoiceInputPrompt {
         this.recordingStartedAt = null;
         this.audioChunks = [];
         this.statusText.textContent = t("inputPrompt.cancelled");
-        this.statusText.style.color = "#ffaa00";
+        this.statusText.style.color = "var(--status-warning)";
         setTimeout(() => this.hidePrompt(), 300);
         return;
       }
       if (!this.audioChunks.length) {
         console.warn('No audio chunks captured; skipping transcription request');
         this.statusText.textContent = t("inputPrompt.noAudio");
-        this.statusText.style.color = "#ffaa00";
+        this.statusText.style.color = "var(--status-warning)";
         setTimeout(() => this.hidePrompt(), 1500);
         return;
       }
@@ -410,7 +426,7 @@ class VoiceInputPrompt {
           (typeof error.message === "string" && error.message.includes("TRANSCRIPTION_CANCELLED")));
       if (isCancelled) {
         this.statusText.textContent = t("inputPrompt.cancelled");
-        this.statusText.style.color = "#ffaa00";
+        this.statusText.style.color = "var(--status-warning)";
         setTimeout(() => this.hidePrompt(), 300);
       } else {
         this.statusText.textContent = t("inputPrompt.transcriptionFailed");
@@ -458,20 +474,20 @@ class VoiceInputPrompt {
         if (result.method === "direct_typing") {
           console.log("Text typed directly:", text);
           this.statusText.textContent = t("inputPrompt.textTypedDirect");
-          this.statusText.style.color = "#00ff00";
+          this.statusText.style.color = "var(--status-success)";
           setTimeout(() => this.hidePrompt(), 1500);
         } else if (result.method === "koffi_sendinput") {
           // Windows SendInput method
           console.log("Text inserted via SendInput:", text);
           this.statusText.textContent = t("inputPrompt.textInserted");
-          this.statusText.style.color = "#00ff00";
+          this.statusText.style.color = "var(--status-success)";
           // Hide prompt immediately after successful insertion on Windows
           this.hidePrompt();
         } else if (result.method === "cgevent_unicode") {
           // macOS CGEvent Unicode method
           console.log("Text inserted via CGEvent:", text);
           this.statusText.textContent = t("inputPrompt.textInserted");
-          this.statusText.style.color = "#00ff00";
+          this.statusText.style.color = "var(--status-success)";
           // Hide prompt immediately after successful insertion
           this.hidePrompt();
         } else if (result.method === "clipboard_textinsert") {
@@ -485,9 +501,9 @@ class VoiceInputPrompt {
           
           // Different colors based on message complexity
           if (isPartial) {
-            this.statusText.style.color = "#ffaa00"; // Orange for partial restoration
+            this.statusText.style.color = "var(--status-warning)"; // Orange for partial restoration
           } else {
-            this.statusText.style.color = "#00ff00"; // Green for full restoration
+            this.statusText.style.color = "var(--status-success)"; // Green for full restoration
           }
           
           // Close immediately after successful insertion
@@ -497,18 +513,18 @@ class VoiceInputPrompt {
           this.statusText.textContent = t("inputPrompt.textCopied", {
             shortcut: pasteShortcut,
           });
-          this.statusText.style.color = "#ffaa00";
+          this.statusText.style.color = "var(--status-warning)";
           setTimeout(() => this.hidePrompt(), 3000);
         } else {
           this.statusText.textContent = result.message || t("inputPrompt.textInserted");
-          this.statusText.style.color = "#00ff00";
+          this.statusText.style.color = "var(--status-success)";
           this.hidePrompt();
         }
       }
     } catch (error) {
       console.error("Failed to process text:", error);
       this.statusText.textContent = t("inputPrompt.textProcessingFailed");
-      this.statusText.style.color = "#ff6600";
+      this.statusText.style.color = "var(--status-warning-strong)";
 
       // Final fallback: copy to clipboard
       try {
@@ -517,12 +533,12 @@ class VoiceInputPrompt {
         this.statusText.textContent = t("inputPrompt.textCopiedFallback", {
           shortcut: pasteShortcut,
         });
-        this.statusText.style.color = "#ffaa00";
+        this.statusText.style.color = "var(--status-warning)";
         setTimeout(() => this.hidePrompt(), 3000);
       } catch (clipboardError) {
         console.error("Failed to copy to clipboard:", clipboardError);
         this.statusText.textContent = t("inputPrompt.errorCouldNotProcess");
-        this.statusText.style.color = "#ff0000";
+        this.statusText.style.color = "var(--status-danger)";
         setTimeout(() => this.hidePrompt(), 3000);
       }
     }
@@ -613,9 +629,11 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const settings = await ipcRenderer.invoke("get-settings");
       initI18n(settings?.uiLanguage);
+      applyTheme(settings?.uiTheme);
     } catch (error) {
       console.error("Failed to load UI language settings:", error);
       initI18n("auto");
+      applyTheme("elegant");
     }
     new VoiceInputPrompt();
   };

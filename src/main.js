@@ -172,6 +172,19 @@ function broadcastUiLanguageUpdate(language) {
   }
 }
 
+function broadcastUiThemeUpdate(theme) {
+  const payload = { theme };
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send("ui-theme-updated", payload);
+  }
+  if (inputPromptWindow && inputPromptWindow.webContents) {
+    inputPromptWindow.webContents.send("ui-theme-updated", payload);
+  }
+  if (settingsWindow && settingsWindow.webContents) {
+    settingsWindow.webContents.send("ui-theme-updated", payload);
+  }
+}
+
 function createCancellationError() {
   const error = new Error("TRANSCRIPTION_CANCELLED");
   error.name = "TranscriptionCancelledError";
@@ -879,6 +892,7 @@ ipcMain.handle("get-settings", () => {
     translateShortcut: TRANSLATE_SHORTCUT,
     language: store.get("language", "auto"),
     uiLanguage: store.get("uiLanguage", "auto"),
+    uiTheme: store.get("uiTheme", "elegant"),
     model: store.get("model", "whisper-large-v3-turbo"),
     microphone: store.get("microphone", "default"),
     autoLaunch: store.get("autoLaunch", false),
@@ -903,6 +917,7 @@ ipcMain.handle("save-settings", async (event, settings) => {
   }
   store.set("language", settings.language);
   store.set("uiLanguage", settings.uiLanguage || "auto");
+  store.set("uiTheme", settings.uiTheme || "elegant");
   store.set("model", settings.model);
   store.set("microphone", settings.microphone);
   store.set("autoLaunch", settings.autoLaunch);
@@ -915,6 +930,7 @@ ipcMain.handle("save-settings", async (event, settings) => {
   // Notify renderers about updated shortcuts
   broadcastShortcutUpdate();
   broadcastUiLanguageUpdate(store.get("uiLanguage", "auto"));
+  broadcastUiThemeUpdate(store.get("uiTheme", "elegant"));
 
   // Handle auto-launch setting
   try {

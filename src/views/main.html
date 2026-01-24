@@ -130,6 +130,15 @@
     const { initI18n, setLanguage, applyI18n, t, getLocale } = window.WhispLineI18n;
     let lastRecordShortcut = 'Ctrl+Shift';
     let lastTranslateShortcut = 'Shift+Alt';
+    const themeOptions = new Set(['midnight', 'elegant']);
+
+    function resolveTheme(value) {
+      return themeOptions.has(value) ? value : 'elegant';
+    }
+
+    function applyTheme(value) {
+      document.documentElement.setAttribute('data-theme', resolveTheme(value));
+    }
 
     // Load activities when page loads
     document.addEventListener('DOMContentLoaded', async () => {
@@ -140,6 +149,7 @@
         console.error('Failed to load settings for i18n:', error);
       }
       initI18n(settings?.uiLanguage);
+      applyTheme(settings?.uiTheme);
       await loadActivities();
       await loadDictionary();
       await loadShortcutHints();
@@ -174,6 +184,11 @@
         applyI18n(document);
         updateShortcutHints(lastRecordShortcut, lastTranslateShortcut);
         await loadActivities();
+      });
+
+      ipcRenderer.on('ui-theme-updated', (event, payload) => {
+        if (!payload) return;
+        applyTheme(payload.theme);
       });
     });
 
@@ -346,7 +361,7 @@
         const icon = button.querySelector('.material-icons');
         const originalText = icon.textContent;
         icon.textContent = 'check';
-        button.style.color = '#4CAF50';
+        button.style.color = 'var(--status-success)';
         
         setTimeout(() => {
           icon.textContent = originalText;
@@ -359,7 +374,7 @@
         const icon = button.querySelector('.material-icons');
         const originalText = icon.textContent;
         icon.textContent = 'error';
-        button.style.color = '#f44336';
+        button.style.color = 'var(--status-danger)';
         
         setTimeout(() => {
           icon.textContent = originalText;
@@ -377,7 +392,7 @@
         position: fixed;
         top: 20px;
         right: 20px;
-        background: ${type === 'success' ? '#4CAF50' : type === 'warning' ? '#FF9800' : '#2196F3'};
+        background: ${type === 'success' ? 'var(--status-success)' : type === 'warning' ? 'var(--status-warning)' : 'var(--status-info)'};
         color: white;
         padding: 16px 20px;
         border-radius: 8px;

@@ -1,9 +1,68 @@
+:root {
+  --settings-bg: #f5f5f5;
+  --settings-surface: #ffffff;
+  --settings-border: #e0e0e0;
+  --settings-text: #333333;
+  --settings-muted: #666666;
+  --settings-subtle: #999999;
+  --settings-sidebar-hover: #f8f8f8;
+  --settings-sidebar-active-bg: #e8f4fd;
+  --settings-accent: #1976d2;
+  --settings-accent-strong: #1565c0;
+  --settings-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --settings-button-secondary-bg: #f5f5f5;
+  --settings-button-secondary-hover: #e0e0e0;
+  --settings-input-border: #dddddd;
+  --settings-input-focus: #1976d2;
+  --settings-input-focus-shadow: rgba(25, 118, 210, 0.2);
+  --settings-permission-bg: #f5f5f5;
+  --settings-permission-granted-bg: #e8f5e8;
+  --settings-permission-granted-text: #2e7d2e;
+  --settings-permission-denied-bg: #ffe6e6;
+  --settings-permission-denied-text: #d32f2f;
+  --settings-permission-unknown-bg: #fff3cd;
+  --settings-permission-unknown-text: #856404;
+  --settings-titlebar-bg: #ffffff;
+  --settings-titlebar-border: #e0e0e0;
+  --settings-close-hover: #ff6b6b;
+}
+
+:root[data-theme="elegant"] {
+  --settings-bg: #f6f2ec;
+  --settings-surface: #fbfaf7;
+  --settings-border: #e6dfd6;
+  --settings-text: #2a2a24;
+  --settings-muted: #6b635a;
+  --settings-subtle: #8a8177;
+  --settings-sidebar-hover: #f1ede7;
+  --settings-sidebar-active-bg: #e7f0ec;
+  --settings-accent: #3d6f68;
+  --settings-accent-strong: #315852;
+  --settings-shadow: 0 2px 8px rgba(36, 36, 26, 0.08);
+  --settings-button-secondary-bg: #f1ede7;
+  --settings-button-secondary-hover: #e5e0d9;
+  --settings-input-border: #d8d1c7;
+  --settings-input-focus: #3d6f68;
+  --settings-input-focus-shadow: rgba(61, 111, 104, 0.18);
+  --settings-permission-bg: #f1ede7;
+  --settings-permission-granted-bg: #e7f2ea;
+  --settings-permission-granted-text: #3f6c52;
+  --settings-permission-denied-bg: #f5e6e3;
+  --settings-permission-denied-text: #a14f46;
+  --settings-permission-unknown-bg: #f4efe3;
+  --settings-permission-unknown-text: #8a6a3f;
+  --settings-titlebar-bg: #fbfaf7;
+  --settings-titlebar-border: #e6dfd6;
+  --settings-close-hover: #c97a6a;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     sans-serif;
   margin: 0;
   padding: 0;
-  background: #f5f5f5;
+  background: var(--settings-bg);
+  color: var(--settings-text);
 }
 
 .container {
@@ -13,8 +72,8 @@ body {
 
 .sidebar {
   width: 200px;
-  background: white;
-  border-right: 1px solid #e0e0e0;
+  background: var(--settings-surface);
+  border-right: 1px solid var(--settings-border);
   padding: 20px 0;
 }
 
@@ -23,7 +82,7 @@ body {
 }
 
 .sidebar-title {
-  color: #999;
+  color: var(--settings-subtle);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -36,7 +95,7 @@ body {
   display: flex;
   align-items: center;
   padding: 12px 20px;
-  color: #333;
+  color: var(--settings-text);
   text-decoration: none;
   font-size: 14px;
   cursor: pointer;
@@ -44,13 +103,13 @@ body {
 }
 
 .sidebar-item:hover {
-  background: #f8f8f8;
+  background: var(--settings-sidebar-hover);
 }
 
 .sidebar-item.active {
-  background: #e8f4fd;
-  color: #1976d2;
-  border-right: 3px solid #1976d2;
+  background: var(--settings-sidebar-active-bg);
+  color: var(--settings-accent);
+  border-right: 3px solid var(--settings-accent);
 }
 
 .sidebar-item-icon {
@@ -96,16 +155,16 @@ body {
 .content-title {
   font-size: 24px;
   font-weight: 600;
-  color: #333;
+  color: var(--settings-text);
   margin-bottom: 8px;
 }
 
 .setting-group {
-  background: white;
+  background: var(--settings-surface);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--settings-shadow);
 }
 
 .setting-item {
@@ -113,7 +172,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 16px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--settings-border);
 }
 
 .setting-item:last-child {
@@ -127,13 +186,13 @@ body {
 .setting-title {
   font-size: 16px;
   font-weight: 500;
-  color: #333;
+  color: var(--settings-text);
   margin-bottom: 4px;
 }
 
 .setting-description {
   font-size: 14px;
-  color: #666;
+  color: var(--settings-muted);
 }
 
 .setting-control {
@@ -141,7 +200,7 @@ body {
 }
 
 .btn {
-  background: #1976d2;
+  background: var(--settings-accent);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -153,16 +212,16 @@ body {
 }
 
 .btn:hover {
-  background: #1565c0;
+  background: var(--settings-accent-strong);
 }
 
 .btn-secondary {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--settings-button-secondary-bg);
+  color: var(--settings-text);
 }
 
 .btn-secondary:hover {
-  background: #e0e0e0;
+  background: var(--settings-button-secondary-hover);
 }
 
 /* Custom title bar styles */
@@ -171,8 +230,8 @@ body {
   align-items: center;
   justify-content: space-between;
   height: 40px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--settings-titlebar-bg);
+  border-bottom: 1px solid var(--settings-titlebar-border);
   padding: 0 20px;
   -webkit-app-region: drag;
 }
@@ -180,7 +239,7 @@ body {
 .title-bar-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--settings-text);
 }
 
 .title-bar-controls {
@@ -203,7 +262,7 @@ body {
 }
 
 .title-bar-close:hover {
-  background: #ff6b6b;
+  background: var(--settings-close-hover);
   color: white;
 }
 
@@ -217,16 +276,18 @@ body {
 
 .input {
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--settings-input-border);
   border-radius: 6px;
   font-size: 14px;
   width: 200px;
+  background: var(--settings-surface);
+  color: var(--settings-text);
 }
 
 .input:focus {
   outline: none;
-  border-color: #1976d2;
-  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+  border-color: var(--settings-input-focus);
+  box-shadow: 0 0 0 2px var(--settings-input-focus-shadow);
 }
 
 .language-select {
@@ -238,6 +299,10 @@ body {
 }
 
 .shortcut-select {
+  width: 200px;
+}
+
+.theme-select {
   width: 200px;
 }
 
@@ -259,22 +324,22 @@ body {
   margin-bottom: 8px;
   padding: 4px 8px;
   border-radius: 4px;
-  background: #f5f5f5;
+  background: var(--settings-permission-bg);
 }
 
 .permission-status.granted {
-  background: #e8f5e8;
-  color: #2e7d2e;
+  background: var(--settings-permission-granted-bg);
+  color: var(--settings-permission-granted-text);
 }
 
 .permission-status.denied {
-  background: #ffe6e6;
-  color: #d32f2f;
+  background: var(--settings-permission-denied-bg);
+  color: var(--settings-permission-denied-text);
 }
 
 .permission-status.unknown {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--settings-permission-unknown-bg);
+  color: var(--settings-permission-unknown-text);
 }
 
 .hidden {
