@@ -2,6 +2,8 @@ const { ipcRenderer } = require("electron");
 const { initI18n, setLanguage, applyI18n, t } = window.WhispLineI18n;
 
 const SHORT_PRESS_THRESHOLD_MS = 500;
+const DEFAULT_RECORD_SHORTCUT = "Ctrl+Shift";
+const DEFAULT_TRANSLATE_SHORTCUT = "Shift+Alt";
 const themeOptions = new Set(["midnight", "elegant"]);
 
 function resolveTheme(value) {
@@ -29,8 +31,8 @@ class VoiceInputPrompt {
     this.cancelledShortPress = false;
     this.cancelInProgress = false;
     this.transcriptionInProgress = false;
-    this.recordShortcut = "Ctrl+Shift";
-    this.translateShortcut = "Shift+Alt";
+    this.recordShortcut = DEFAULT_RECORD_SHORTCUT;
+    this.translateShortcut = DEFAULT_TRANSLATE_SHORTCUT;
 
     this.promptElement = document.getElementById("inputPrompt");
     this.promptText = document.getElementById("promptText");
@@ -57,8 +59,9 @@ class VoiceInputPrompt {
       if (!payload) {
         return;
       }
-      const recordShortcut = payload.recordShortcut || "Ctrl+Shift";
-      const translateShortcut = payload.translateShortcut || "Shift+Alt";
+      const recordShortcut = payload.recordShortcut || DEFAULT_RECORD_SHORTCUT;
+      const translateShortcut =
+        payload.translateShortcut || DEFAULT_TRANSLATE_SHORTCUT;
       this.updateShortcutHint(recordShortcut, translateShortcut);
     });
 
@@ -133,8 +136,8 @@ class VoiceInputPrompt {
         return;
       }
       this.updateShortcutHint(
-        settings.shortcut || "Ctrl+Shift",
-        settings.translateShortcut || "Shift+Alt"
+        settings.shortcut || DEFAULT_RECORD_SHORTCUT,
+        settings.translateShortcut || DEFAULT_TRANSLATE_SHORTCUT
       );
     } catch (error) {
       console.error("Failed to load shortcut hint settings:", error);
@@ -155,9 +158,10 @@ class VoiceInputPrompt {
     if (!this.promptText) {
       return;
     }
-    const safeRecordShortcut = recordShortcut || this.recordShortcut || "Ctrl+Shift";
+    const safeRecordShortcut =
+      recordShortcut || this.recordShortcut || DEFAULT_RECORD_SHORTCUT;
     const safeTranslateShortcut =
-      translateShortcut || this.translateShortcut || "Shift+Alt";
+      translateShortcut || this.translateShortcut || DEFAULT_TRANSLATE_SHORTCUT;
     this.recordShortcut = safeRecordShortcut;
     this.translateShortcut = safeTranslateShortcut;
     const recordLabel = this.formatShortcutLabel(safeRecordShortcut);
