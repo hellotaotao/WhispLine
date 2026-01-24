@@ -4,6 +4,7 @@ const { initI18n, setLanguage, applyI18n, t } = window.WhispLineI18n;
 const SHORT_PRESS_THRESHOLD_MS = 500;
 const DEFAULT_RECORD_SHORTCUT = "Ctrl+Shift";
 const DEFAULT_TRANSLATE_SHORTCUT = "Shift+Alt";
+const DEBUG_MICROPHONE_CLEANUP = false;
 const themeOptions = new Set(["midnight", "elegant"]);
 
 function resolveTheme(value) {
@@ -12,6 +13,13 @@ function resolveTheme(value) {
 
 function applyTheme(value) {
   document.documentElement.setAttribute("data-theme", resolveTheme(value));
+}
+
+function logMicrophoneCleanup(...args) {
+  if (!DEBUG_MICROPHONE_CLEANUP) {
+    return;
+  }
+  console.log(...args);
 }
 
 class VoiceInputPrompt {
@@ -330,26 +338,32 @@ class VoiceInputPrompt {
 
   cleanup(options = {}) {
     const { preserveAudioChunks = false } = options;
-    console.log('Starting microphone cleanup...');
+    logMicrophoneCleanup("Starting microphone cleanup...");
     
     // Stop all media tracks
     if (this.mediaStream) {
-      console.log('Stopping media stream tracks...');
+      logMicrophoneCleanup("Stopping media stream tracks...");
       this.mediaStream.getTracks().forEach((track) => {
-        console.log(`Stopping track: ${track.kind}, state: ${track.readyState}`);
+        logMicrophoneCleanup(
+          `Stopping track: ${track.kind}, state: ${track.readyState}`
+        );
         track.stop();
-        console.log(`Track stopped: ${track.kind}, new state: ${track.readyState}`);
+        logMicrophoneCleanup(
+          `Track stopped: ${track.kind}, new state: ${track.readyState}`
+        );
       });
       this.mediaStream = null;
-      console.log('Media stream cleared');
+      logMicrophoneCleanup("Media stream cleared");
     }
 
     // Close audio context
     if (this.audioContext) {
-      console.log(`Closing audio context, current state: ${this.audioContext.state}`);
+      logMicrophoneCleanup(
+        `Closing audio context, current state: ${this.audioContext.state}`
+      );
       if (this.audioContext.state !== 'closed') {
         this.audioContext.close().then(() => {
-          console.log('Audio context closed successfully');
+          logMicrophoneCleanup("Audio context closed successfully");
         }).catch(err => {
           console.error('Error closing audio context:', err);
         });
@@ -359,7 +373,7 @@ class VoiceInputPrompt {
 
     // Clean up media recorder
     if (this.mediaRecorder) {
-      console.log('Cleaning up media recorder...');
+      logMicrophoneCleanup("Cleaning up media recorder...");
       if (!preserveAudioChunks) {
         this.mediaRecorder = null;
       }
@@ -367,7 +381,7 @@ class VoiceInputPrompt {
 
     // Clean up analyser
     if (this.analyser) {
-      console.log('Cleaning up analyser...');
+      logMicrophoneCleanup("Cleaning up analyser...");
       this.analyser = null;
     }
     
@@ -380,7 +394,7 @@ class VoiceInputPrompt {
       this.audioChunks = [];
     }
     
-    console.log('Microphone cleanup completed');
+    logMicrophoneCleanup("Microphone cleanup completed");
   }
 
   async processRecording() {
