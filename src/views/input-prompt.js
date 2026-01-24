@@ -184,15 +184,6 @@ class VoiceInputPrompt {
 
       this.audioChunks = [];
 
-      // Update UI for recording state
-      this.promptElement.classList.add("recording");
-      if (this.translateMode) {
-        this.promptText.textContent = t("inputPrompt.listeningEnglish");
-      } else {
-        this.promptText.textContent = t("inputPrompt.listening");
-      }
-      this.statusText.innerHTML = `${t("inputPrompt.recording")} <div class="recording-dot"></div>`;
-
       // Create media stream directly using getUserMedia
       // In Electron, system-level permissions are handled by main process
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -213,6 +204,15 @@ class VoiceInputPrompt {
       }
 
       this.mediaStream = stream;
+
+      // Update UI for recording state after permissions resolve
+      this.promptElement.classList.add("recording");
+      if (this.translateMode) {
+        this.promptText.textContent = t("inputPrompt.listeningEnglish");
+      } else {
+        this.promptText.textContent = t("inputPrompt.listening");
+      }
+      this.statusText.innerHTML = `${t("inputPrompt.recording")} <div class="recording-dot"></div>`;
 
       // Setup audio context for visualization
       this.audioContext = new (window.AudioContext ||
@@ -468,83 +468,96 @@ class VoiceInputPrompt {
     setTimeout(() => this.hidePrompt(), 3000);
   }
 
+  async handleTextProcessingFailure(text, messageOverride) {
+    const fallbackMessage =
+      typeof messageOverride === "string" && messageOverride.trim()
+        ? messageOverride
+        : t("inputPrompt.textProcessingFailed");
+    this.statusText.textContent = fallbackMessage;
+    this.statusText.style.color = "var(--status-warning-strong)";
+
+    // Final fallback: copy to clipboard
+    try {
+      const pasteShortcut = this.getPasteShortcutLabel();
+      await navigator.clipboard.writeText(text);
+      this.statusText.textContent = t("inputPrompt.textCopiedFallback", {
+        shortcut: pasteShortcut,
+      });
+      this.statusText.style.color = "var(--status-warning)";
+      setTimeout(() => this.hidePrompt(), 3000);
+    } catch (clipboardError) {
+      console.error("Failed to copy to clipboard:", clipboardError);
+      this.statusText.textContent = t("inputPrompt.errorCouldNotProcess");
+      this.statusText.style.color = "var(--status-danger)";
+      setTimeout(() => this.hidePrompt(), 3000);
+    }
+  }
+
   async typeText(text) {
     // Send the transcribed text to the active application
     try {
       const result = await ipcRenderer.invoke("type-text", text);
+
+      if (!result || !result.success) {
+        console.warn("Text processing failed in main process:", result);
+        await this.handleTextProcessingFailure(text, result?.message);
+        return;
+      }
+
       const pasteShortcut = this.getPasteShortcutLabel();
 
-      if (result.success) {
-        if (result.method === "direct_typing") {
-          console.log("Text typed directly:", text);
-          this.statusText.textContent = t("inputPrompt.textTypedDirect");
-          this.statusText.style.color = "var(--status-success)";
-          setTimeout(() => this.hidePrompt(), 1500);
-        } else if (result.method === "koffi_sendinput") {
-          // Windows SendInput method
-          console.log("Text inserted via SendInput:", text);
-          this.statusText.textContent = t("inputPrompt.textInserted");
-          this.statusText.style.color = "var(--status-success)";
-          // Hide prompt immediately after successful insertion on Windows
-          this.hidePrompt();
-        } else if (result.method === "cgevent_unicode") {
-          // macOS CGEvent Unicode method
-          console.log("Text inserted via CGEvent:", text);
-          this.statusText.textContent = t("inputPrompt.textInserted");
-          this.statusText.style.color = "var(--status-success)";
-          // Hide prompt immediately after successful insertion
-          this.hidePrompt();
-        } else if (result.method === "clipboard_textinsert") {
-          console.log("Text inserted successfully:", text);
-          const isPartial =
-            typeof result.message === "string" &&
-            result.message.includes("partially restored");
-          this.statusText.textContent = isPartial
-            ? t("inputPrompt.textInsertedPartial")
-            : t("inputPrompt.textInsertedAuto");
-          
-          // Different colors based on message complexity
-          if (isPartial) {
-            this.statusText.style.color = "var(--status-warning)"; // Orange for partial restoration
-          } else {
-            this.statusText.style.color = "var(--status-success)"; // Green for full restoration
-          }
-          
-          // Close immediately after successful insertion
-          this.hidePrompt();
-        } else if (result.method === "clipboard") {
-          console.log("Text copied to clipboard:", text);
-          this.statusText.textContent = t("inputPrompt.textCopied", {
-            shortcut: pasteShortcut,
-          });
-          this.statusText.style.color = "var(--status-warning)";
-          setTimeout(() => this.hidePrompt(), 3000);
-        } else {
-          this.statusText.textContent = result.message || t("inputPrompt.textInserted");
-          this.statusText.style.color = "var(--status-success)";
-          this.hidePrompt();
-        }
-      }
-    } catch (error) {
-      console.error("Failed to process text:", error);
-      this.statusText.textContent = t("inputPrompt.textProcessingFailed");
-      this.statusText.style.color = "var(--status-warning-strong)";
+      if (result.method === "direct_typing") {
+        console.log("Text typed directly:", text);
+        this.statusText.textContent = t("inputPrompt.textTypedDirect");
+        this.statusText.style.color = "var(--status-success)";
+        setTimeout(() => this.hidePrompt(), 1500);
+      } else if (result.method === "koffi_sendinput") {
+        // Windows SendInput method
+        console.log("Text inserted via SendInput:", text);
+        this.statusText.textContent = t("inputPrompt.textInserted");
+        this.statusText.style.color = "var(--status-success)";
+        // Hide prompt immediately after successful insertion on Windows
+        this.hidePrompt();
+      } else if (result.method === "cgevent_unicode") {
+        // macOS CGEvent Unicode method
+        console.log("Text inserted via CGEvent:", text);
+        this.statusText.textContent = t("inputPrompt.textInserted");
+        this.statusText.style.color = "var(--status-success)";
+        // Hide prompt immediately after successful insertion
+        this.hidePrompt();
+      } else if (result.method === "clipboard_textinsert") {
+        console.log("Text inserted successfully:", text);
+        const isPartial =
+          typeof result.message === "string" &&
+          result.message.includes("partially restored");
+        this.statusText.textContent = isPartial
+          ? t("inputPrompt.textInsertedPartial")
+          : t("inputPrompt.textInsertedAuto");
 
-      // Final fallback: copy to clipboard
-      try {
-        const pasteShortcut = this.getPasteShortcutLabel();
-        await navigator.clipboard.writeText(text);
-        this.statusText.textContent = t("inputPrompt.textCopiedFallback", {
+        // Different colors based on message complexity
+        if (isPartial) {
+          this.statusText.style.color = "var(--status-warning)"; // Orange for partial restoration
+        } else {
+          this.statusText.style.color = "var(--status-success)"; // Green for full restoration
+        }
+
+        // Close immediately after successful insertion
+        this.hidePrompt();
+      } else if (result.method === "clipboard") {
+        console.log("Text copied to clipboard:", text);
+        this.statusText.textContent = t("inputPrompt.textCopied", {
           shortcut: pasteShortcut,
         });
         this.statusText.style.color = "var(--status-warning)";
         setTimeout(() => this.hidePrompt(), 3000);
-      } catch (clipboardError) {
-        console.error("Failed to copy to clipboard:", clipboardError);
-        this.statusText.textContent = t("inputPrompt.errorCouldNotProcess");
-        this.statusText.style.color = "var(--status-danger)";
-        setTimeout(() => this.hidePrompt(), 3000);
+      } else {
+        this.statusText.textContent = result.message || t("inputPrompt.textInserted");
+        this.statusText.style.color = "var(--status-success)";
+        this.hidePrompt();
       }
+    } catch (error) {
+      console.error("Failed to process text:", error);
+      await this.handleTextProcessingFailure(text);
     }
   }
 
