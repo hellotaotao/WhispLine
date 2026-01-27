@@ -8,6 +8,7 @@ A voice input method software built with Electron that allows you to dictate tex
 - **Real-time Audio Visualization**: Beautiful waveform animation while recording
 - **AI Transcription**: Uses Groq's Whisper API for accurate speech-to-text
 - **Auto-typing**: Automatically types transcribed text into active application (macOS)
+- **Auto-update**: Automatically checks for updates and notifies when new versions are available
 - **Cross-platform**: Works on macOS, Windows, and Linux
 - **Background Operation**: Runs silently in the system tray
 - **Customizable Settings**: Configure API key, microphone, and languages
@@ -49,6 +50,17 @@ npm run dev
 # Build for production
 npm run build
 ```
+
+## Auto-Updates
+
+WhispLine includes automatic update functionality:
+
+- **Automatic Check**: On app startup, WhispLine automatically checks for new versions (in production builds only)
+- **Manual Check**: Right-click the system tray icon and select "Check for Updates"
+- **Update Process**: When an update is available, you'll be prompted to download it. Once downloaded, you can choose to install immediately or install on next app restart
+- **GitHub Releases**: Updates are distributed via GitHub Releases. When building for release, use `npm run build` which will create distributable files compatible with the auto-updater
+
+**Note**: Auto-update is disabled in development mode (`npm run dev`).
 
 ## Console Character Encoding (Windows)
 
