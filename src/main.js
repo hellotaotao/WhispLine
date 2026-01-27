@@ -18,6 +18,7 @@ const { uIOhook, UiohookKey } = require("uiohook-napi");
 const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
 const TranscriptionService = require("./services/transcription-service");
+const AutoUpdaterService = require("./auto-updater");
 
 // Import platform-specific text inserters
 let windowsTextInserter = null;
@@ -59,6 +60,9 @@ const MODIFIER_ALIASES = {
 const db = new DatabaseManager();
 const permissionManager = new PermissionManager();
 const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+
+// Auto-updater service (initialized after main window is created)
+let autoUpdaterService = null;
 
 // Transcription service cache to avoid recreating clients
 let transcriptionServiceCache = new Map();
@@ -792,6 +796,17 @@ app.whenReady().then(async () => {
           type: "separator"
         },
         {
+          label: "Check for Updates...",
+          click: () => {
+            if (autoUpdaterService) {
+              autoUpdaterService.checkForUpdates();
+            }
+          }
+        },
+        {
+          type: "separator"
+        },
+        {
           label: "Preferences...",
           accelerator: process.platform === "darwin" ? "Command+," : "Ctrl+,",
           click: () => {
@@ -854,6 +869,17 @@ app.whenReady().then(async () => {
   createInputPromptWindow();
   createTray();
   await setupGlobalHotkeys();
+
+  // Initialize auto-updater service (only in production)
+  if (!isDevelopment) {
+    autoUpdaterService = new AutoUpdaterService(mainWindow);
+    // Check for updates quietly on startup (after a short delay)
+    setTimeout(() => {
+      if (autoUpdaterService) {
+        autoUpdaterService.checkForUpdatesQuietly();
+      }
+    }, 3000);
+  }
 
   // Show main window on startup unless startMinimized is true
   const startMinimized = store.get("startMinimized", false);
@@ -1272,6 +1298,13 @@ ipcMain.handle("get-recent-activities", async (event) => {
 // Get app version using Electron's official API
 ipcMain.handle("get-app-version", () => {
   return app.getVersion();
+});
+
+// Check for updates
+ipcMain.handle("check-for-updates", () => {
+  if (autoUpdaterService) {
+    autoUpdaterService.checkForUpdates();
+  }
 });
 
 // Dictionary-related IPC handlers
