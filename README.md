@@ -11,6 +11,7 @@ A voice input method software built with Electron that allows you to dictate tex
 - **Cross-platform**: Works on macOS, Windows, and Linux
 - **Background Operation**: Runs silently in the system tray
 - **Customizable Settings**: Configure API key, microphone, and languages
+- **Auto-Update**: Automatically checks for and installs updates (production builds only)
 
 ## Installation
 
@@ -37,6 +38,16 @@ Access settings through the system tray menu or main window to configure:
 - Default microphone
 - Transcription language
 
+## Auto-Update
+
+WhispLine includes automatic update functionality that:
+- Checks for updates on app startup (production builds only)
+- Notifies you when a new version is available
+- Downloads and installs updates with your permission
+- Can be manually triggered via the "Check for Updates" menu item or button in the main window
+
+**Note**: Auto-update only works in production builds. Development mode (using `npm run dev`) does not check for updates.
+
 ## Development
 
 ```bash
@@ -49,6 +60,22 @@ npm run dev
 # Build for production
 npm run build
 ```
+
+## Publishing Releases
+
+To enable auto-update functionality for users:
+
+1. Build the app using `npm run build`
+2. Create a new release on GitHub with a version tag (e.g., `v1.0.78`)
+3. Upload the built artifacts from the `dist/` folder to the GitHub release
+4. The auto-updater will automatically detect and download new releases for users
+
+The app uses GitHub Releases as the update server. Each new release should include:
+- macOS: `.dmg` file
+- Windows: `.exe` installer
+- Linux: `.AppImage` file
+
+**Note**: For auto-update to work properly, ensure the `version` field in `package.json` matches the release tag on GitHub.
 
 ## Console Character Encoding (Windows)
 

@@ -16,6 +16,9 @@
         <div class="subline">
           <div class="badge" data-i18n="app.plan.basic">Basic</div>
           <div id="appVersion" class="app-version">v-</div>
+          <button id="checkUpdateBtn" class="check-update-btn check-update-btn--hidden" title="Check for updates">
+            <span class="material-icons">refresh</span>
+          </button>
         </div>
       </div>
     </div>
@@ -160,6 +163,19 @@
         const version = await ipcRenderer.invoke("get-app-version");
         const el = document.getElementById('appVersion');
         if (el) el.textContent = `v${version}`;
+        
+        // Show the check for updates button
+        const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+        if (checkUpdateBtn) {
+          checkUpdateBtn.classList.remove('check-update-btn--hidden');
+          checkUpdateBtn.addEventListener('click', async () => {
+            try {
+              await ipcRenderer.invoke("check-for-updates");
+            } catch (e) {
+              console.error('Failed to check for updates', e);
+            }
+          });
+        }
       } catch (e) {
         console.error('Failed to load app version', e);
       }
