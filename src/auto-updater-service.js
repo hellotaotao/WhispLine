@@ -14,6 +14,7 @@ class AutoUpdaterService {
 
     this.updateAvailable = false;
     this.updateDownloaded = false;
+    this.lastLoggedProgress = 0; // Track last logged progress percentage
     
     this.setupEventHandlers();
   }
@@ -41,13 +42,19 @@ class AutoUpdaterService {
     });
 
     autoUpdater.on("download-progress", (progressObj) => {
-      const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`;
-      log.info(logMessage);
+      // Only log progress at 10% intervals to avoid excessive logging
+      const percent = Math.floor(progressObj.percent);
+      if (percent >= this.lastLoggedProgress + 10 || percent === 100) {
+        const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${percent}% (${progressObj.transferred}/${progressObj.total})`;
+        log.info(logMessage);
+        this.lastLoggedProgress = percent;
+      }
     });
 
     autoUpdater.on("update-downloaded", (info) => {
       log.info("Update downloaded:", info.version);
       this.updateDownloaded = true;
+      this.lastLoggedProgress = 0; // Reset for next download
       this.showUpdateDownloadedDialog(info);
     });
   }
