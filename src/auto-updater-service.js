@@ -44,7 +44,7 @@ class AutoUpdaterService {
     autoUpdater.on("download-progress", (progressObj) => {
       // Only log progress at 10% intervals to avoid excessive logging
       const percent = Math.floor(progressObj.percent);
-      if (percent >= this.lastLoggedProgress + 10 || percent === 100) {
+      if (percent >= this.lastLoggedProgress + 10 || (percent === 100 && percent > this.lastLoggedProgress)) {
         const logMessage = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${percent}% (${progressObj.transferred}/${progressObj.total})`;
         log.info(logMessage);
         this.lastLoggedProgress = percent;
