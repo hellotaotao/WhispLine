@@ -7,6 +7,9 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: read
+    
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
@@ -56,6 +59,9 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Needed to create releases
     
     steps:
       - name: Checkout code
