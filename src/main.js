@@ -18,6 +18,7 @@ const { uIOhook, UiohookKey } = require("uiohook-napi");
 const DatabaseManager = require("./database-manager");
 const PermissionManager = require("./permission-manager");
 const TranscriptionService = require("./services/transcription-service");
+const AutoUpdaterService = require("./auto-updater-service");
 
 // Import platform-specific text inserters
 let windowsTextInserter = null;
@@ -58,6 +59,12 @@ const MODIFIER_ALIASES = {
 const db = new DatabaseManager();
 const permissionManager = new PermissionManager();
 const isDevelopment = process.env.NODE_ENV === 'development' || process.argv.includes('--dev');
+
+// Initialize auto-updater (only in production)
+let autoUpdaterService = null;
+if (!isDevelopment) {
+  autoUpdaterService = new AutoUpdaterService();
+}
 
 // Transcription service cache to avoid recreating clients
 let transcriptionServiceCache = new Map();
@@ -414,6 +421,24 @@ function createTray() {
         label: "Settings",
         click: () => {
           createSettingsWindow();
+        },
+      },
+      {
+        type: "separator",
+      },
+      {
+        label: "Check for Updates",
+        click: () => {
+          if (autoUpdaterService) {
+            autoUpdaterService.checkForUpdates();
+          } else {
+            dialog.showMessageBox({
+              type: "info",
+              buttons: ["OK"],
+              title: "Development Mode",
+              message: "Auto-update is not available in development mode",
+            });
+          }
         },
       },
       {
@@ -814,6 +839,14 @@ app.whenReady().then(async () => {
   // Request microphone permission on startup (non-blocking for UX)
   if (process.platform === "darwin") {
     permissionManager.requestInitialMicrophonePermission();
+  }
+
+  // Check for updates on startup (quietly, in production only)
+  if (autoUpdaterService) {
+    // Wait a bit before checking to let the app fully initialize
+    setTimeout(() => {
+      autoUpdaterService.checkForUpdatesQuietly();
+    }, 5000);
   }
 
   app.on("activate", () => {
