@@ -62,6 +62,19 @@ WhispLine includes automatic update functionality:
 
 **Note**: Auto-update is disabled in development mode (`npm run dev`).
 
+### Creating a Release
+
+To create a new release with auto-update support:
+
+1. Update the version in `package.json` (or use `npm version patch/minor/major`)
+2. Create and push a git tag: 
+   ```bash
+   git tag v1.0.75
+   git push origin v1.0.75
+   ```
+3. The GitHub Actions workflow will automatically build and publish the release
+4. Users will be notified of the update on their next app launch
+
 ## Console Character Encoding (Windows)
 
 On Windows, the console may display non-English characters as garbled text due to PowerShell/CMD output encoding settings.
