@@ -16,8 +16,8 @@
         <div class="subline">
           <div class="badge" data-i18n="app.plan.basic">Basic</div>
           <div id="appVersion" class="app-version">v-</div>
-          <button id="checkUpdateBtn" class="check-update-btn" title="Check for updates" style="display: none;">
-            <span class="material-icons" style="font-size: 14px;">refresh</span>
+          <button id="checkUpdateBtn" class="check-update-btn check-update-btn--hidden" title="Check for updates">
+            <span class="material-icons">refresh</span>
           </button>
         </div>
       </div>
@@ -167,7 +167,7 @@
         // Show the check for updates button
         const checkUpdateBtn = document.getElementById('checkUpdateBtn');
         if (checkUpdateBtn) {
-          checkUpdateBtn.style.display = 'inline-flex';
+          checkUpdateBtn.classList.remove('check-update-btn--hidden');
           checkUpdateBtn.addEventListener('click', async () => {
             try {
               await ipcRenderer.invoke("check-for-updates");
