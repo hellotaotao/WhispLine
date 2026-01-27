@@ -6,13 +6,14 @@ const themeOptions = new Set(["midnight", "elegant"]);
 // Define available models per API provider
 const modelOptions = {
   groq: [
-    { value: "whisper-large-v3", label: "Whisper Large V3 (Standard)" },
-    { value: "whisper-large-v3-turbo", label: "Whisper Large V3 Turbo (Faster)" }
+    { value: "whisper-large-v3", labelKey: "settings.model.options.whisperLargeV3" },
+    { value: "whisper-large-v3-turbo", labelKey: "settings.model.options.whisperLargeV3Turbo" }
   ],
   openai: [
-    { value: "whisper-1", label: "Whisper-1 (Classic)" },
-    { value: "gpt-4o-transcribe", label: "GPT-4o Transcribe (High Quality)" },
-    { value: "gpt-4o-mini-transcribe", label: "GPT-4o Mini Transcribe (Fast)" }
+    { value: "whisper-1", labelKey: "settings.model.options.whisper1" },
+    { value: "gpt-4o-transcribe", labelKey: "settings.model.options.gpt4oTranscribe" },
+    { value: "gpt-4o-mini-transcribe", labelKey: "settings.model.options.gpt4oMiniTranscribe" },
+    { value: "gpt-4o-transcribe-diarize", labelKey: "settings.model.options.gpt4oTranscribeDiarize" }
   ]
 };
 
@@ -23,7 +24,7 @@ function updateModelOptions(provider) {
   (modelOptions[provider] || []).forEach((opt) => {
     const option = document.createElement("option");
     option.value = opt.value;
-    option.textContent = opt.label;
+    option.textContent = opt.labelKey ? t(opt.labelKey) : opt.label || opt.value;
     select.appendChild(option);
   });
 }

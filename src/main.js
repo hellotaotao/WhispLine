@@ -930,7 +930,7 @@ ipcMain.handle("get-settings", () => {
     language: store.get("language", "auto"),
     uiLanguage: store.get("uiLanguage", "auto"),
     uiTheme: store.get("uiTheme", "elegant"),
-    model: store.get("model", "whisper-large-v3-turbo"),
+    model: store.get("model", "gpt-4o-transcribe"),
     microphone: store.get("microphone", "default"),
     autoLaunch: store.get("autoLaunch", false),
     startMinimized: store.get("startMinimized", false),
@@ -1033,7 +1033,7 @@ ipcMain.handle("transcribe-audio", async (event, audioBuffer, translateMode = fa
     }
 
     const language = store.get("language", "auto");
-    const model = store.get("model", "whisper-large-v3-turbo");
+    const model = store.get("model", "gpt-4o-transcribe");
     const dictionary = store.get('dictionary', '');
 
     // Get cached transcription service

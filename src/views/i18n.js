@@ -129,6 +129,19 @@
           title: "Model Selection",
           description: "Select transcription model.",
           selectTitle: "Select transcription model",
+          options: {
+            whisper1: "Whisper-1 (Classic) — $0.006/min ($0.36/hr)",
+            gpt4oTranscribe:
+              "GPT-4o Transcribe (High Quality) — $0.006/min ($0.36/hr)",
+            gpt4oMiniTranscribe:
+              "GPT-4o Mini Transcribe (Fast) — $0.003/min ($0.18/hr)",
+            gpt4oTranscribeDiarize:
+              "GPT-4o Transcribe (Diarize) — $0.006/min ($0.36/hr)",
+            whisperLargeV3:
+              "Whisper Large V3 (Standard) — $0.00185/min ($0.111/hr)",
+            whisperLargeV3Turbo:
+              "Whisper Large V3 Turbo (Faster) — $0.000667/min ($0.04/hr)",
+          },
         },
         cancel: "Cancel",
         save: "Save",
@@ -295,6 +308,19 @@
           title: "模型选择",
           description: "选择转录模型。",
           selectTitle: "选择转录模型",
+          options: {
+            whisper1: "Whisper-1（经典） — $0.006/分钟 ($0.36/小时)",
+            gpt4oTranscribe:
+              "GPT-4o 转录（高质量） — $0.006/分钟 ($0.36/小时)",
+            gpt4oMiniTranscribe:
+              "GPT-4o Mini 转录（快速） — $0.003/分钟 ($0.18/小时)",
+            gpt4oTranscribeDiarize:
+              "GPT-4o 转录（说话人分离） — $0.006/分钟 ($0.36/小时)",
+            whisperLargeV3:
+              "Whisper Large V3（标准） — $0.00185/分钟 ($0.111/小时)",
+            whisperLargeV3Turbo:
+              "Whisper Large V3 Turbo（更快） — $0.000667/分钟 ($0.04/小时)",
+          },
         },
         cancel: "取消",
         save: "保存",
