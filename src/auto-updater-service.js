@@ -53,12 +53,19 @@ class AutoUpdaterService {
   }
 
   showUpdateAvailableDialog(info) {
+    const detailLines = [
+      "A new version of WhispLine is available. Would you like to download it now?",
+      "",
+      `Current version: ${autoUpdater.currentVersion}`,
+      `New version: ${info.version}`
+    ];
+    
     const dialogOpts = {
       type: "info",
       buttons: ["Download", "Later"],
       title: "Update Available",
       message: `Version ${info.version} is available`,
-      detail: `A new version of WhispLine is available. Would you like to download it now?\n\nCurrent version: ${autoUpdater.currentVersion}\nNew version: ${info.version}`,
+      detail: detailLines.join("\n"),
     };
 
     dialog.showMessageBox(dialogOpts).then((returnValue) => {

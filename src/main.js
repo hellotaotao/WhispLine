@@ -66,6 +66,9 @@ if (!isDevelopment) {
   autoUpdaterService = new AutoUpdaterService();
 }
 
+// Constants for auto-update
+const UPDATE_CHECK_DELAY_MS = 5000; // Wait 5 seconds after startup before checking for updates
+
 // Transcription service cache to avoid recreating clients
 let transcriptionServiceCache = new Map();
 
@@ -846,7 +849,7 @@ app.whenReady().then(async () => {
     // Wait a bit before checking to let the app fully initialize
     setTimeout(() => {
       autoUpdaterService.checkForUpdatesQuietly();
-    }, 5000);
+    }, UPDATE_CHECK_DELAY_MS);
   }
 
   app.on("activate", () => {
