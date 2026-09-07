@@ -64,6 +64,23 @@ pub fn normalize_local_compute(value: &str) -> &'static str {
   crate::local_asr::ComputePreference::parse(value).as_str()
 }
 
+/// Which cloud provider translate mode should use. An explicit choice wins as
+/// long as that provider has a key; anything else (unset, unknown, or a choice
+/// whose key was since cleared) falls back to the historical order — Groq
+/// first, then OpenAI — so an unconfigured install behaves as it always did.
+/// Returns "" when neither provider has a key.
+pub fn normalize_translate_provider(config: &AppConfig) -> &'static str {
+  let has_groq = !config.api_key_groq.trim().is_empty();
+  let has_openai = !config.api_key_openai.trim().is_empty();
+  match config.translate_provider.trim() {
+    "groq" if has_groq => "groq",
+    "openai" if has_openai => "openai",
+    _ if has_groq => "groq",
+    _ if has_openai => "openai",
+    _ => "",
+  }
+}
+
 fn default_shortcut() -> String {
   DEFAULT_RECORD_SHORTCUT.into()
 }
@@ -109,6 +126,18 @@ pub struct AppConfig {
   /// See local_asr::ComputePreference; "auto" resolves to CPU today.
   #[serde(default = "default_local_compute")]
   pub local_compute: String,
+  /// Which cloud provider serves translate mode ("groq" | "openai"). Local
+  /// engines only transcribe, so Shift+Alt has to leave the device; this makes
+  /// that a deliberate choice instead of "whichever key happens to exist".
+  /// Empty means the user has not chosen — the route falls back to the old
+  /// Groq-then-OpenAI order.
+  #[serde(default)]
+  pub translate_provider: String,
+  /// Whether the user has acknowledged that translate mode uploads audio.
+  /// False blocks the cloud round-trip on a local engine: the recording is kept
+  /// and the prompt asks first, so the upload is never a surprise.
+  #[serde(default)]
+  pub translate_consented: bool,
   #[serde(default)]
   pub onboarding_completed: bool,
 }
@@ -132,6 +161,8 @@ impl Default for AppConfig {
       dictionary: String::new(),
       nemotron_latency_ms: default_nemotron_latency_ms(),
       local_compute: default_local_compute(),
+      translate_provider: String::new(),
+      translate_consented: false,
       onboarding_completed: false,
     }
   }
@@ -157,6 +188,12 @@ pub struct SettingsPayload {
   pub nemotron_latency_ms: u32,
   /// Which backend the local engine runs on: "auto" | "cpu" | "gpu".
   pub local_compute: String,
+  /// The cloud provider translate mode routes to ("groq" | "openai"), or empty
+  /// when the user has not picked one.
+  pub translate_provider: String,
+  /// Whether the audio-leaves-the-device notice for translate mode has been
+  /// accepted. The input prompt asks before the first cloud translation.
+  pub translate_consented: bool,
   /// The OS the backend runs on ("macos" | "windows" | "linux"), so the frontend
   /// can choose OS-correct copy and modifier glyphs instead of relying on the
   /// deprecated navigator.platform.
@@ -209,6 +246,8 @@ impl SettingsPayload {
       provider: config.provider.clone(),
       nemotron_latency_ms: normalize_nemotron_latency_ms(config.nemotron_latency_ms),
       local_compute: normalize_local_compute(&config.local_compute).into(),
+      translate_provider: normalize_translate_provider(config).into(),
+      translate_consented: config.translate_consented,
       gpu_runtime_supported: crate::local_asr::gpu_runtime_supported(),
       os: std::env::consts::OS.to_string(),
       is_dev: cfg!(debug_assertions),

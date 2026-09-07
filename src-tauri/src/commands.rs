@@ -567,6 +567,10 @@ pub fn save_settings(
     // field deserializes to false — without this line every settings save would
     // re-trigger the onboarding wizard.
     config.onboarding_completed = existing.onboarding_completed;
+    // Same reason as the two above: consent is a one-off decision made at the
+    // prompt, not a form field. Without this every settings save would silently
+    // revoke it and the next translation would ask again.
+    config.translate_consented = existing.translate_consented;
     config.translate_shortcut = TRANSLATE_SHORTCUT.into();
     config.shortcut = settings::normalize_record_shortcut(&config.shortcut);
     config.nemotron_latency_ms =
@@ -745,6 +749,20 @@ pub(crate) fn sync_local_runtime(app: &AppHandle, config: &AppConfig) {
 pub fn set_provider(app: AppHandle, provider: String) -> Result<bool, String> {
   log::info!("command:set_provider provider={provider}");
   apply_provider_change(&app, &provider)?;
+  Ok(true)
+}
+
+/// Record (or withdraw) the acknowledgement that translate mode uploads audio.
+/// Kept out of `save_settings` on purpose: this is a decision the user makes at
+/// the prompt, right after speaking, not a field on the settings form.
+#[tauri::command]
+pub fn set_translate_consent(consented: bool) -> Result<bool, String> {
+  log::info!("command:set_translate_consent consented={consented}");
+  settings::mutate_config(move |config| {
+    config.translate_consented = consented;
+    Ok(())
+  })
+  .map_err(stringify_error)?;
   Ok(true)
 }
 
@@ -2051,6 +2069,11 @@ pub enum TranscriptionRoute {
   },
 }
 
+/// Returned when translate mode is requested on a local engine before the user
+/// has accepted that the clip will be uploaded. The frontend matches on this
+/// exact string to show the notice instead of a generic failure.
+pub const TRANSLATE_NEEDS_CONSENT: &str = "TRANSLATE_NEEDS_CONSENT";
+
 /// Decide where this transcription goes. Local provider transcribes locally;
 /// translate mode is the exception — Qwen3-ASR only transcribes, so translation
 /// falls back to whichever cloud key is configured (Groq preferred: cheaper,
@@ -2063,21 +2086,27 @@ pub fn resolve_transcription_route(
     if !translate_mode {
       return Ok(TranscriptionRoute::Local);
     }
-    if !config.api_key_groq.trim().is_empty() {
-      return Ok(TranscriptionRoute::Cloud {
+    // Translate on a local engine is the one path where audio leaves the
+    // device, so it is gated on an explicit acknowledgement. The frontend keeps
+    // the recording, shows the notice, and retries once accepted — hence a
+    // distinguishable code rather than free-form prose.
+    if !config.translate_consented {
+      return Err(TRANSLATE_NEEDS_CONSENT.into());
+    }
+    return match crate::settings::normalize_translate_provider(config) {
+      "groq" => Ok(TranscriptionRoute::Cloud {
         provider: "groq",
         api_key: config.api_key_groq.trim().into(),
-      });
-    }
-    if !config.api_key_openai.trim().is_empty() {
-      return Ok(TranscriptionRoute::Cloud {
+      }),
+      "openai" => Ok(TranscriptionRoute::Cloud {
         provider: "openai",
         api_key: config.api_key_openai.trim().into(),
-      });
-    }
-    return Err(
-      "Translation needs a cloud API key (the local model only transcribes). Add a Groq or OpenAI key in Settings.".into(),
-    );
+      }),
+      _ => Err(
+        "Translation needs a cloud API key (the local model only transcribes). Add a Groq or OpenAI key in Settings."
+          .into(),
+      ),
+    };
   }
   let provider = if config.provider == "groq" {
     "groq"
@@ -2758,16 +2787,23 @@ mod tests {
     assert!(matches!(route, TranscriptionRoute::Local));
   }
 
+  /// Translate on a local engine, with the upload already acknowledged.
+  fn consented(provider: &str, groq: &str, openai: &str) -> AppConfig {
+    let mut c = config_with(provider, groq, openai);
+    c.translate_consented = true;
+    c
+  }
+
   #[test]
   fn local_translate_falls_back_to_a_cloud_key_groq_first() {
-    match resolve_transcription_route(&config_with("local", "gsk", "osk"), true).unwrap() {
+    match resolve_transcription_route(&consented("local", "gsk", "osk"), true).unwrap() {
       TranscriptionRoute::Cloud { provider, api_key } => {
         assert_eq!(provider, "groq");
         assert_eq!(api_key, "gsk");
       }
       other => panic!("expected cloud, got {other:?}"),
     }
-    match resolve_transcription_route(&config_with("local", "", "osk"), true).unwrap() {
+    match resolve_transcription_route(&consented("local", "", "osk"), true).unwrap() {
       TranscriptionRoute::Cloud { provider, api_key } => {
         assert_eq!(provider, "openai");
         assert_eq!(api_key, "osk");
@@ -2777,8 +2813,48 @@ mod tests {
   }
 
   #[test]
+  fn local_translate_honours_an_explicit_provider_choice() {
+    // Both keys present: the stored choice decides, not the Groq-first order.
+    let mut c = consented("local", "gsk", "osk");
+    c.translate_provider = "openai".into();
+    match resolve_transcription_route(&c, true).unwrap() {
+      TranscriptionRoute::Cloud { provider, api_key } => {
+        assert_eq!(provider, "openai");
+        assert_eq!(api_key, "osk");
+      }
+      other => panic!("expected openai, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn local_translate_ignores_a_choice_whose_key_is_gone() {
+    // The user picked OpenAI, then cleared that key: fall back rather than
+    // failing with an empty bearer token.
+    let mut c = consented("local", "gsk", "");
+    c.translate_provider = "openai".into();
+    match resolve_transcription_route(&c, true).unwrap() {
+      TranscriptionRoute::Cloud { provider, .. } => assert_eq!(provider, "groq"),
+      other => panic!("expected groq fallback, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn local_translate_blocks_until_the_upload_is_acknowledged() {
+    // A key alone is not enough — the clip only leaves the device on consent.
+    let err = resolve_transcription_route(&config_with("local", "gsk", ""), true).unwrap_err();
+    assert_eq!(err, TRANSLATE_NEEDS_CONSENT);
+  }
+
+  #[test]
+  fn plain_local_dictation_never_needs_consent() {
+    // Consent gates translate only; ordinary dictation stays on-device.
+    let route = resolve_transcription_route(&config_with("local", "", ""), false).unwrap();
+    assert!(matches!(route, TranscriptionRoute::Local));
+  }
+
+  #[test]
   fn local_translate_without_any_cloud_key_errors_clearly() {
-    let err = resolve_transcription_route(&config_with("local", "", ""), true).unwrap_err();
+    let err = resolve_transcription_route(&consented("local", "", ""), true).unwrap_err();
     assert!(err.contains("cloud API key"), "{err}");
   }
 
