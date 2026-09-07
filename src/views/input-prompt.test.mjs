@@ -1479,6 +1479,11 @@ function makeChunked(overrides = {}) {
     livePartial: null,
     aborted: false,
     stopped: false,
+    accounting: {
+      acceptedSamples: 0, queuedSamples: 0, submittedSamples: 0, completedSamples: 0,
+      queuedChunks: 0, submittedChunks: 0, completedChunks: 0,
+      startedAt: 0, lastPcmAt: null, stopRequestedAt: null, sealedAt: null,
+    },
     ...overrides,
   };
 }
@@ -1672,7 +1677,7 @@ test("finishChunkedLocal reports failed chunks but accepts silence", async () =>
   await assert.rejects(() => prompt.finishChunkedLocal({ chunked: allFailed }));
 
   // Silence decodes to empty text with no error — a legitimate "no speech".
-  const silent = makeChunked({ results: ["", ""], failedChunks: 0 });
+  const silent = makeChunked({ results: ["", ""], failedChunks: 0, stopped: true });
   assert.equal(await prompt.finishChunkedLocal({ chunked: silent }), "");
 });
 
@@ -1837,6 +1842,8 @@ async function createLifecycleHarness(options = {}) {
     setTimeout: timers.setTimeout,
     clearTimeout: timers.clearTimeout,
     captureLifecycle: options.captureLifecycle,
+    captureAudioProbe: options.captureAudioProbe,
+    performance: options.performance,
     invoke(command, ...args) {
       calls.push([command, ...args]);
       if (options.invoke) return options.invoke(command, ...args);
@@ -1879,11 +1886,9 @@ async function createLifecycleHarness(options = {}) {
     async setupNemotronLive() {},
     async setupChunkedLocal(session) {
       if (options.batch) return;
-      session.chunked = makeChunked({ sessionId: session.id, sampleRate: options.sampleRate || 16000 });
+      this.createChunkedSession(session, options.sampleRate || 16000);
       const pcm = new Float32Array(320);
-      session.chunked.blocks.push(pcm);
-      session.chunked.blockSamples = pcm.length;
-      chunkDecision.pushFrame(session.chunked.state, 0.1, pcm.length);
+      this.consumeChunkedSamples(session, pcm);
     },
     async typeText(text) { inserted.push(text); return { ok: true, direct: true }; },
     showInsertFailed(text) { recovered.push(text); this._failedText = text; },
@@ -2877,6 +2882,285 @@ test("native stop waits for channel drainage and detects missing samples", async
   assert.equal(session.chunks.length, 1);
   assert.equal(timers.pending.size, 0);
   assert.equal(capture.accepting, false);
+});
+
+async function createChunkCoverageHarness(options = {}) {
+  let h;
+  let clockMs = 0;
+  h = await createLifecycleHarness({
+    batch: true,
+    captureAudioProbe: true,
+    performance: { now: () => clockMs },
+    vadGate: { encodeFullWav: async (blob) => new Uint8Array(await blob.arrayBuffer()) },
+    invoke(command, ...args) {
+      if (command === "stop-native-capture") {
+        const stats = { outputSamples: options.totalSamples ?? h.session.nativeCapture.sampleCount,
+          channelSendFailures: 0 };
+        if (!options.deferStopped) h.prompt.consumeNativeCaptureMessage(h.session, { event: "stopped", stats });
+        return Promise.resolve(stats);
+      }
+      if (command === "transcribe-audio") {
+        if (args[4] === 0 && options.firstDecode) return options.firstDecode.promise;
+        if (options.decodeError) return Promise.reject(new Error("chunk decode failed"));
+        return Promise.resolve(args[4] === 0 ? options.firstText ?? "first words" : options.emptyTail ? "" : "tail words");
+      }
+      if (command === "record-assembled-transcription") return Promise.resolve(args[0]);
+      if (command === "report-audio-probe" && options.probeThrows) throw new Error("diagnostic unavailable");
+      return Promise.resolve(null);
+    },
+  });
+  h.session.audioContext = null;
+  h.prompt.createNativeCapture(h.session);
+  h.prompt.nativeCapture = h.session.nativeCapture;
+  h.prompt.createChunkedSession(h.session, 16000);
+  h.feed = (seconds, silence = false) => {
+    for (let second = 0; second < seconds; second++) {
+      const bytes = new Uint8Array(16000 * 2);
+      if (!silence) for (let offset = 1; offset < bytes.length; offset += 2) bytes[offset] = 64;
+      clockMs += 1000;
+      h.prompt.consumeNativeCaptureMessage(h.session, bytes.buffer);
+    }
+  };
+  h.advance = (ms) => { clockMs += ms; };
+  h.probes = () => h.calls.filter(([command, report]) => command === "report-audio-probe" && report.stage === "chunk")
+    .map(([, report]) => Object.fromEntries(report.detail.split(" ").map((part) => part.split("="))));
+  h.finish = async () => {
+    h.prompt.stopRecording();
+    await h.session.nativeCapture.stopPromise;
+    await settlePromises();
+    await h.session.lifecycle.processPromise;
+    await settlePromises();
+  };
+  return h;
+}
+
+for (const cut of ["silence", "forced"]) {
+  test(`chunk sample coverage preserves every sample across a ${cut} cut and release`, async () => {
+    const h = await createChunkCoverageHarness();
+    if (cut === "silence") { h.feed(55); h.feed(1, true); h.feed(24); }
+    else h.feed(100);
+    const expectedSamples = (cut === "silence" ? 80 : 100) * 16000;
+    await h.finish();
+    assert.deepEqual(h.inserted, ["first words tail words"]);
+    const accounting = h.session.chunked.accounting;
+    for (const stage of ["acceptedSamples", "queuedSamples", "submittedSamples", "completedSamples"]) {
+      assert.equal(accounting?.[stage], expectedSamples, stage);
+    }
+    assert.equal(h.session.nativeCapture.sampleCount, expectedSamples);
+    assert.equal(h.session.chunked.blockSamples, 0);
+    const submittedPcm = h.calls.filter(([command]) => command === "transcribe-audio")
+      .map(([, wav]) => Buffer.from(wav).subarray(44));
+    const capturedPcm = Buffer.from(await h.session.chunks[0].arrayBuffer()).subarray(44);
+    const joinedPcm = Buffer.concat(submittedPcm);
+    assert.equal(joinedPcm.length, capturedPcm.length);
+    // The existing native positive-PCM normalization can round up by one LSB.
+    for (let offset = 0; offset < joinedPcm.length; offset += 2) {
+      assert.ok(Math.abs(joinedPcm.readInt16LE(offset) - capturedPcm.readInt16LE(offset)) <= 1,
+        `captured sample ${offset / 2} remains at its original position`);
+    }
+    const queued = h.probes().filter((probe) => probe.event === "queued");
+    assert.equal(queued.length, 2);
+    assert.equal(queued[0].reason, cut);
+    assert.equal(queued[0].start, "0");
+    assert.equal(queued[0].end, queued[1].start);
+    assert.equal(Number(queued[1].end), expectedSamples);
+    assert.equal(queued[1].reason, "release");
+    const started = h.probes().filter((probe) => probe.event === "request-start");
+    assert.equal(started.length, 2);
+    for (const probe of started) {
+      assert.equal(Number(probe.wav_frames), Number(probe.input_samples));
+      assert.equal(Number(probe.wav_bytes), 44 + Number(probe.wav_frames) * 2);
+      assert.equal(probe.rate, "16000");
+    }
+    const summary = h.probes().find((probe) => probe.event === "final");
+    assert.equal(summary.reason, "complete");
+    assert.equal(summary.completed_chunks, "2");
+    assert.equal(Number(summary.hold_ms), expectedSamples / 16);
+    assert.equal(summary.last_pcm_gap_ms, "0");
+    assert.equal(JSON.stringify(h.probes()).includes("first words"), false);
+  });
+}
+
+test("chunk sample coverage waits for a 20 second tail delivered after stop IPC and a delayed first decode", async () => {
+  const firstDecode = createDeferred();
+  const h = await createChunkCoverageHarness({ firstDecode, deferStopped: true, totalSamples: 76 * 16000 });
+  h.feed(55); h.feed(1, true);
+  await settlePromises();
+  h.prompt.stopRecording();
+  await settlePromises();
+  assert.equal(h.calls.some(([command]) => command === "stop-native-capture"), true);
+  h.feed(20);
+  await settlePromises();
+  assert.equal(h.session.chunked.stopped, false, "stop IPC is not channel drainage");
+  assert.deepEqual(h.inserted, []);
+  h.prompt.consumeNativeCaptureMessage(h.session, { event: "stopped" });
+  await h.session.nativeCapture.stopPromise;
+  await settlePromises();
+  assert.equal(h.session.chunked.accounting?.queuedSamples, 76 * 16000);
+  assert.equal(h.session.chunked.accounting.submittedSamples, 56 * 16000);
+  assert.equal(h.session.chunked.accounting.completedSamples, 0);
+  assert.deepEqual(h.inserted, [], "the first decode is still pending");
+  firstDecode.resolve("first words");
+  await settlePromises();
+  await h.session.lifecycle.processPromise;
+  assert.deepEqual(h.inserted, ["first words tail words"]);
+  assert.equal(h.session.chunked.accounting.completedSamples, 76 * 16000);
+});
+
+for (const fault of ["cleared-tail", "dropped-consumer"]) {
+  test(`chunk sample coverage rejects ${fault} instead of inserting the first chunk`, async () => {
+    const h = await createChunkCoverageHarness();
+    h.feed(55); h.feed(1, true);
+    await settlePromises();
+    if (fault === "dropped-consumer") h.prompt.consumeChunkedSamples = () => {};
+    h.feed(20);
+    if (fault === "cleared-tail") {
+      h.session.chunked.blocks = [];
+      h.session.chunked.blockSamples = 0;
+      h.session.chunked.state = chunkDecision.createChunkState();
+    }
+    await h.finish();
+    assert.deepEqual(h.inserted, [], "an uncovered tail must not be auto-inserted as complete");
+    assert.deepEqual(h.recovered, ["first words"]);
+    assert.equal(h.session.lifecycle.state, "failed");
+    assert.equal(h.calls.some(([command]) => command === "record-assembled-transcription"), false);
+    assert.equal(h.session.audioRecovery.blob.size, 44 + 76 * 16000 * 2);
+    assert.equal(h.session.audioRecovery.wav.length, 44 + 76 * 16000 * 2);
+    assert.equal(h.calls.some(([command]) => command === "save-pending-transcription"), true);
+    assert.equal(h.probes().find((probe) => probe.event === "final").reason, "coverage-mismatch");
+  });
+}
+
+test("chunk sample coverage accepts a 20 second silent tail returning empty text", async () => {
+  const h = await createChunkCoverageHarness({ emptyTail: true });
+  h.feed(55); h.feed(1, true); h.feed(20, true);
+  await h.finish();
+  assert.deepEqual(h.inserted, ["first words"]);
+  assert.equal(h.session.chunked.accounting?.completedSamples, 76 * 16000);
+  assert.equal(h.calls.filter(([command]) => command === "transcribe-audio").length, 2);
+  assert.equal(h.calls.some(([command]) => command === "save-pending-transcription"), false);
+  const results = h.probes().filter((probe) => probe.event === "request-result");
+  assert.equal(results[1].chars, "0");
+  assert.equal(h.session.lifecycle.state, "completed");
+});
+
+test("chunk sample coverage diagnostics report stalled delivery without making wall time an invariant", async () => {
+  const h = await createChunkCoverageHarness();
+  h.feed(55); h.feed(1, true); h.advance(20000);
+  await h.finish();
+  assert.deepEqual(h.inserted, ["first words"]);
+  const summary = h.probes().find((probe) => probe.event === "final");
+  assert.equal(summary?.hold_ms, "76000");
+  assert.equal(summary?.last_pcm_gap_ms, "20000");
+  assert.equal(summary?.native_samples, String(56 * 16000));
+});
+
+test("chunk sample coverage diagnostics cannot fail a healthy recording", async () => {
+  const h = await createChunkCoverageHarness({ probeThrows: true });
+  h.feed(55); h.feed(1, true); h.feed(20);
+  await h.finish();
+  assert.deepEqual(h.inserted, ["first words tail words"]);
+});
+
+test("chunk sample coverage release diagnostics retain a stalled gap before a final tiny PCM packet", async () => {
+  const h = await createChunkCoverageHarness({ deferStopped: true, totalSamples: 56 * 16000 + 1, emptyTail: true });
+  h.feed(55); h.feed(1, true); h.advance(20000);
+  h.prompt.stopRecording();
+  await settlePromises();
+  assert.equal(h.probes().find((probe) => probe.event === "stop").last_pcm_gap_ms, "20000");
+  h.prompt.consumeNativeCaptureMessage(h.session, new Uint8Array([0, 0]).buffer);
+  h.prompt.consumeNativeCaptureMessage(h.session, { event: "stopped" });
+  await h.session.nativeCapture.stopPromise;
+  await settlePromises();
+  await h.session.lifecycle.processPromise;
+  assert.equal(h.probes().find((probe) => probe.event === "seal").last_pcm_gap_ms, "0");
+  assert.equal(h.probes().find((probe) => probe.event === "stop").last_pcm_gap_ms, "20000");
+  assert.deepEqual(h.inserted, ["first words"]);
+});
+
+test("chunk sample coverage reports Unicode scalar counts matching Rust", async () => {
+  const h = await createChunkCoverageHarness({ firstText: "A😀B" });
+  h.feed(2);
+  await h.finish();
+  const result = h.probes().find((probe) => probe.event === "request-result");
+  assert.equal(result.chars, "3");
+  assert.deepEqual(h.inserted, ["A😀B"]);
+});
+
+test("chunk sample coverage logs fit the backend limit for day-long 192 kHz recordings", () => {
+  const reports = [];
+  const V = loadForChunking(async () => null);
+  const prompt = createBarePrompt(V, { reportAudioProbe(_session, _stage, detail) { reports.push(detail); } });
+  const session = { id: 9999999 };
+  const chunked = prompt.createChunkedSession(session, 192000);
+  const samples = 24 * 3600 * 192000;
+  Object.assign(chunked.accounting, {
+    acceptedSamples: samples, queuedSamples: samples, submittedSamples: samples, completedSamples: samples,
+    queuedChunks: 2000, submittedChunks: 2000, completedChunks: 2000,
+    startedAt: 0, stopRequestedAt: 86400000, sealedAt: 86400000, lastPcmAt: 86380000,
+  });
+  session.nativeCapture = { sampleCount: samples };
+  chunked.blockSamples = 75 * 192000;
+  for (const event of ["stop", "seal", "final", "request-result"]) {
+    prompt.reportChunkProbe(chunked, event, "coverage-mismatch", {
+      chunkIndex: 2000, start: samples - chunked.blockSamples, end: samples,
+      inputSamples: chunked.blockSamples, wavBytes: 75 * 16000 * 2 + 44,
+      wavFrames: 75 * 16000, chars: 50000,
+    });
+  }
+  for (const detail of reports) {
+    assert.ok(detail.length <= 512, `diagnostic was ${detail.length} characters`);
+    assert.match(detail.slice(0, 512), /last_pcm_gap_ms=20000/);
+  }
+});
+
+test("chunk sample coverage compares original 48 kHz samples rather than resampled WAV frames", async () => {
+  const reports = [];
+  const V = loadForChunking(async (command, ...args) => command === "transcribe-audio" ? `part${args[4]}` : null);
+  const prompt = createBarePrompt(V, {
+    reportAudioProbe(_session, _stage, detail) { reports.push(Object.fromEntries(detail.split(" ").map((part) => part.split("=")))); },
+    async resampleTo16k(pcm, rate) { return new Float32Array(Math.ceil(pcm.length * 16000 / rate)); },
+  });
+  const session = { id: 7 };
+  const chunked = prompt.createChunkedSession(session, 48000);
+  for (let second = 0; second < 80; second++) {
+    prompt.consumeChunkedSamples(session, new Float32Array(48000).fill(second === 55 ? 0 : 0.5));
+  }
+  prompt.stopChunkedCapture(session);
+  assert.equal(await prompt.finishChunkedLocal(session), "part0 part1");
+  assert.equal(chunked.accounting.completedSamples, 80 * 48000);
+  const starts = reports.filter((report) => report.event === "request-start");
+  assert.equal(starts.length, 2);
+  for (const start of starts) {
+    assert.equal(start.rate, "48000");
+    assert.equal(Number(start.input_samples), Number(start.wav_frames) * 3);
+  }
+});
+
+test("chunk sample coverage preserves existing decode-error and cancellation behavior", async () => {
+  const failed = await createChunkCoverageHarness({ decodeError: true });
+  failed.feed(55); failed.feed(1, true);
+  await settlePromises();
+  failed.feed(20);
+  await failed.finish();
+  assert.deepEqual(failed.inserted, []);
+  assert.equal(failed.session.audioRecovery.blob.size, 44 + 76 * 16000 * 2);
+  assert.equal(failed.probes().find((probe) => probe.event === "final").reason, "decode-error");
+
+  const pending = createDeferred();
+  const cancelled = await createChunkCoverageHarness({ firstDecode: pending });
+  cancelled.feed(55); cancelled.feed(1, true);
+  await settlePromises();
+  cancelled.feed(20);
+  cancelled.prompt.stopRecording();
+  cancelled.prompt.cancelRecording();
+  await cancelled.session.nativeCapture.stopPromise;
+  pending.resolve("late first words");
+  await settlePromises();
+  assert.deepEqual(cancelled.inserted, []);
+  assert.deepEqual(cancelled.recovered, []);
+  assert.equal(cancelled.calls.some(([command]) => command === "save-pending-transcription"), false);
+  assert.equal(cancelled.session.chunked.accounting.completedSamples, 0);
 });
 
 test("native stop timeout after Escape cannot recover or insert the cancelled clip", async () => {

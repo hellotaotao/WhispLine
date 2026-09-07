@@ -1873,6 +1873,20 @@ class VoiceInputPrompt {
       aborted: false,
       stopped: false,
       recordingSession,
+      // All custody counters use the capture rate, before WAV resampling.
+      accounting: {
+        acceptedSamples: 0,
+        queuedSamples: 0,
+        submittedSamples: 0,
+        completedSamples: 0,
+        queuedChunks: 0,
+        submittedChunks: 0,
+        completedChunks: 0,
+        startedAt: performance.now(),
+        lastPcmAt: null,
+        stopRequestedAt: null,
+        sealedAt: null,
+      },
     };
     recordingSession.chunked = chunked;
     return chunked;
@@ -1884,6 +1898,8 @@ class VoiceInputPrompt {
       return;
     }
     pushOnsetBlock(recordingSession.onsetProbe, samples, recordingSession.audioContext);
+    chunked.accounting.acceptedSamples += samples.length;
+    chunked.accounting.lastPcmAt = performance.now();
     chunked.blocks.push(samples);
     chunked.blockSamples += samples.length;
     window.SayTypeChunk.pushFrame(
@@ -1893,7 +1909,38 @@ class VoiceInputPrompt {
     );
     const cut = window.SayTypeChunk.decideCut(chunked.state, chunked.sampleRate);
     if (cut) {
-      this.closeChunk(chunked, cut.cutAtSample);
+      this.closeChunk(chunked, cut.cutAtSample, cut.reason);
+    }
+  }
+
+  reportChunkProbe(chunked, event, reason, metadata = {}, slow = false) {
+    // Numeric custody metadata only: never include PCM, text, or error messages.
+    // Even formatting a diagnostic must not interrupt capture or decoding.
+    try {
+      const a = chunked.accounting;
+      const session = chunked.recordingSession || { id: chunked.sessionId };
+      const now = performance.now();
+      const stopAt = a.stopRequestedAt ?? a.sealedAt ?? now;
+      const gapAt = a.sealedAt ?? now;
+      this.reportAudioProbe(session, "chunk", [
+        `event=${event}`, `reason=${reason}`, `session=${chunked.sessionId}`,
+        `chunk=${metadata.chunkIndex ?? -1}`, `rate=${chunked.sampleRate}`,
+        `hold_ms=${Math.max(0, Math.round(stopAt - a.startedAt))}`,
+        `last_pcm_gap_ms=${a.lastPcmAt === null ? -1 : Math.max(0, Math.round(gapAt - a.lastPcmAt))}`,
+        `start=${metadata.start ?? -1}`, `end=${metadata.end ?? -1}`,
+        `input_samples=${metadata.inputSamples ?? 0}`,
+        `wav_bytes=${metadata.wavBytes ?? -1}`, `wav_frames=${metadata.wavFrames ?? -1}`,
+        `chars=${metadata.chars ?? -1}`,
+        `accepted=${a.acceptedSamples}`, `buffered=${chunked.blockSamples}`,
+        `queued=${a.queuedSamples}`, `submitted=${a.submittedSamples}`,
+        `completed=${a.completedSamples}`,
+        `queued_chunks=${a.queuedChunks}`, `submitted_chunks=${a.submittedChunks}`,
+        `completed_chunks=${a.completedChunks}`,
+        `native_samples=${session.nativeCapture?.sampleCount ?? -1}`,
+        `stopped=${Number(chunked.stopped)}`,
+      ].join(" "), slow);
+    } catch {
+      // Diagnostics remain best effort even during teardown.
     }
   }
 
@@ -1953,7 +2000,10 @@ class VoiceInputPrompt {
 
   // Split the buffered blocks at `cutAtSample`, hand the head off to decode, and
   // carry the tail over as the opening of the next chunk.
-  closeChunk(chunked, requestedCut) {
+  closeChunk(chunked, requestedCut, reason = "manual") {
+    if (chunked.blocks.reduce((total, block) => total + block.length, 0) !== chunked.blockSamples) {
+      throw new Error("Local chunk audio buffer sample mismatch");
+    }
     const cutAtSample = Math.min(requestedCut, chunked.blockSamples);
     const head = new Float32Array(cutAtSample);
     const tail = [];
@@ -1975,15 +2025,25 @@ class VoiceInputPrompt {
     chunked.blockSamples = tail.reduce((total, block) => total + block.length, 0);
     chunked.state = window.SayTypeChunk.stateAfterCut(chunked.state, cutAtSample);
     if (head.length) {
-      this.enqueueChunkDecode(chunked, head);
+      this.enqueueChunkDecode(chunked, head, reason);
     }
   }
 
-  enqueueChunkDecode(chunked, pcm) {
+  enqueueChunkDecode(chunked, pcm, reason = "manual") {
     const recordingSession = chunked.recordingSession ||
       this.recordingSessions?.get(chunked.sessionId) || { id: chunked.sessionId, chunked };
     this.ensureRecordingSession(recordingSession);
     const chunkIndex = chunked.nextChunkIndex++;
+    const accounting = chunked.accounting;
+    const metadata = {
+      chunkIndex,
+      start: accounting.queuedSamples,
+      end: accounting.queuedSamples + pcm.length,
+      inputSamples: pcm.length,
+    };
+    accounting.queuedSamples += pcm.length;
+    accounting.queuedChunks += 1;
+    this.reportChunkProbe(chunked, "queued", reason, metadata);
     chunked.results[chunkIndex] = "";
     chunked.queue = chunked.queue.then(async () => {
       if (chunked.aborted) {
@@ -1995,17 +2055,38 @@ class VoiceInputPrompt {
         if (chunked.aborted) {
           return;
         }
+        // encodeChunkWav emits a standard PCM16 mono WAV. Inspect only its
+        // header for diagnostics; never equate resampled frames with input PCM.
+        try {
+          metadata.wavBytes = wav.byteLength;
+          if (wav.byteLength >= 44) {
+            const header = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+            const frameBytes = header.getUint16(32, true);
+            if (frameBytes > 0 && header.getUint32(40, true) + 44 === wav.byteLength) {
+              metadata.wavFrames = header.getUint32(40, true) / frameBytes;
+            }
+          }
+        } catch {
+          // Header diagnostics do not affect an otherwise valid request.
+        }
         chunked.inFlightChunkIndex = chunkIndex;
-        const text = await this.waitForSessionStage(recordingSession, "chunk-ipc", () => ipc.invoke(
-          "transcribe-audio",
-          wav,
-          false,
-          "audio/wav",
-          chunked.sessionId,
-          chunkIndex
-        ), TRANSCRIPTION_STAGE_TIMEOUT_MS, chunkIndex);
+        const text = await this.waitForSessionStage(recordingSession, "chunk-ipc", () => {
+          const request = ipc.invoke("transcribe-audio", wav, false, "audio/wav",
+            chunked.sessionId, chunkIndex);
+          accounting.submittedSamples += pcm.length;
+          accounting.submittedChunks += 1;
+          this.reportChunkProbe(chunked, "request-start", reason, metadata);
+          return request;
+        }, TRANSCRIPTION_STAGE_TIMEOUT_MS, chunkIndex);
         if (chunked.aborted || this.isSessionCancelled(recordingSession)) return;
         chunked.results[chunkIndex] = typeof text === "string" ? text : "";
+        accounting.completedSamples += pcm.length;
+        accounting.completedChunks += 1;
+        let chars = 0;
+        for (const _ of chunked.results[chunkIndex]) chars += 1;
+        this.reportChunkProbe(chunked, "request-result", "complete", {
+          ...metadata, chars,
+        });
         // Keep this recording's worker due for its successor. Reset-safe
         // runtimes retain the same process; one-audio runtimes replace it. The
         // true final chunk has neither condition and leaves no unused process.
@@ -2013,6 +2094,9 @@ class VoiceInputPrompt {
           successorQueued: chunked.nextChunkIndex > chunkIndex + 1,
         });
       } catch (error) {
+        this.reportChunkProbe(chunked, "request-result",
+          this.isSessionCancelled(recordingSession) || chunked.aborted ? "cancelled" : "error",
+          metadata, true);
         if (this.isSessionCancelled(recordingSession) || chunked.aborted) return;
         // Never label or insert a join with a missing chunk as a complete final.
         // Preserve successful chunks for explicit Copy instead, and stop queued
@@ -2083,6 +2167,7 @@ class VoiceInputPrompt {
       return;
     }
     chunked.stopped = true;
+    chunked.accounting.sealedAt = performance.now();
     if (chunked.node) {
       chunked.node.port.onmessage = null;
     }
@@ -2095,8 +2180,9 @@ class VoiceInputPrompt {
     // Everything since the last cut becomes the final chunk — unless the user
     // cancelled, in which case decoding it would only be killed moments later.
     if (flush && chunked.blockSamples > 0 && !chunked.aborted) {
-      this.closeChunk(chunked, chunked.blockSamples);
+      this.closeChunk(chunked, chunked.blockSamples, "release");
     }
+    this.reportChunkProbe(chunked, "seal", flush ? "release" : "cancelled");
     this.reportAudioOnset(recordingSession);
   }
 
@@ -2106,12 +2192,35 @@ class VoiceInputPrompt {
       throw new Error("chunked local session was not initialized");
     }
     await chunked.queue;
+    if (this.isSessionCancelled(recordingSession)) {
+      this.reportChunkProbe(chunked, "final", "cancelled");
+    }
     this.assertSessionActive(recordingSession);
     const text = window.SayTypeChunk.joinChunkTexts(chunked.results);
     // Silence is legitimate; a missing chunk is not a complete dictation.
     if (chunked.failedChunks > 0) {
+      this.reportChunkProbe(chunked, "final", "decode-error", {}, true);
       throw chunked.failure || new Error("local chunked transcription incomplete");
     }
+    if (!recordingSession.captureIncomplete) {
+      const a = chunked.accounting;
+      const capture = recordingSession.nativeCapture;
+      const covered = a && chunked.stopped && !chunked.aborted &&
+        chunked.blockSamples === 0 && chunked.blocks.length === 0 &&
+        [a.acceptedSamples, a.queuedSamples, a.submittedSamples, a.completedSamples,
+          a.queuedChunks, a.submittedChunks, a.completedChunks].every(Number.isSafeInteger) &&
+        a.acceptedSamples === a.queuedSamples && a.queuedSamples === a.submittedSamples &&
+        a.submittedSamples === a.completedSamples &&
+        a.queuedChunks === chunked.nextChunkIndex && a.queuedChunks === a.submittedChunks &&
+        a.submittedChunks === a.completedChunks &&
+        (!capture || (capture.stopped && !capture.accepting && capture.sampleCount === a.acceptedSamples));
+      if (!covered) {
+        this.reportChunkProbe(chunked, "final", "coverage-mismatch", {}, true);
+        throw new Error("Local chunk audio coverage incomplete");
+      }
+    }
+    this.reportChunkProbe(chunked, "final", recordingSession.captureIncomplete ? "capture-incomplete" : "complete",
+      {}, !!recordingSession.captureIncomplete);
     return text;
   }
 
@@ -2776,6 +2885,10 @@ class VoiceInputPrompt {
       const lifecycle = this.ensureRecordingSession(recordingSession);
       lifecycle.state = "waiting-stop";
       lifecycle.stopRequestedAt = Date.now();
+      if (recordingSession.chunked) {
+        recordingSession.chunked.accounting.stopRequestedAt = performance.now();
+        this.reportChunkProbe(recordingSession.chunked, "stop", shouldCancel ? "cancelled" : "release");
+      }
       this.reportLifecycle(
         recordingSession,
         recordingSession.nativeCapture ? "capture" : "recorder-stop",

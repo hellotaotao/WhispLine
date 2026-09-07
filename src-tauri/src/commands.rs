@@ -57,6 +57,7 @@ pub struct AudioProbeReport {
 #[serde(rename_all = "kebab-case")]
 pub enum AudioProbeStage {
   Capture,
+  Chunk,
   Onset,
   Envelope,
   Prime,
@@ -66,6 +67,7 @@ impl AudioProbeStage {
   fn as_str(&self) -> &'static str {
     match self {
       Self::Capture => "audio-capture",
+      Self::Chunk => "audio-chunk",
       Self::Onset => "audio-onset",
       Self::Envelope => "audio-envelope",
       Self::Prime => "audio-prime",
@@ -1050,6 +1052,19 @@ pub async fn cancel_live_transcription(session_id: u64) -> Result<bool, String> 
   Ok(crate::nemotron_asr::cancel_live_session(session_id).await)
 }
 
+fn scrub_transcription_with_chunk_diagnostics(raw: &str) -> (String, String) {
+  let text = crate::scrub::scrub_transcription(raw);
+  // Keep result content out of the persistent diagnostic log, including when
+  // a legitimate empty result or the existing scrubber produces no text.
+  let detail = format!(
+    "raw_chars={} final_chars={} empty={}",
+    raw.chars().count(),
+    text.chars().count(),
+    text.is_empty(),
+  );
+  (text, detail)
+}
+
 #[tauri::command]
 pub async fn transcribe_audio(
   app: AppHandle,
@@ -1116,6 +1131,15 @@ pub async fn transcribe_audio(
       audio_buffer.len(),
       MAX_AUDIO_SIZE_BYTES
     ));
+  }
+
+  if let Some(chunk_index) = chunk_index {
+    log::info!(
+      target: "saytype_lifecycle",
+      "audio-chunk:received session_id={} chunk_index={chunk_index} bytes={}",
+      session_id.map_or_else(|| "none".to_owned(), |id| id.to_string()),
+      audio_buffer.len(),
+    );
   }
 
   let config = settings::read_config().map_err(stringify_error)?;
@@ -1200,7 +1224,14 @@ pub async fn transcribe_audio(
     // per chunk so the streamed preview matches the recorded text.
     // Partial whole clips are also saved through the frontend recovery path.
     Ok(raw) if chunk_index.is_some() || capture_incomplete => {
-      let text = crate::scrub::scrub_transcription(&raw);
+      let (text, detail) = scrub_transcription_with_chunk_diagnostics(&raw);
+      if let Some(chunk_index) = chunk_index {
+        log::info!(
+          target: "saytype_lifecycle",
+          "audio-chunk:complete session_id={} chunk_index={chunk_index} {detail}",
+          session_id.map_or_else(|| "none".to_owned(), |id| id.to_string()),
+        );
+      }
       if capture_incomplete && !frontend_owns_recovery {
         if let Some(id) = failure_id.as_deref() {
           if let Err(error) = history::refresh_incomplete_retry(id, &text) {
@@ -2355,9 +2386,54 @@ mod tests {
   #[test]
   fn audio_probe_stage_labels_match_the_log_grep() {
     assert_eq!(AudioProbeStage::Capture.as_str(), "audio-capture");
+    assert_eq!(AudioProbeStage::Chunk.as_str(), "audio-chunk");
     assert_eq!(AudioProbeStage::Onset.as_str(), "audio-onset");
     assert_eq!(AudioProbeStage::Envelope.as_str(), "audio-envelope");
     assert_eq!(AudioProbeStage::Prime.as_str(), "audio-prime");
+  }
+
+  #[test]
+  fn audio_probe_accepts_chunk_accounting_reports() {
+    let report: AudioProbeReport = serde_json::from_value(json!({
+      "sessionId": 17,
+      "stage": "chunk",
+      "detail": "event=finalize received_samples=1200000 enqueued_samples=1200000",
+    })).unwrap();
+    assert_eq!(report.stage.as_str(), "audio-chunk");
+    assert_eq!(report.session_id, 17);
+    assert!(!report.slow);
+  }
+
+  #[test]
+  fn chunk_result_diagnostics_keep_text_private_and_count_characters() {
+    let raw = "secret caf\u{00e9} \u{1f680}";
+    let (text, detail) = scrub_transcription_with_chunk_diagnostics(raw);
+    assert_eq!(text, raw);
+    assert_eq!(detail, "raw_chars=13 final_chars=13 empty=false");
+    assert!(!detail.contains("secret"));
+    assert!(!detail.contains("caf"));
+    assert!(!detail.contains('\u{1f680}'));
+  }
+
+  #[test]
+  fn chunk_result_diagnostics_preserve_legitimate_empty_results() {
+    for raw in ["", " \n\t "] {
+      let (text, detail) = scrub_transcription_with_chunk_diagnostics(raw);
+      assert_eq!(text, "");
+      assert_eq!(detail, format!(
+        "raw_chars={} final_chars=0 empty=true", raw.chars().count(),
+      ));
+    }
+  }
+
+  #[test]
+  fn chunk_result_diagnostics_distinguish_scrubbed_empty_from_raw_empty() {
+    let (text, detail) = scrub_transcription_with_chunk_diagnostics(SEED_ZH);
+    assert_eq!(text, "");
+    assert_eq!(detail, format!(
+      "raw_chars={} final_chars=0 empty=true", SEED_ZH.chars().count(),
+    ));
+    assert!(!detail.contains(SEED_ZH));
   }
 
   use super::*;
