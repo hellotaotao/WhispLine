@@ -131,8 +131,8 @@ git commit -am "chore(release): bump version to X.Y.Z"
 git tag vX.Y.Z && git push origin main --tags
 ```
 
-Then review the draft Release on GitHub and click Publish (or set
-`releaseDraft: false` to auto-publish). **Publishing is also the auto-update
+The workflow publishes directly (`releaseDraft: false`), without a manual draft
+review step. **Publishing is also the auto-update
 rollout gate**: installed clients (v1.4.0+, the first updater-capable release)
 poll `releases/latest/download/latest.json` on startup + daily, auto-download in
 the background, and offer "Restart to update" in the tray + settings — the
