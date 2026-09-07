@@ -167,6 +167,8 @@
         helpItem3: "Use clear, descriptive language",
         helpItem4:
           "This content will be sent as a prompt to improve transcription accuracy",
+        localNote:
+          "The local engine does not receive the dictionary — it goes out as a prompt parameter, which only the cloud APIs accept. Your entries are kept and apply again on Groq or OpenAI.",
         punctuationTitle: "Automatic punctuation for Chinese",
         punctuationDesc:
           "When transcribing Chinese with a Whisper model, SayType automatically appends the fixed example below after your dictionary so punctuation comes out reliably. It contains no personal data, and is not added for GPT models or other languages.",
@@ -254,6 +256,8 @@
           description: "Choose the default language for voice transcription.",
           auto: "Auto-detect",
           selectTitle: "Select default language for transcription",
+          localNote:
+            "The local engine works out the language itself — this setting is not passed to it. Switch to Groq or OpenAI and it applies again.",
         },
         autoLaunch: {
           title: "Start with system",
@@ -312,6 +316,14 @@
           openaiPlaceholder: "OpenAI API key",
           reveal: "Show key",
           hide: "Hide key",
+        },
+        translateCloud: {
+          title: "Cloud translation (optional)",
+          description:
+            "Shift + Alt translates to English. The local engine only transcribes, so that one goes to a cloud provider.",
+          uploadNote:
+            "Only the clip you record with Shift + Alt is uploaded; ordinary dictation stays on this device. Leave the key empty to keep translation off.",
+          selectTitle: "Select the provider translation uses",
         },
         model: {
           title: "Model Selection",
@@ -413,6 +425,12 @@
         checkMicrophone: "Please check your microphone settings",
         textInserted: "Text inserted",
         insertFailed: "Insertion failed — copy it from History",
+        translateConsentTitle: "Send this clip to {provider}?",
+        translateConsentHint:
+          "Translation cannot run locally. Ordinary dictation stays on this device.",
+        translateConsentAccept: "Upload & translate",
+        translateConsentDecline: "Not now",
+        translateConsentDeclined: "Not sent — nothing left this device.",
         insertFailedTitle: "Insertion failed",
         insertFailedHint: "Click Copy, then paste it yourself",
         copyButton: "Copy",
@@ -577,6 +595,8 @@
         helpItem2: "提供上下文或示例以提升识别效果",
         helpItem3: "使用清晰、具体的描述",
         helpItem4: "此内容将作为提示发送，以提升转录准确率",
+        localNote:
+          "本地引擎收不到词典——词典是作为 prompt 参数发出去的，只有云端 API 认。词条不会丢，换回 Groq 或 OpenAI 就继续生效。",
         punctuationTitle: "中文标点自动优化",
         punctuationDesc:
           "使用 Whisper 模型转录中文时，SayType 会在你的词典之后自动追加下面这句固定示例，让标点稳定输出。它不含任何隐私内容；GPT 系列模型和其它语言不会追加。",
@@ -664,6 +684,8 @@
           description: "选择语音转录的默认语言。",
           auto: "自动检测",
           selectTitle: "选择转录默认语言",
+          localNote:
+            "本地引擎自己判断语言，这一项不会传给它。换成 Groq 或 OpenAI 后立即生效。",
         },
         autoLaunch: {
           title: "开机自启",
@@ -721,6 +743,14 @@
           openaiPlaceholder: "OpenAI API 密钥",
           reveal: "显示密钥",
           hide: "隐藏密钥",
+        },
+        translateCloud: {
+          title: "云端翻译（可选）",
+          description:
+            "按 Shift + Alt 是边说边译成英文。本地引擎只做转写，翻译这一路要走云端。",
+          uploadNote:
+            "只有按 Shift + Alt 录的那一段会上传，平时听写不出这台电脑。密钥留空就不启用翻译。",
+          selectTitle: "选择翻译使用的服务商",
         },
         model: {
           title: "模型选择",
@@ -821,6 +851,11 @@
         checkMicrophone: "请检查麦克风设置",
         textInserted: "文本已插入",
         insertFailed: "插入失败，可在历史记录中复制",
+        translateConsentTitle: "把这段发给 {provider}？",
+        translateConsentHint: "翻译跑不了本地。平时的听写不出这台电脑。",
+        translateConsentAccept: "上传并翻译",
+        translateConsentDecline: "这次不用",
+        translateConsentDeclined: "没有发出去，音频留在本机。",
         insertFailedTitle: "插入失败",
         insertFailedHint: "点「复制」，自己粘贴一下",
         copyButton: "复制",

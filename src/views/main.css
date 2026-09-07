@@ -187,6 +187,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Dictionary: shown only while a local engine is selected, where the prompt
+   the dictionary becomes never reaches the decoder. */
+.dictionary-local-note {
+  margin-bottom: 16px;
+  padding: 12px 15px;
+  border-radius: 10px;
+  background: var(--pill-warn-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--pill-warn-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dictionary-local-note.hidden {
+  display: none;
+}
+
 /* Content */
 .main-content {
   flex: 1;

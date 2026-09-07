@@ -1799,6 +1799,12 @@ async function loadDictionary() {
   } catch (error) {
     console.error("Error loading dictionary:", error);
   }
+  // The dictionary rides along as the transcription request's `prompt`, which
+  // only the cloud APIs take — the local CLI invocation has no such argument.
+  // Say so on the page instead of letting entries look active when they aren't.
+  document
+    .getElementById("dictionaryLocalNote")
+    ?.classList.toggle("hidden", cachedSettings?.provider !== "local");
 }
 
 async function saveDictionary() {

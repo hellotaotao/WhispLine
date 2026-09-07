@@ -92,9 +92,39 @@ test("local engines are provider choices while cloud providers retain model sele
   assert.doesNotMatch(transcription, /option value="local"/);
   assert.match(transcription, /id="modelItem"/);
   assert.match(settingsJs, /localModelForProvider/);
-  assert.match(settingsJs, /modelItem\?\.classList\.toggle\("hidden", provider === "local"\)/);
+  assert.match(settingsJs, /modelItem\?\.classList\.toggle\("hidden", isLocal\)/);
   assert.match(settingsJs, /provider = localModel \? "local" : providerChoice/);
   assert.match(settingsJs, /model: localModel \|\| document\.getElementById\("modelSelect"\)/);
+});
+
+test("a local engine states what it cannot use instead of hiding it", () => {
+  // Language and dictionary reach the cloud APIs as request parameters; the
+  // local CLI invocation carries neither. Both said nothing before, so a
+  // selection looked applied when it was inert.
+  assert.match(mainHtml, /id="languageLocalNote"/);
+  assert.match(mainHtml, /id="dictionaryLocalNote"/);
+  assert.match(settingsJs, /languageSelect\.disabled = isLocal/);
+  assert.match(settingsJs, /getElementById\("languageLocalNote"\)\?\.classList\.toggle\("hidden", !isLocal\)/);
+  assert.match(mainJs, /getElementById\("dictionaryLocalNote"\)/);
+  for (const locale of ["settings", "dictionary"]) {
+    assert.ok(i18nJs.includes("localNote"), `${locale} localNote copy is missing`);
+  }
+});
+
+test("cloud translation stays reachable while a local engine is selected", () => {
+  // The key field used to be hidden outright on a local engine, so a failed
+  // translation pointed at Settings and Settings had nowhere to type a key.
+  assert.match(settingsJs, /apiKeyItem\?\.classList\.remove\("hidden"\)/);
+  assert.match(mainHtml, /id="translateProviderSelect"/);
+  assert.match(mainHtml, /id="translateUploadNote"/);
+  assert.match(settingsJs, /settings\.translateCloud\.title/);
+  assert.match(settingsJs, /translateProvider: document\.getElementById\("translateProviderSelect"\)/);
+  // Backend: an explicit choice, a consent gate, and a code the prompt matches.
+  assert.ok(settingsRs.includes("pub translate_provider: String"));
+  assert.ok(settingsRs.includes("pub translate_consented: bool"));
+  assert.ok(settingsRs.includes("pub fn normalize_translate_provider"));
+  assert.ok(commandsRs.includes("TRANSLATE_NEEDS_CONSENT"));
+  assert.ok(commandsRs.includes("config.translate_consented = existing.translate_consented"));
 });
 
 test("onboarding, Home, and tray expose Qwen and Nemotron as separate local engines", () => {

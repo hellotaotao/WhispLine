@@ -391,6 +391,11 @@ class VoiceInputPrompt {
     this.modelBadge = document.getElementById("modelBadge");
     this.copyBtn = document.getElementById("copyBtn");
     this.copyBtnLabel = document.getElementById("copyBtnLabel");
+    this.consentActions = document.getElementById("consentActions");
+    this.consentAcceptBtn = document.getElementById("consentAcceptBtn");
+    this.consentDeclineBtn = document.getElementById("consentDeclineBtn");
+    this.translateConsented = false;
+    this.translateProvider = "";
     this.currentProvider = null;
     this.currentModel = "";
     this.currentLanguage = "auto";
@@ -716,6 +721,8 @@ class VoiceInputPrompt {
       this.currentModel = settings.model || "";
       this.currentLanguage = settings.language || "auto";
       this.currentMicrophone = settings.microphone || "default";
+      this.translateConsented = !!settings.translateConsented;
+      this.translateProvider = settings.translateProvider || "";
       this.updateShortcutHint(
         settings.shortcut || DEFAULT_RECORD_SHORTCUT,
         settings.translateShortcut || DEFAULT_TRANSLATE_SHORTCUT
@@ -788,6 +795,49 @@ class VoiceInputPrompt {
       return;
     }
     this.modelBadge.textContent = this.resolveActiveModel() || "";
+  }
+
+  // --- Translate-upload consent ---
+  // Display name for the provider the clip would go to. Mirrors the backend's
+  // normalize_translate_provider fallback (Groq first) so the notice names the
+  // provider that will actually be used.
+  translateProviderLabel() {
+    return this.translateProvider === "openai" ? "OpenAI" : "Groq";
+  }
+
+  // Local dictation never leaves the device; translate mode has to. Ask once,
+  // here rather than in Settings, because this is the moment it actually
+  // matters — the clip exists and is about to be sent. Resolves true to send.
+  askTranslateConsent(providerLabel) {
+    if (!this.consentActions || !this.consentAcceptBtn || !this.consentDeclineBtn) {
+      // No UI to ask with: refuse rather than upload unasked.
+      return Promise.resolve(false);
+    }
+    this.clearHidePromptTimer();
+    this.promptElement.classList.remove("recording");
+    this.promptText.textContent = t("inputPrompt.translateConsentTitle", {
+      provider: providerLabel,
+    });
+    this.statusText.textContent = t("inputPrompt.translateConsentHint");
+    this.statusText.style.color = "var(--status-warning)";
+    this.consentAcceptBtn.textContent = t("inputPrompt.translateConsentAccept");
+    this.consentDeclineBtn.textContent = t("inputPrompt.translateConsentDecline");
+    if (this.waveContainer) this.waveContainer.style.display = "none";
+    this.consentActions.hidden = false;
+
+    return new Promise((resolve) => {
+      const finish = (accepted) => {
+        this.consentActions.hidden = true;
+        if (this.waveContainer) this.waveContainer.style.display = "";
+        this.consentAcceptBtn.removeEventListener("click", onAccept);
+        this.consentDeclineBtn.removeEventListener("click", onDecline);
+        resolve(accepted);
+      };
+      const onAccept = () => finish(true);
+      const onDecline = () => finish(false);
+      this.consentAcceptBtn.addEventListener("click", onAccept);
+      this.consentDeclineBtn.addEventListener("click", onDecline);
+    });
   }
 
   // --- Insertion-failure "click to Copy" UI (never an automatic clipboard touch) ---
@@ -3075,6 +3125,36 @@ class VoiceInputPrompt {
           this.scheduleHidePrompt(1500);
         }
         return;
+      }
+
+      // Translate on a local engine has to reach a cloud provider, so this clip
+      // leaves the device while ordinary dictation never does. Ask before the
+      // upload rather than after a rejection: the recording is already in hand
+      // and, unlike during recording, the user's hands are off the shortcut.
+      if (
+        translateMode &&
+        (recordingSession.provider || this.currentProvider) === "local" &&
+        !this.translateConsented
+      ) {
+        const accepted = await this.askTranslateConsent(this.translateProviderLabel());
+        if (!accepted) {
+          terminalState = "cancelled";
+          this.removePendingInsertion(sessionId);
+          if (allowUi()) {
+            this.statusText.textContent = t("inputPrompt.translateConsentDeclined");
+            this.statusText.style.color = "var(--status-warning)";
+            this.scheduleHidePrompt(2000);
+          }
+          return;
+        }
+        // Best-effort: a failed write means we ask again next time, which is
+        // the safe direction. Never block the translation the user just asked for.
+        try {
+          await ipc.invoke("set-translate-consent", true);
+        } catch (error) {
+          console.warn("Could not persist translate consent:", error);
+        }
+        this.translateConsented = true;
       }
 
       const useLocalWav =

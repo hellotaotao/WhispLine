@@ -105,6 +105,29 @@
   line-height: 1.45;
 }
 
+/* Capability note: why a control on this row will not reach the current
+   engine. Sits under the description, dimmer than it, and only rendered when
+   the setting is genuinely inert. */
+#settings-page .setting-note {
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: var(--panel-bg-subtle);
+  border: 1px solid var(--panel-border);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+#settings-page .setting-note.hidden {
+  display: none;
+}
+
+#settings-page .input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 #settings-page .setting-control {
   flex: 0 0 auto;
   min-width: 220px;

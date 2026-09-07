@@ -205,8 +205,14 @@ function applyNemotronAvailability() {
   document.getElementById("nemotronLatencyItem")?.classList.add("hidden");
 }
 
+/// The API-key row serves two jobs. On a cloud provider it is the key for
+/// transcription. On a local engine transcription needs no key at all, but
+/// translate mode still has to reach a cloud provider — so instead of hiding
+/// the row (which left the user with an error and nowhere to fix it), it
+/// becomes the optional cloud-translation setup, with its own provider picker.
 function toggleProviderFields(providerChoice) {
   const provider = localModelForProvider(providerChoice) ? "local" : providerChoice;
+  const isLocal = provider === "local";
   const apiKeyItem = document.getElementById("apiKeyItem");
   const modelItem = document.getElementById("modelItem");
   const nemotronLatencyItem = document.getElementById("nemotronLatencyItem");
@@ -215,8 +221,34 @@ function toggleProviderFields(providerChoice) {
   if (!fieldGroq || !fieldOpenAI) {
     return;
   }
-  apiKeyItem?.classList.toggle("hidden", provider === "local");
-  modelItem?.classList.toggle("hidden", provider === "local");
+
+  const title = document.getElementById("apiKeyTitle");
+  const description = document.getElementById("apiKeyDescription");
+  const uploadNote = document.getElementById("translateUploadNote");
+  const translateSelect = document.getElementById("translateProviderSelect");
+  if (title) {
+    title.textContent = translate(
+      isLocal ? "settings.translateCloud.title" : "settings.apiKey.title"
+    );
+  }
+  if (description) {
+    description.textContent = translate(
+      isLocal ? "settings.translateCloud.description" : "settings.apiKey.description"
+    );
+  }
+  uploadNote?.classList.toggle("hidden", !isLocal);
+  translateSelect?.classList.toggle("hidden", !isLocal);
+
+  // Language never reaches the local engine: the CLI invocation carries no
+  // language argument. Show that rather than letting the choice look applied.
+  const languageSelect = document.getElementById("languageSelect");
+  if (languageSelect) {
+    languageSelect.disabled = isLocal;
+  }
+  document.getElementById("languageLocalNote")?.classList.toggle("hidden", !isLocal);
+
+  apiKeyItem?.classList.remove("hidden");
+  modelItem?.classList.toggle("hidden", isLocal);
   nemotronLatencyItem?.classList.toggle("hidden", providerChoice !== LOCAL_NEMOTRON_PROVIDER);
   // GPU acceleration applies to the Qwen engine only: Nemotron runs on its
   // own runtime, and platforms without a GPU pack have nothing to switch.
@@ -226,8 +258,9 @@ function toggleProviderFields(providerChoice) {
       "hidden",
       !gpuRuntimeSupported || providerChoice !== LOCAL_QWEN_PROVIDER
     );
-  fieldGroq.classList.toggle("hidden", provider !== "groq");
-  fieldOpenAI.classList.toggle("hidden", provider !== "openai");
+  const keyProvider = isLocal ? translateSelect?.value || "groq" : provider;
+  fieldGroq.classList.toggle("hidden", keyProvider !== "groq");
+  fieldOpenAI.classList.toggle("hidden", keyProvider !== "openai");
 }
 
 // --- Local model panel (provider "local") ---
@@ -836,6 +869,11 @@ function setSelectValue(element, value, fallback) {
   element.value = hasOption ? value : fallback;
 }
 
+function handleTranslateProviderChange() {
+  toggleProviderFields(document.getElementById("providerSelect")?.value || "groq");
+  markDirty();
+}
+
 function handleProviderChange(event) {
   const providerChoice = event.target.value || "groq";
   const provider = localModelForProvider(providerChoice) ? "local" : providerChoice;
@@ -921,6 +959,9 @@ function bindEventHandlers() {
   const themeSelect = document.getElementById("themeSelect");
 
   providerSelect?.addEventListener("change", handleProviderChange);
+  document
+    .getElementById("translateProviderSelect")
+    ?.addEventListener("change", handleTranslateProviderChange);
   checkPermissionButton?.addEventListener("click", () => {
     void requestMicrophonePermission();
   });
@@ -1278,6 +1319,13 @@ async function loadSettings() {
       "auto"
     );
     applyNemotronAvailability();
+    // Seed before toggleProviderFields: on a local engine it decides which key
+    // field is on screen.
+    setSelectValue(
+      document.getElementById("translateProviderSelect"),
+      currentSettings.translateProvider || "groq",
+      "groq"
+    );
     setSelectValue(providerSelect, providerChoice, "groq");
     if (provider !== "local") {
       updateModelOptions(provider);
@@ -1354,6 +1402,7 @@ async function saveSettings() {
       startMinimized: !!document.getElementById("startMinimizedCheck")?.checked,
       provider,
       localCompute: document.getElementById("localComputeSelect")?.value || "auto",
+      translateProvider: document.getElementById("translateProviderSelect")?.value || "",
       nemotronLatencyMs: Number(
         document.getElementById("nemotronLatencySelect")?.value || 560
       ),
