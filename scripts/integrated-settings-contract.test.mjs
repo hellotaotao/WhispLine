@@ -150,14 +150,32 @@ test("Nemotron is hidden wherever no wired runtime exists", () => {
   assert.ok(trayRs.includes("crate::nemotron_asr::supported()"));
 });
 
-test("main page owns the Settings controller and dirty navigation guard", () => {
+test("main page owns the Settings controller", () => {
   assert.match(mainHtml, /<script src="main\.js"><\/script>\s*<script src="settings\.js"><\/script>/);
   assert.match(settingsJs, /window\.SayTypeSettings\s*=/);
-  assert.match(settingsJs, /confirmLeave/);
   assert.match(settingsJs, /#settings-page/);
   assert.doesNotMatch(settingsJs, /invoke\("close-settings"\)/);
-  assert.match(mainJs, /SayTypeSettings\?\.confirmLeave/);
   assert.match(mainJs, /ipc\.on\("open-settings-page"/);
+});
+
+test("settings commit on change — no draft, no Save button", () => {
+  // Home's engine switcher always wrote through immediately (set_provider),
+  // while this page held a draft behind Save: one setting, two meanings of
+  // "changed". Both write through now.
+  assert.doesNotMatch(mainHtml, /id="saveSettingsButton"/);
+  assert.doesNotMatch(mainHtml, /id="discardSettingsButton"/);
+  assert.doesNotMatch(mainHtml, /id="unsavedHint"/);
+  assert.doesNotMatch(settingsJs, /settingsDirty/);
+  assert.doesNotMatch(settingsJs, /function markDirty/);
+  assert.doesNotMatch(settingsJs, /confirmLeave/);
+  assert.doesNotMatch(mainJs, /confirmLeave/);
+  assert.match(settingsJs, /settingsPage\?\.addEventListener\("change", commitNow\)/);
+  // Free text debounces then commits on blur; a failed write has to be visible
+  // because there is no longer a button whose state could imply "unsaved".
+  assert.match(settingsJs, /function commitSoon/);
+  assert.match(settingsJs, /showSaveStatus\("error"/);
+  assert.match(mainHtml, /id="saveStatus"/);
+  assert.doesNotMatch(settingsJs, /alert\(translate\("settings\.saveError"\)\)/);
 });
 
 test("backend routes every Settings entry into the main window", () => {

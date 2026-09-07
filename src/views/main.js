@@ -1826,14 +1826,6 @@ async function saveDictionary() {
 /* ---------- Navigation & misc ---------- */
 
 async function showPage(pageId, options = {}) {
-  const activePage = document.querySelector(".page.active")?.id;
-  if (activePage === "settings-page" && pageId !== "settings") {
-    const canLeave = await window.SayTypeSettings?.confirmLeave?.();
-    if (canLeave === false) {
-      return false;
-    }
-  }
-
   document.querySelectorAll(".page").forEach((page) => {
     page.classList.remove("active");
   });

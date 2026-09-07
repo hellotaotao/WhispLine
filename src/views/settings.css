@@ -388,26 +388,6 @@
   background: var(--accent);
 }
 
-#settings-page .save-section {
-  position: sticky;
-  bottom: -28px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  margin: 18px -6px -28px;
-  padding: 14px 6px 28px;
-  background: linear-gradient(to bottom, transparent, var(--panel-bg-strong) 26%);
-  backdrop-filter: blur(10px);
-}
-
-#settings-page .unsaved-hint {
-  margin-right: auto;
-  color: var(--text-soft);
-  font-size: 13px;
-}
-
 #settings-page button:disabled {
   cursor: default;
   opacity: 0.45;
@@ -462,4 +442,31 @@
   #localModelProgress::-webkit-progress-value {
     transition: none;
   }
+}
+
+/* Immediate-save marker. Replaces the Save/Discard bar: success is a glance,
+   a failure stays put rather than vanishing on a timer. */
+.settings-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+#settings-page .save-status {
+  flex: none;
+  padding-top: 8px;
+  font-size: 13px;
+  min-height: 18px;
+  color: var(--text-soft);
+  transition: color 0.15s;
+}
+
+#settings-page .save-status-ok {
+  color: var(--status-success);
+}
+
+#settings-page .save-status-error {
+  color: var(--danger-text);
+  font-weight: 500;
 }

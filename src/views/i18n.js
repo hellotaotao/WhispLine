@@ -199,7 +199,7 @@
       settings: {
         title: "Settings - SayType",
         pageTitle: "Settings",
-        pageSubtitle: "Voice input, transcription, and app preferences",
+        pageSubtitle: "Changes take effect immediately",
         tabsAria: "Settings sections",
         section: {
           voiceInput: "Voice Input",
@@ -378,12 +378,8 @@
           deleteConfirm: "Remove the GPU runtime and go back to the CPU? The models stay; only the 33 MB runtime is deleted.",
           downloadFailed: "GPU runtime download failed: {reason}",
         },
-        discard: "Discard changes",
-        discardConfirm: "Discard your unsaved settings changes?",
-        save: "Save",
         saved: "Saved",
-        unsaved: "Unsaved changes",
-        saveError: "Failed to save settings. Please try again.",
+        saveError: "Couldn't save — the last change was not kept.",
       },
       axCloud: {
         hint: "Drag me into the list",
@@ -627,7 +623,7 @@
       settings: {
         title: "设置 - SayType",
         pageTitle: "设置",
-        pageSubtitle: "语音输入、转写和应用偏好",
+        pageSubtitle: "改动即时生效",
         tabsAria: "设置分类",
         section: {
           voiceInput: "语音输入",
@@ -804,12 +800,8 @@
           deleteConfirm: "删除显卡运行时并改回 CPU？模型会保留，只删除 33 MB 的运行时。",
           downloadFailed: "显卡运行时下载失败：{reason}",
         },
-        discard: "放弃更改",
-        discardConfirm: "要放弃尚未保存的设置更改吗？",
-        save: "保存",
         saved: "已保存",
-        unsaved: "有未保存的更改",
-        saveError: "保存设置失败，请重试。",
+        saveError: "没能保存——刚才那次改动没生效。",
       },
       axCloud: {
         hint: "把我拖进列表",

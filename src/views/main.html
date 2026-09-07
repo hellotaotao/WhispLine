@@ -275,8 +275,13 @@
     <!-- Settings Page -->
     <div id="settings-page" class="page">
       <div class="welcome settings-header">
-        <h1 data-i18n="settings.pageTitle">Settings</h1>
-        <p data-i18n="settings.pageSubtitle">Voice input, transcription, and app preferences</p>
+        <div class="settings-header-row">
+          <div>
+            <h1 data-i18n="settings.pageTitle">Settings</h1>
+            <p data-i18n="settings.pageSubtitle">Changes take effect immediately</p>
+          </div>
+          <div class="save-status" id="saveStatus" role="status" aria-live="polite"></div>
+        </div>
       </div>
 
       <div class="settings-tabs" role="tablist" aria-label="Settings sections" data-i18n="settings.tabsAria" data-i18n-attr="aria-label">
@@ -672,13 +677,6 @@
         </section>
       </div>
 
-      <div class="save-section">
-        <span id="unsavedHint" class="unsaved-hint hidden" data-i18n="settings.unsaved">Unsaved changes</span>
-        <button class="btn-secondary" id="discardSettingsButton" type="button" disabled>
-          <span data-i18n="settings.discard">Discard changes</span>
-        </button>
-        <button class="btn" id="saveSettingsButton" type="button" data-i18n="settings.save" disabled>Save</button>
-      </div>
     </div>
   </div>
 

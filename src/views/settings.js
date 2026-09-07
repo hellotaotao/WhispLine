@@ -60,7 +60,6 @@ let themeSyncBound = false;
 let pendingAccessibilityRecheck = false;
 let accessibilityRecheckTimer = null;
 let settingsInitialized = false;
-let settingsDirty = false;
 let activeSettingsTab = "voice-input";
 
 const SETTINGS_TABS = ["voice-input", "transcription", "app"];
@@ -387,8 +386,10 @@ async function offerSwitchToLocal(model) {
     toggleProviderFields(providerSelect?.value || "groq");
     void refreshLocalModelStatus();
   } catch (error) {
+    // Same reason as saveSettings: no modal on this page. The user is looking
+    // at the row that failed to change.
     console.error("Failed to switch to the local engine:", error);
-    alert(translate("settings.saveError"));
+    showSaveStatus("error", translate("settings.saveError"));
   }
 }
 
@@ -834,30 +835,44 @@ function toggleKeyReveal(button) {
   button.setAttribute("title", label);
 }
 
-function markDirty() {
-  settingsDirty = true;
-  document.getElementById("unsavedHint")?.classList.remove("hidden");
-  const saveButton = document.getElementById("saveSettingsButton");
-  const discardButton = document.getElementById("discardSettingsButton");
-  if (saveButton) {
-    saveButton.disabled = false;
+// Settings commit as they are changed — there is no draft to keep. The Home
+// engine switcher always wrote through immediately (set_provider), so the page
+// and the switcher used to disagree about what "changed" meant; now they don't.
+let saveStatusTimer = null;
+
+function showSaveStatus(state, message) {
+  const element = document.getElementById("saveStatus");
+  if (!element) {
+    return;
   }
-  if (discardButton) {
-    discardButton.disabled = false;
+  window.clearTimeout(saveStatusTimer);
+  element.textContent = message;
+  element.classList.toggle("save-status-error", state === "error");
+  element.classList.toggle("save-status-ok", state === "ok");
+  if (state === "ok") {
+    // A confirmation only has to be caught out of the corner of the eye; a
+    // failure stays until the next attempt says otherwise.
+    saveStatusTimer = window.setTimeout(() => {
+      element.textContent = "";
+      element.classList.remove("save-status-ok");
+    }, 1600);
   }
 }
 
-function clearDirty() {
-  settingsDirty = false;
-  document.getElementById("unsavedHint")?.classList.add("hidden");
-  const saveButton = document.getElementById("saveSettingsButton");
-  const discardButton = document.getElementById("discardSettingsButton");
-  if (saveButton) {
-    saveButton.disabled = true;
-  }
-  if (discardButton) {
-    discardButton.disabled = true;
-  }
+// Text inputs commit on blur, but a key pasted and left alone should not sit
+// unsaved either — hence a debounce on top.
+let commitTimer = null;
+
+function commitSoon(delayMs = 700) {
+  window.clearTimeout(commitTimer);
+  commitTimer = window.setTimeout(() => {
+    void saveSettings();
+  }, delayMs);
+}
+
+function commitNow() {
+  window.clearTimeout(commitTimer);
+  void saveSettings();
 }
 
 function setSelectValue(element, value, fallback) {
@@ -871,7 +886,7 @@ function setSelectValue(element, value, fallback) {
 
 function handleTranslateProviderChange() {
   toggleProviderFields(document.getElementById("providerSelect")?.value || "groq");
-  markDirty();
+  commitNow();
 }
 
 function handleProviderChange(event) {
@@ -953,8 +968,6 @@ function bindEventHandlers() {
   const providerSelect = document.getElementById("providerSelect");
   const checkPermissionButton = document.getElementById("checkPermission");
   const checkAccessibilityButton = document.getElementById("checkAccessibility");
-  const discardSettingsButton = document.getElementById("discardSettingsButton");
-  const saveSettingsButton = document.getElementById("saveSettingsButton");
   const uiLanguageSelect = document.getElementById("uiLanguageSelect");
   const themeSelect = document.getElementById("themeSelect");
 
@@ -967,12 +980,6 @@ function bindEventHandlers() {
   });
   checkAccessibilityButton?.addEventListener("click", () => {
     void handleAccessibilityPermission();
-  });
-  discardSettingsButton?.addEventListener("click", () => {
-    void discardSettings();
-  });
-  saveSettingsButton?.addEventListener("click", () => {
-    void saveSettings();
   });
   uiLanguageSelect?.addEventListener("change", handleUiLanguageChange);
   themeSelect?.addEventListener("change", handleThemeChange);
@@ -997,22 +1004,27 @@ function bindEventHandlers() {
     void handleLocalModelDelete();
   });
 
-  // Only edits inside Settings mark the draft dirty. History search and the
-  // dictionary live in the same main window and must not affect this state.
+  // Only edits inside Settings commit. History search and the dictionary live
+  // in the same main window and must not trigger a settings write.
   const settingsPage = document.querySelector("#settings-page");
-  settingsPage?.addEventListener("input", markDirty);
-  settingsPage?.addEventListener("change", markDirty);
-
-  document.addEventListener("keydown", (event) => {
-    if (
-      event.key === "Escape" &&
-      settingsDirty &&
-      document.getElementById("settings-page")?.classList.contains("active")
-    ) {
-      event.preventDefault();
-      void discardSettings();
+  settingsPage?.addEventListener("change", commitNow);
+  settingsPage?.addEventListener("input", (event) => {
+    // Selects and checkboxes already fired `change`; only free text needs the
+    // debounce, and re-committing on every keystroke would rewrite the config
+    // file per character.
+    if (event.target instanceof HTMLInputElement && event.target.type !== "checkbox") {
+      commitSoon();
     }
   });
+  settingsPage?.addEventListener(
+    "blur",
+    (event) => {
+      if (event.target instanceof HTMLInputElement && event.target.type !== "checkbox") {
+        commitNow();
+      }
+    },
+    true
+  );
 
   // Permission state can change while another main-window page is active or
   // while System Settings is in front. Refresh quietly whenever the app comes
@@ -1369,7 +1381,6 @@ async function loadSettings() {
       checkAccessibilityStatus(),
     ]);
 
-    clearDirty();
   } catch (error) {
     console.error("Failed to load settings:", error);
     initI18n("auto");
@@ -1410,29 +1421,13 @@ async function saveSettings() {
 
     await ipc.invoke("save-settings", settings);
     currentSettings = settings;
-    clearDirty();
-    const saveButton = document.getElementById("saveSettingsButton");
-    if (saveButton) {
-      saveButton.textContent = translate("settings.saved");
-      window.setTimeout(() => {
-        saveButton.textContent = translate("settings.save");
-      }, 1400);
-    }
+    showSaveStatus("ok", translate("settings.saved"));
   } catch (error) {
+    // Never an alert: a write can fail while the user is mid-edit, and a modal
+    // there would eat the next keystroke. The marker persists instead.
     console.error("Failed to save settings:", error);
-    alert(translate("settings.saveError"));
+    showSaveStatus("error", translate("settings.saveError"));
   }
-}
-
-async function discardSettings() {
-  // Revert unsaved controls plus the live theme/language preview. Settings is
-  // now a normal page, so discarding stays on the page instead of closing it.
-  try {
-    await loadSettings();
-  } catch (error) {
-    console.error("Failed to discard settings changes:", error);
-  }
-  clearDirty();
 }
 
 async function initializeSettingsPage() {
@@ -1458,7 +1453,7 @@ async function showSettings(target = null) {
   const wasInitialized = settingsInitialized;
   try {
     await initializeSettingsPage();
-    if (wasInitialized && !settingsDirty) {
+    if (wasInitialized) {
       await loadSettings();
     }
 
@@ -1479,23 +1474,9 @@ async function showSettings(target = null) {
   }
 }
 
-async function confirmLeave() {
-  if (!settingsDirty) {
-    return true;
-  }
-  if (!window.confirm(translate("settings.discardConfirm"))) {
-    return false;
-  }
-  await discardSettings();
-  return true;
-}
-
 window.SayTypeSettings = {
   show: showSettings,
-  confirmLeave,
-  hasUnsavedChanges: () => settingsDirty,
   save: saveSettings,
-  discard: discardSettings,
 };
 
 document.documentElement.setAttribute("data-settings-handlers-exposed", "1");
