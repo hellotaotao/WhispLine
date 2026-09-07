@@ -268,6 +268,8 @@
           selectTitle: "Select default language for transcription",
           localNote:
             "The local engine works out the language itself — this setting is not passed to it. Switch to Groq or OpenAI and it applies again.",
+          groupCommon: "Common",
+          groupAll: "All languages",
         },
         autoLaunch: {
           title: "Start with system",
@@ -318,6 +320,34 @@
           selectTitle: "Select Nemotron latency",
           balanced: "Lower latency · 0.56 s",
           accuracy: "Higher accuracy · 1.12 s",
+        },
+        engine: {
+          recommended: "Recommended",
+          experimental: "Experimental",
+          localQwen: {
+            name: "Qwen3-ASR",
+            description: "Decodes on this computer — audio never leaves the device. Good Chinese punctuation.",
+          },
+          groq: {
+            name: "Groq",
+            description: "The fastest cloud Whisper. Audio is uploaded to Groq.",
+          },
+          openai: {
+            name: "OpenAI",
+            description: "Best punctuation of the cloud options (gpt-transcribe). Audio is uploaded to OpenAI.",
+          },
+          localNemotron: {
+            name: "Nemotron 3.5 ASR",
+            description: "Streams while you speak, but noticeably less accurate than Qwen.",
+          },
+          status: {
+            ready: "Ready",
+            downloading: "Downloading",
+            needsDownload: "Needs download",
+            needsKey: "Needs a key",
+            keySet: "Key saved",
+            local: "On this device",
+          },
         },
         apiKey: {
           title: "API Key",
@@ -718,6 +748,8 @@
           selectTitle: "选择转录默认语言",
           localNote:
             "本地引擎自己判断语言，这一项不会传给它。换成 Groq 或 OpenAI 后立即生效。",
+          groupCommon: "常用",
+          groupAll: "全部语言",
         },
         autoLaunch: {
           title: "开机自启",
@@ -767,6 +799,34 @@
           selectTitle: "选择 Nemotron 延迟",
           balanced: "较低延迟 · 0.56 秒",
           accuracy: "较高准确率 · 1.12 秒",
+        },
+        engine: {
+          recommended: "推荐",
+          experimental: "实验",
+          localQwen: {
+            name: "Qwen3-ASR",
+            description: "在这台电脑上解码，音频不离开设备。中文标点打得好。",
+          },
+          groq: {
+            name: "Groq",
+            description: "最快的云端 Whisper。音频会上传到 Groq。",
+          },
+          openai: {
+            name: "OpenAI",
+            description: "云端里标点最好的一档（gpt-transcribe）。音频会上传到 OpenAI。",
+          },
+          localNemotron: {
+            name: "Nemotron 3.5 ASR",
+            description: "边说边出字，但识别准确率明显低于 Qwen。",
+          },
+          status: {
+            ready: "已就绪",
+            downloading: "下载中",
+            needsDownload: "需下载",
+            needsKey: "待填密钥",
+            keySet: "密钥已存",
+            local: "本机运行",
+          },
         },
         apiKey: {
           title: "API 密钥",

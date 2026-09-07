@@ -483,3 +483,156 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12.5px;
 }
+
+/* --- Engine cards ---------------------------------------------------------
+   Replaces the provider dropdown. A dropdown could not show what a bare label
+   hides: where the audio goes, what it costs, and whether the choice is even
+   usable yet (key missing, model not downloaded). The <select> stays in the
+   DOM as the value holder and the keyboard path. */
+#settings-page .setting-item-stacked {
+  display: block;
+}
+
+#settings-page .setting-item-stacked .setting-info {
+  margin-bottom: 12px;
+}
+
+/* The select is the accessible fallback, not the visible control. Off-screen
+   rather than display:none so it keeps taking focus and announcing changes. */
+#settings-page .setting-control-fallback {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.engine-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-border);
+}
+
+.engine-card-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 13px 15px;
+  border: none;
+  background: var(--panel-bg-strong);
+  color: var(--app-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.engine-card-row:hover {
+  background: var(--nav-item-hover-bg);
+}
+
+.engine-card-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.engine-card-row.active {
+  background: var(--accent-soft-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.engine-card-row.experimental {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  opacity: 0.75;
+}
+
+.engine-radio {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--panel-border-strong);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.engine-card-row.active .engine-radio {
+  border: 5px solid var(--accent);
+}
+
+.engine-card-icon {
+  flex: none;
+  font-size: 20px;
+  color: var(--text-soft);
+}
+
+.engine-card-row.active .engine-card-icon {
+  color: var(--accent-text);
+}
+
+.engine-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.engine-card-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.engine-card-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+
+.engine-tag-ok,
+.engine-tag-muted {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.engine-tag-ok {
+  background: var(--pill-ok-bg);
+  color: var(--pill-ok-text);
+}
+
+.engine-tag-muted {
+  background: var(--panel-bg-subtle);
+  color: var(--text-soft);
+}
+
+.engine-card-status {
+  flex: none;
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--panel-bg-subtle);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.engine-status-ok {
+  background: var(--pill-ok-bg);
+  color: var(--pill-ok-text);
+}
+
+.engine-status-warn {
+  background: var(--pill-warn-bg);
+  color: var(--pill-warn-text);
+}

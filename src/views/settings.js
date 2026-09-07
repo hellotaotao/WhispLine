@@ -175,6 +175,114 @@ function updateModelOptions(provider) {
   });
 }
 
+// The engine list, in the order it is offered. Cloud rows carry the key state,
+// local rows the download state — the two things that decide whether a choice
+// is usable at all, which a bare dropdown could not show.
+const ENGINE_CARDS = [
+  { value: LOCAL_QWEN_PROVIDER, local: true, icon: "memory", recommended: true },
+  { value: "groq", local: false, icon: "cloud" },
+  { value: "openai", local: false, icon: "cloud" },
+  { value: LOCAL_NEMOTRON_PROVIDER, local: true, icon: "memory", experimental: true },
+];
+
+function engineStatus(entry) {
+  if (entry.value === LOCAL_QWEN_PROVIDER) {
+    if (localModelState === "ready") {
+      return { key: "settings.engine.status.ready", tone: "ok" };
+    }
+    if (localModelState === "downloading") {
+      return { key: "settings.engine.status.downloading", tone: "busy" };
+    }
+    return { key: "settings.engine.status.needsDownload", tone: "warn" };
+  }
+  if (entry.local) {
+    return { key: "settings.engine.status.local", tone: "" };
+  }
+  const field = entry.value === "groq" ? "apiKeyGroq" : "apiKeyOpenAI";
+  const hasKey = !!document.getElementById(field)?.value.trim();
+  return hasKey
+    ? { key: "settings.engine.status.keySet", tone: "ok" }
+    : { key: "settings.engine.status.needsKey", tone: "warn" };
+}
+
+function renderEngineCards() {
+  const host = document.getElementById("engineCards");
+  const select = document.getElementById("providerSelect");
+  if (!host || !select) {
+    return;
+  }
+  const offered = new Set(Array.from(select.options).map((option) => option.value));
+  const selected = select.value;
+
+  host.replaceChildren(
+    ...ENGINE_CARDS.filter((entry) => offered.has(entry.value)).map((entry) => {
+      const active = entry.value === selected;
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = `engine-card-row${active ? " active" : ""}${
+        entry.experimental ? " experimental" : ""
+      }`;
+      card.setAttribute("role", "radio");
+      card.setAttribute("aria-checked", String(active));
+
+      const radio = document.createElement("span");
+      radio.className = "engine-radio";
+
+      const icon = document.createElement("span");
+      icon.className = "engine-card-icon material-icons";
+      icon.textContent = entry.icon;
+
+      const body = document.createElement("div");
+      body.className = "engine-card-body";
+      const nameRow = document.createElement("div");
+      nameRow.className = "engine-card-name";
+      const name = document.createElement("span");
+      name.textContent = translate(`settings.engine.${camelKey(entry.value)}.name`);
+      nameRow.appendChild(name);
+      if (entry.recommended) {
+        const tag = document.createElement("span");
+        tag.className = "engine-tag-ok";
+        tag.textContent = translate("settings.engine.recommended");
+        nameRow.appendChild(tag);
+      }
+      if (entry.experimental) {
+        const tag = document.createElement("span");
+        tag.className = "engine-tag-muted";
+        tag.textContent = translate("settings.engine.experimental");
+        nameRow.appendChild(tag);
+      }
+      const desc = document.createElement("div");
+      desc.className = "engine-card-desc";
+      desc.textContent = translate(`settings.engine.${camelKey(entry.value)}.description`);
+      body.appendChild(nameRow);
+      body.appendChild(desc);
+
+      const status = engineStatus(entry);
+      const statusEl = document.createElement("span");
+      statusEl.className = `engine-card-status${status.tone ? ` engine-status-${status.tone}` : ""}`;
+      statusEl.textContent = translate(status.key);
+
+      card.append(radio, icon, body, statusEl);
+      card.addEventListener("click", () => {
+        if (select.value === entry.value) {
+          return;
+        }
+        // Drive the select rather than duplicating its logic: `change` reaches
+        // handleProviderChange and the page-level commit exactly as a native
+        // selection would.
+        select.value = entry.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        renderEngineCards();
+      });
+      return card;
+    })
+  );
+}
+
+function camelKey(providerValue) {
+  return providerValue.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
 function localModelForProvider(provider) {
   if (provider === LOCAL_NEMOTRON_PROVIDER) {
     return NEMOTRON_LOCAL_MODEL;
@@ -291,6 +399,8 @@ function selectedLocalModel() {
 }
 
 function renderLocalModelPanel(status) {
+  // The Qwen card reports the same state, so re-render it whenever this does.
+  window.setTimeout(renderEngineCards, 0);
   const item = document.getElementById("localModelItem");
   const statusEl = document.getElementById("localModelStatus");
   const actionBtn = document.getElementById("localModelActionBtn");
@@ -565,6 +675,7 @@ async function handleGpuRuntimeDelete() {
     currentSettings.localCompute = "auto";
     await refreshGpuRuntimeStatus();
     void renderBuildLine();
+    renderEngineCards();
   } catch (error) {
     console.error("Failed to remove the GPU runtime:", error);
   }
@@ -896,6 +1007,7 @@ function handleTranslateProviderChange() {
 
 function handleProviderChange(event) {
   const providerChoice = event.target.value || "groq";
+  renderEngineCards();
   const provider = localModelForProvider(providerChoice) ? "local" : providerChoice;
   if (provider !== "local") {
     updateModelOptions(provider);
@@ -1027,6 +1139,9 @@ function bindEventHandlers() {
   // in the same main window and must not trigger a settings write.
   const settingsPage = document.querySelector("#settings-page");
   settingsPage?.addEventListener("change", commitNow);
+  for (const id of ["apiKeyGroq", "apiKeyOpenAI"]) {
+    document.getElementById(id)?.addEventListener("input", () => renderEngineCards());
+  }
   settingsPage?.addEventListener("input", (event) => {
     // Selects and checkboxes already fired `change`; only free text needs the
     // debounce, and re-committing on every keystroke would rewrite the config

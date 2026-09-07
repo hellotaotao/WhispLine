@@ -109,6 +109,24 @@ test("local engines are provider choices while cloud providers retain model sele
   assert.match(settingsJs, /model: localModel \|\| document\.getElementById\("modelSelect"\)/);
 });
 
+test("the engine is chosen from cards that show what a label cannot", () => {
+  // A dropdown row reads "Local · Qwen3-ASR · ★ Recommended" and truncates.
+  // The cards carry where the audio goes and whether the choice is usable yet.
+  assert.match(mainHtml, /id="engineCards"[^>]*role="radiogroup"/);
+  assert.match(settingsJs, /const ENGINE_CARDS = \[/);
+  assert.match(settingsJs, /function renderEngineCards/);
+  assert.match(settingsJs, /function engineStatus/);
+  // The select survives as the value holder and the keyboard path, so every
+  // existing listener keeps working — cards drive it rather than replace it.
+  assert.match(mainHtml, /id="providerSelect"/);
+  assert.match(settingsJs, /select\.dispatchEvent\(new Event\("change", \{ bubbles: true \}\)\)/);
+  assert.match(settingsCss, /\.setting-control-fallback/);
+  assert.doesNotMatch(settingsCss, /\.setting-control-fallback\s*\{[^}]*display:\s*none/);
+  for (const key of ["needsKey", "keySet", "needsDownload"]) {
+    assert.ok(i18nJs.includes(`${key}:`), `engine status copy ${key} is missing`);
+  }
+});
+
 test("a local engine states what it cannot use instead of hiding it", () => {
   // Language and dictionary reach the cloud APIs as request parameters; the
   // local CLI invocation carries neither. Both said nothing before, so a

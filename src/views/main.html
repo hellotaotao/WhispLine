@@ -326,14 +326,19 @@
           </div>
 
           <div class="setting-group">
-            <div class="setting-item">
+            <div class="setting-item setting-item-stacked">
               <div class="setting-info">
-                <div class="setting-title" data-i18n="settings.apiProvider.title">Transcription Provider</div>
+                <div class="setting-title" data-i18n="settings.apiProvider.title">Transcription engine</div>
                 <div class="setting-description" data-i18n="settings.apiProvider.description">
-                  Choose a cloud provider or local engine.
+                  Who turns your speech into text. Switching changes which of the settings below apply.
                 </div>
               </div>
-              <div class="setting-control">
+              <!-- Cards are the visible control; the select below stays as the
+                   value holder and the keyboard/AT path. Card clicks write to
+                   it and dispatch `change`, so every existing listener — the
+                   provider handler and the page-level commit — keeps working. -->
+              <div class="engine-cards" id="engineCards" role="radiogroup" aria-labelledby="engineCardsLabel"></div>
+              <div class="setting-control setting-control-fallback">
                 <select class="input provider-select" id="providerSelect" title="Select transcription provider" data-i18n="settings.apiProvider.selectTitle" data-i18n-attr="title">
                   <option value="groq">Groq</option>
                   <option value="openai">OpenAI</option>
@@ -441,11 +446,14 @@
               </div>
               <div class="setting-control">
                 <select class="input language-select" id="languageSelect" title="Select default language for transcription" data-i18n="settings.transcriptionLanguage.selectTitle" data-i18n-attr="title">
+                  <optgroup label="Common" data-i18n="settings.transcriptionLanguage.groupCommon" data-i18n-attr="label">
                   <option value="auto" data-i18n="settings.transcriptionLanguage.auto">Auto-detect</option>
-                  <option value="en">English</option>
                   <option value="zh">中文 (Chinese)</option>
+                  <option value="en">English</option>
                   <option value="ja">日本語 (Japanese)</option>
                   <option value="ko">한국어 (Korean)</option>
+                  </optgroup>
+                  <optgroup label="All languages" data-i18n="settings.transcriptionLanguage.groupAll" data-i18n-attr="label">
                   <option value="es">Español (Spanish)</option>
                   <option value="fr">Français (French)</option>
                   <option value="de">Deutsch (German)</option>
@@ -523,6 +531,7 @@
                   <option value="ug">ئۇيغۇر (Uyghur)</option>
                   <option value="uz">O'zbek (Uzbek)</option>
                   <option value="yo">Yorùbá (Yoruba)</option>
+                  </optgroup>
                 </select>
               </div>
             </div>\n\n            <div class="setting-item">
