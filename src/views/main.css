@@ -1325,11 +1325,16 @@ body {
   color: var(--danger-text);
 }
 
-/* A hung clip saved for recovery — no text yet, so read it as a muted prompt
-   rather than a normal (or failed) transcription. */
+/* A clip saved for recovery — italic marks it as a stored recording rather than
+   a transcript. A hung one carries no text and reads as a muted prompt; one that
+   records why it failed keeps the failure colour, since that is what it is. */
 .activity-text.pending {
   color: var(--text-secondary, #8a8a8e);
   font-style: italic;
+}
+
+.activity-text.pending.failed {
+  color: var(--danger-text);
 }
 
 .activity-actions {

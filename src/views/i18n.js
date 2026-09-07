@@ -177,8 +177,10 @@
         deleteTitle: "Delete",
         playTitle: "Play recording (debug)",
         pendingAudio: "Transcription stalled — tap to retry",
+        pendingHint: "The recording is kept — re-transcribe once the cause is fixed.",
         retranscribeTitle: "Re-transcribe",
         retranscribeFailed: "Re-transcribe failed — try again",
+        retranscribeFailedReason: "Re-transcribe failed: {reason}",
       },
       settings: {
         title: "Settings - SayType",
@@ -573,8 +575,10 @@
         deleteTitle: "删除",
         playTitle: "播放录音（调试）",
         pendingAudio: "转录卡住了 — 点击重试",
+        pendingHint: "录音已保留 — 排除原因后可重新转录。",
         retranscribeTitle: "重新转录",
         retranscribeFailed: "重新转录失败 — 请再试一次",
+        retranscribeFailedReason: "重新转录失败：{reason}",
       },
       settings: {
         title: "设置 - SayType",

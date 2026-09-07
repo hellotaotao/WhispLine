@@ -2965,6 +2965,11 @@ class VoiceInputPrompt {
   async transcribeWithRetry(uploadBuffer, translateMode, uploadMime, sessionId) {
     const MAX_ATTEMPTS = 2; // original + one retry
     const session = this.recordingSessions?.get(sessionId);
+    // Both attempts are the SAME recording, so they must share one History row.
+    // The backend keys its failure row on this id; without it a retried upload
+    // logs a second row and stores a second copy of the clip, and a retry that
+    // finally succeeds leaves the first row behind as an orphan.
+    const failureId = `failed-${Date.now()}-${sessionId}`;
     for (let attempt = 1; ; attempt++) {
       try {
         const transcribe = () => ipc.invoke(
@@ -2973,7 +2978,9 @@ class VoiceInputPrompt {
           translateMode,
           uploadMime,
           sessionId,
-          ...(session?.captureIncomplete ? [undefined, true] : [])
+          undefined, // chunk-index: this is the whole-clip path
+          session?.captureIncomplete ? true : undefined,
+          failureId
         );
         return session ? await this.waitForSessionStage(session, "chunk-ipc",
           transcribe, TRANSCRIPTION_STAGE_TIMEOUT_MS) : await transcribe();

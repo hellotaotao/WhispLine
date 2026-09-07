@@ -1515,9 +1515,14 @@ function buildActivityRow(activity) {
   const text = document.createElement("div");
   text.className = "activity-text";
   if (isPending) {
+    // An ordinary failure keeps its reason on the same row as the clip, so show
+    // it. Hang rows saved by input-prompt carry no text and fall back to the
+    // generic stalled label. Either way the clip is what makes the row retryable.
+    const reason = rawText.trim();
     text.classList.add("pending");
-    text.textContent = t("activity.pendingAudio");
-    text.title = t("activity.pendingAudio");
+    if (reason) text.classList.add("failed");
+    text.textContent = reason || t("activity.pendingAudio");
+    text.title = `${reason || t("activity.pendingAudio")}\n${t("activity.pendingHint")}`;
   } else {
     if (activity.success === false) {
       text.classList.add("failed");
@@ -1528,6 +1533,19 @@ function buildActivityRow(activity) {
 
   const actions = document.createElement("div");
   actions.className = "activity-actions";
+
+  // Dev-only: play back the original recording captured for this entry. Pending
+  // rows always have one — the stored clip is the whole point of the row.
+  if (cachedSettings?.isDev && activity.audioId) {
+    const playBtn = document.createElement("button");
+    playBtn.className = "icon-btn";
+    playBtn.type = "button";
+    playBtn.title = t("activity.playTitle");
+    playBtn.setAttribute("aria-label", t("activity.playTitle"));
+    playBtn.appendChild(makeIcon("play_arrow"));
+    playBtn.addEventListener("click", () => playDebugAudio(activity.audioId, playBtn));
+    actions.appendChild(playBtn);
+  }
 
   if (isPending) {
     // Re-run transcription on the stored clip; on success the "activity-updated"
@@ -1541,18 +1559,6 @@ function buildActivityRow(activity) {
     retryBtn.addEventListener("click", () => retranscribePending(activity.id, retryBtn));
     actions.appendChild(retryBtn);
   } else {
-    // Dev-only: play back the original recording captured for this entry.
-    if (cachedSettings?.isDev && activity.audioId) {
-      const playBtn = document.createElement("button");
-      playBtn.className = "icon-btn";
-      playBtn.type = "button";
-      playBtn.title = t("activity.playTitle");
-      playBtn.setAttribute("aria-label", t("activity.playTitle"));
-      playBtn.appendChild(makeIcon("play_arrow"));
-      playBtn.addEventListener("click", () => playDebugAudio(activity.audioId, playBtn));
-      actions.appendChild(playBtn);
-    }
-
     const copyBtn = document.createElement("button");
     copyBtn.className = "icon-btn";
     copyBtn.type = "button";
@@ -1578,9 +1584,11 @@ function buildActivityRow(activity) {
   return item;
 }
 
-// Re-transcribe a pending (hung) clip from History. The success path arrives via
-// the "activity-updated" broadcast, which re-renders the row as normal text; on
-// failure we re-enable the button so the user can try again.
+// Re-transcribe a stored clip from History. The success path arrives via the
+// "activity-updated" broadcast, which re-renders the row as normal text; on
+// failure we re-enable the button so the user can try again. The reason matters
+// here — it is usually something the user can act on (a key to add, an engine to
+// switch), so surface it rather than a bare "try again".
 async function retranscribePending(id, btn) {
   if (btn) {
     btn.disabled = true;
@@ -1590,7 +1598,14 @@ async function retranscribePending(id, btn) {
     await ipc.invoke("retranscribe-pending", id);
   } catch (error) {
     console.error("re-transcribe failed:", error);
-    showNotification(t("activity.retranscribeFailed"), "warning");
+    // Tauri rejects with the command's Err value, a raw string for Result<_, String>.
+    const reason = (typeof error === "string" ? error : error?.message || "").trim();
+    showNotification(
+      reason
+        ? t("activity.retranscribeFailedReason", { reason })
+        : t("activity.retranscribeFailed"),
+      "warning"
+    );
     if (btn) {
       btn.disabled = false;
       btn.replaceChildren(makeIcon("replay"));

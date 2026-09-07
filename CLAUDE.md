@@ -204,6 +204,52 @@ hotkey, transcribes speech via a cloud Whisper API, and inserts the text into th
   is already saved there; an explicit `copy_to_clipboard` command backs the manual "Copy"
   button), permission checks, history, and dictionary. The actual per-OS implementations
   (insertion, permission checks, clipboard, autostart) live behind `platform/` (see below).
+  **A failed transcription keeps its clip.** `record_failed_transcription` writes
+  ONE History row carrying both the reason and the audio (`pending: true`,
+  `audioId`, `translate`) — not a text-only failure beside an audio-only
+  placeholder. Unlike the dev-only playback copy attached to *successful* rows,
+  this runs **in release**, so raw recordings of failed dictations do land on
+  disk under `<app-data>`; they are released only when the retry produces text,
+  when the row is deleted/cleared, or when it falls off the 100-entry cap.
+  Route resolution (`resolve_transcription_route`) is inside that net too — a
+  missing API key returns before any request is built, and is exactly the
+  failure a user fixes and retries. Two cases are *not* recorded here because
+  the frontend already owns them: a chunked dictation (`chunk_index.is_some()`)
+  and a `capture_incomplete` session (`preserveRecoveryAudio` runs before the
+  request). A hung decode is handed over only on the **local** route
+  (`frontend_owns_hang_recovery`) — the frontend's recovery gate requires
+  `provider === "local" && !translateMode`, so gating on `is_hang_error` alone
+  made every *cloud* timeout vanish from History with no row and no audio.
+  **One recording, one row — including across the frontend's retry.**
+  `transcribeWithRetry` auto-retries a hung/timed-out upload, and
+  `isRetryableTranscriptionError` does *not* check the provider, so a cloud
+  timeout is re-uploaded too. Both attempts therefore carry the same
+  `failure-id` header (`failed-<millis>-<sessionId>`, validated by
+  `valid_stable_recovery_id` because it becomes a filename): a second failure
+  refreshes the first attempt's row instead of adding one, and a second attempt
+  that **succeeds** turns that row into the success in place
+  (`history::resolve_failed_audio`), dropping the clip only then. Without the
+  shared id one recording leaves two rows and two clips, and a successful retry
+  leaves the failure row orphaned beside its own text. An id whose row has
+  already settled is never reused — a fresh one is minted.
+  `retranscribe_pending` re-runs the clip through whichever engine is configured
+  **now**, not the one that failed: the cause is usually a key, a network or a
+  model the user has since fixed, and pinning the row to its original provider
+  would lock the clip to the thing that broke. `translate` is carried on the row
+  because it is a mode, not an engine. Every failure past loading the row goes
+  through `refresh_failed_row`, so the recorded reason is never left blaming a
+  cause the user has since fixed — a toast does not survive closing the window.
+  Failure refresh reads the current row under the History lock and only updates
+  a still-pending row: a late manual retry failure cannot overwrite an automatic
+  retry's successful text. Audio reads retain I/O error kinds; only confirmed
+  `NotFound` clears `pending` and `audioId`, while other read errors keep retry
+  available and report the underlying cause.
+  Known gap: for a **cloud or translate-mode** `capture_incomplete`
+  session the clip is held in memory only — `persistRecoveryAudio` defers
+  non-local audio (`routeDeferred`) and Rust defers to the frontend, so neither
+  writes it to disk and it dies with the process. Partial *text* is unaffected;
+  it has its own acknowledged path (`preserveCompletedChunks`).
+
 - `platform/` — the platform abstraction layer (`mod.rs` contract + `macos.rs` / `fallback.rs`).
   All `#[cfg(target_os)]` capabilities — synthetic text insertion, Accessibility/Microphone
   checks, clipboard write, login-item autostart — live here. macOS is fully implemented.
