@@ -695,6 +695,7 @@ class VoiceInputPrompt {
 
     // Add window beforeunload event to ensure cleanup
     window.addEventListener("beforeunload", () => {
+      this.pendingTranslateConsent?.finish(false);
       const native = this.activeRecordingSession?.nativeCapture;
       if (native && !native.stopped && !native.stopPromise) {
         native.accepting = false;
@@ -808,7 +809,14 @@ class VoiceInputPrompt {
   // Local dictation never leaves the device; translate mode has to. Ask once,
   // here rather than in Settings, because this is the moment it actually
   // matters — the clip exists and is about to be sent. Resolves true to send.
-  askTranslateConsent(providerLabel) {
+  askTranslateConsent(providerLabel, recordingSession) {
+    // Late finalization must not overwrite a newer recording's UI.
+    if (!recordingSession || recordingSession.id !== this.recordingSessionId ||
+        this.isRecording || this.starting || this.isSessionCancelled(recordingSession)) {
+      return Promise.resolve(false);
+    }
+    this.pendingTranslateConsent?.finish(false);
+    const lifecycle = this.ensureRecordingSession(recordingSession);
     if (!this.consentActions || !this.consentAcceptBtn || !this.consentDeclineBtn) {
       // No UI to ask with: refuse rather than upload unasked.
       return Promise.resolve(false);
@@ -826,15 +834,23 @@ class VoiceInputPrompt {
     this.consentActions.hidden = false;
 
     return new Promise((resolve) => {
+      let settled = false;
+      const cancelWaiter = () => finish(false);
       const finish = (accepted) => {
+        if (settled) return;
+        settled = true;
+        lifecycle.cancelWaiters.delete(cancelWaiter);
+        this.pendingTranslateConsent = null;
         this.consentActions.hidden = true;
         if (this.waveContainer) this.waveContainer.style.display = "";
         this.consentAcceptBtn.removeEventListener("click", onAccept);
         this.consentDeclineBtn.removeEventListener("click", onDecline);
         resolve(accepted);
       };
-      const onAccept = () => finish(true);
+      const onAccept = () => finish(!this.isSessionCancelled(recordingSession));
       const onDecline = () => finish(false);
+      this.pendingTranslateConsent = { sessionId: recordingSession.id, finish };
+      lifecycle.cancelWaiters.add(cancelWaiter);
       this.consentAcceptBtn.addEventListener("click", onAccept);
       this.consentDeclineBtn.addEventListener("click", onDecline);
     });
@@ -2496,6 +2512,7 @@ class VoiceInputPrompt {
 
   async startRecording(startupTiming = {}) {
     if (this.isRecording || this.starting) return;
+    this.pendingTranslateConsent?.finish(false);
 
     // A prior Escape may have cancelled an older transcription without hiding
     // the prompt yet. A new recording is a fresh operation and must not inherit
@@ -3136,7 +3153,7 @@ class VoiceInputPrompt {
         (recordingSession.provider || this.currentProvider) === "local" &&
         !this.translateConsented
       ) {
-        const accepted = await this.askTranslateConsent(this.translateProviderLabel());
+        const accepted = await this.askTranslateConsent(this.translateProviderLabel(), recordingSession);
         if (!accepted) {
           terminalState = "cancelled";
           this.removePendingInsertion(sessionId);
@@ -3147,13 +3164,11 @@ class VoiceInputPrompt {
           }
           return;
         }
-        // Best-effort: a failed write means we ask again next time, which is
-        // the safe direction. Never block the translation the user just asked for.
-        try {
-          await ipc.invoke("set-translate-consent", true);
-        } catch (error) {
-          console.warn("Could not persist translate consent:", error);
-        }
+        this.assertSessionActive(recordingSession);
+        // The backend gates the upload on durable consent too. A failed write
+        // must not leave the renderer believing authorization was persisted.
+        await ipc.invoke("set-translate-consent", true);
+        this.assertSessionActive(recordingSession);
         this.translateConsented = true;
       }
 

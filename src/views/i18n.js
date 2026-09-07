@@ -211,10 +211,11 @@
         pageTitle: "Settings",
         pageSubtitle: "Changes take effect immediately",
         tabsAria: "Settings sections",
+        advanced: "Advanced settings",
         section: {
-          dictation: "Dictation",
-          app: "App",
-          system: "System",
+          dictation: "Dictation Settings",
+          app: "App Settings",
+          engines: "Engines & Translation",
         },
         recordingShortcut: {
           title: "Recording shortcut",
@@ -360,9 +361,9 @@
         translateCloud: {
           title: "Cloud translation (optional)",
           description:
-            "Shift + Alt translates to English. The local engine only transcribes, so that one goes to a cloud provider.",
+            "Local dictation needs no API key. Expand only to set up English translation with Shift + Alt.",
           uploadNote:
-            "Only the clip you record with Shift + Alt is uploaded; ordinary dictation stays on this device. Leave the key empty to keep translation off.",
+            "Translation sends your recording to the selected cloud provider. Ordinary dictation stays on this device.",
           selectTitle: "Select the provider translation uses",
         },
         model: {
@@ -426,6 +427,9 @@
           allGrantedDetail:
             "Microphone and Accessibility are both granted — recording and automatic insertion work.",
           recheck: "Re-check",
+          checked: "Checked — all permissions are in place.",
+          needsAttention: "Checked — some permissions need attention. See the controls below.",
+          checkFailed: "Could not complete the permission check. Please try again.",
         },
         dictionaryLink: {
           title: "Dictionary",
@@ -692,10 +696,11 @@
         pageTitle: "设置",
         pageSubtitle: "改动即时生效",
         tabsAria: "设置分类",
+        advanced: "高级设置",
         section: {
-          dictation: "听写",
-          app: "应用",
-          system: "系统",
+          dictation: "听写设置",
+          app: "应用设置",
+          engines: "引擎与翻译",
         },
         recordingShortcut: {
           title: "录音快捷键",
@@ -840,9 +845,9 @@
         translateCloud: {
           title: "云端翻译（可选）",
           description:
-            "按 Shift + Alt 是边说边译成英文。本地引擎只做转写，翻译这一路要走云端。",
+            "本地听写无需 API 密钥。只有需要用 Shift + Alt 翻译成英文时，才需展开配置。",
           uploadNote:
-            "只有按 Shift + Alt 录的那一段会上传，平时听写不出这台电脑。密钥留空就不启用翻译。",
+            "翻译会将录音上传至所选云端服务商，普通听写仍在本机完成。",
           selectTitle: "选择翻译使用的服务商",
         },
         model: {
@@ -904,6 +909,9 @@
           allGranted: "系统权限齐了",
           allGrantedDetail: "麦克风、辅助功能都已授权——录音和自动插入文字都能用。",
           recheck: "重新检查",
+          checked: "已检查，所有权限正常。",
+          needsAttention: "已检查，部分权限需要处理，请查看下方设置。",
+          checkFailed: "未能完成权限检查，请重试。",
         },
         dictionaryLink: {
           title: "词典",

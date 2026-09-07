@@ -38,9 +38,9 @@ test("main sidebar treats Settings as a normal page", () => {
   assert.match(mainJs, /showPage\("settings"/);
 });
 
-test("Settings uses three horizontal accessible tabs", () => {
+test("Settings uses two horizontal accessible tabs", () => {
   assert.match(mainHtml, /class="settings-tabs"[^>]*role="tablist"/);
-  for (const tab of ["dictation", "app", "system"]) {
+  for (const tab of ["dictation", "app"]) {
     assert.match(mainHtml, new RegExp(`data-settings-tab="${tab}"`));
     assert.match(mainHtml, new RegExp(`id="settings-panel-${tab}"`));
   }
@@ -51,22 +51,14 @@ test("Settings uses three horizontal accessible tabs", () => {
 });
 
 test("settings are grouped by what the user came to do", () => {
-  // Dictation owns everything one dictation touches. Language and the engine
-  // used to sit in different tabs even though changing one changes whether the
-  // other applies at all.
   const dictation = sectionSource("settings-panel-dictation");
-  for (const id of [
-    "shortcutSelect",
-    "providerSelect",
-    "apiKeyGroq",
-    "apiKeyOpenAI",
-    "modelSelect",
-    "nemotronLatencySelect",
-    "localModelItem",
-    "languageSelect",
-    "openDictionaryBtn",
-  ]) {
+  for (const id of ["shortcutSelect", "languageSelect", "openDictionaryBtn"]) {
     assert.match(dictation, new RegExp(`id="${id}"`));
+  }
+  assert.match(dictation, /id="providerSelect"/);
+  const engines = sectionSource("settings-panel-dictation");
+  for (const id of ["providerSelect", "apiKeyGroq", "apiKeyOpenAI", "modelSelect", "nemotronLatencySelect", "localModelItem", "translationPanel"]) {
+    assert.match(engines, new RegExp(`id="${id}"`));
   }
 
   // App is how the app itself looks and starts.
@@ -82,7 +74,7 @@ test("settings are grouped by what the user came to do", () => {
   }
 
   // System is set-up-once state: permissions, logs, build. Not day-to-day.
-  const system = sectionSource("settings-panel-system");
+  const system = sectionSource("settings-panel-app");
   for (const id of [
     "permissionSummary",
     "permissionStatus",
@@ -106,7 +98,7 @@ test("local engines are provider choices while cloud providers retain model sele
   assert.match(settingsJs, /localModelForProvider/);
   assert.match(settingsJs, /modelItem\?\.classList\.toggle\("hidden", isLocal\)/);
   assert.match(settingsJs, /provider = localModel \? "local" : providerChoice/);
-  assert.match(settingsJs, /model: localModel \|\| document\.getElementById\("modelSelect"\)/);
+  assert.match(settingsJs, /model: localModel \|\| cloudModel/);
 });
 
 test("the engine is chosen from cards that show what a label cannot", () => {
@@ -147,7 +139,7 @@ test("cloud translation stays reachable while a local engine is selected", () =>
   assert.match(settingsJs, /apiKeyItem\?\.classList\.remove\("hidden"\)/);
   assert.match(mainHtml, /id="translateProviderSelect"/);
   assert.match(mainHtml, /id="translateUploadNote"/);
-  assert.match(settingsJs, /settings\.translateCloud\.title/);
+  assert.match(mainHtml, /settings\.translateCloud\.title/);
   assert.match(settingsJs, /translateProvider: document\.getElementById\("translateProviderSelect"\)/);
   // Backend: an explicit choice, a consent gate, and a code the prompt matches.
   assert.ok(settingsRs.includes("pub translate_provider: String"));
@@ -235,13 +227,11 @@ test("Qwen is the recommended local engine and Nemotron exposes both latency pro
 test("new Settings page labels exist in both locales", () => {
   for (const value of [
     'pageTitle: "Settings"',
-    'dictation: "Dictation"',
-    'app: "App"',
-    'system: "System"',
+    'dictation: "Dictation Settings"',
+    'app: "App Settings"',
     'pageTitle: "设置"',
-    'dictation: "听写"',
-    'app: "应用"',
-    'system: "系统"',
+    'dictation: "听写设置"',
+    'app: "应用设置"',
   ]) {
     assert.ok(i18nJs.includes(value), `missing i18n entry: ${value}`);
   }
@@ -266,7 +256,7 @@ test("software update is reachable without the tray or three clicks", () => {
 });
 
 test("System settings contains a collapsed diagnostic log viewer with refresh and copy", () => {
-  const system = sectionSource("settings-panel-system");
+  const system = sectionSource("settings-panel-app");
   const app = system;
   const details = system.match(/<details\b[^>]*id="diagnosticLogPanel"[^>]*>/)?.[0] || "";
 
@@ -311,4 +301,43 @@ test("unrequested microphone permission is not reported as granted", () => {
     settingsJs,
     /requestMicrophonePermission[\s\S]*open-microphone-settings/
   );
+});
+
+test("sidebar version and update action stack without horizontal crowding", () => {
+  const css = read("src/views/main.css");
+  const row = css.match(/\.sidebar-version\s*\{([^}]+)\}/)?.[1] || "";
+  assert.match(row, /flex-direction:\s*column/);
+  assert.match(row, /align-items:\s*flex-start/);
+});
+
+test("settings markup contains no literal escaped newlines", () => {
+  assert.ok(!mainHtml.includes("\\n"));
+});
+
+test("engine cards offer Qwen then OpenAI then Groq then Nemotron", () => {
+  const cards = settingsJs.match(/const ENGINE_CARDS = \[([\s\S]*?)\];/)?.[1] || "";
+  const values = [...cards.matchAll(/value: ([^,]+)/g)].map((match) => match[1]);
+  assert.deepEqual(values, ["LOCAL_QWEN_PROVIDER", '"openai"', '"groq"', "LOCAL_NEMOTRON_PROVIDER"]);
+});
+
+test("optional local translation is a separate collapsed panel", () => {
+  assert.match(mainHtml, /<details[^>]*id="translationPanel"[^>]*>/);
+  assert.doesNotMatch(mainHtml.match(/<details[^>]*id="translationPanel"[^>]*>/)?.[0] || "", /\sopen(?:\s|=|>)/);
+  assert.match(mainHtml, /id="translationKeySlot"/);
+  assert.match(settingsCss, /#settings-page \.setting-group\s*\{[^}]*margin-bottom:\s*20px/);
+});
+
+test("model setup opens Dictation while update checks still open App", () => {
+  assert.match(settingsJs, /target\.startsWith\("local-model"\)[\s\S]*?activateSettingsTab\("dictation"\)/);
+  assert.match(mainJs, /settingsTarget: "app"/);
+  assert.match(settingsJs, /const SETTINGS_TABS = \["dictation", "app"\]/);
+});
+
+
+test("default settings prioritizes engines and collapses local maintenance", () => {
+  const panel = sectionSource("settings-panel-dictation");
+  assert.ok(panel.indexOf('id="engineCards"') < panel.indexOf('id="shortcutSelect"'));
+  assert.match(panel, /<details[^>]*id="engineAdvanced"/);
+  assert.match(panel, /id="cloudDictationOptions"/);
+  assert.doesNotMatch(mainHtml, /data-settings-tab="engines"/);
 });

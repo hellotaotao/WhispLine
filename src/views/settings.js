@@ -62,11 +62,8 @@ let accessibilityRecheckTimer = null;
 let settingsInitialized = false;
 let activeSettingsTab = "dictation";
 
-// Grouped by what the user came here to do, not by what kind of setting it is:
-// Dictation holds everything one dictation touches (shortcut, engine, language,
-// dictionary), App is how the app itself looks and starts, System is
-// permissions and diagnostics — the things you set up once and never revisit.
-const SETTINGS_TABS = ["dictation", "app", "system"];
+// Keep primary dictation controls together; low-frequency setup is collapsible.
+const SETTINGS_TABS = ["dictation", "app"];
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -180,8 +177,8 @@ function updateModelOptions(provider) {
 // is usable at all, which a bare dropdown could not show.
 const ENGINE_CARDS = [
   { value: LOCAL_QWEN_PROVIDER, local: true, icon: "memory", recommended: true },
-  { value: "groq", local: false, icon: "cloud" },
   { value: "openai", local: false, icon: "cloud" },
+  { value: "groq", local: false, icon: "cloud" },
   { value: LOCAL_NEMOTRON_PROVIDER, local: true, icon: "memory", experimental: true },
 ];
 
@@ -316,14 +313,15 @@ function applyNemotronAvailability() {
   document.getElementById("nemotronLatencyItem")?.classList.add("hidden");
 }
 
-/// The API-key row serves two jobs. On a cloud provider it is the key for
-/// transcription. On a local engine transcription needs no key at all, but
-/// translate mode still has to reach a cloud provider — so instead of hiding
-/// the row (which left the user with an error and nowhere to fix it), it
-/// becomes the optional cloud-translation setup, with its own provider picker.
+// Reuse the same key inputs so switching modes never loses an unsaved key.
+// Local translation lives in a separate, collapsed panel, not in dictation.
 function toggleProviderFields(providerChoice) {
   const provider = localModelForProvider(providerChoice) ? "local" : providerChoice;
   const isLocal = provider === "local";
+  document.getElementById("cloudDictationOptions")?.classList.toggle("hidden", isLocal);
+  const advanced = document.getElementById("engineAdvanced");
+  advanced?.classList.toggle("hidden", !isLocal && !inspectedLocalModel);
+
   const apiKeyItem = document.getElementById("apiKeyItem");
   const modelItem = document.getElementById("modelItem");
   const nemotronLatencyItem = document.getElementById("nemotronLatencyItem");
@@ -337,16 +335,18 @@ function toggleProviderFields(providerChoice) {
   const description = document.getElementById("apiKeyDescription");
   const uploadNote = document.getElementById("translateUploadNote");
   const translateSelect = document.getElementById("translateProviderSelect");
-  if (title) {
-    title.textContent = translate(
-      isLocal ? "settings.translateCloud.title" : "settings.apiKey.title"
-    );
+  const translationPanel = document.getElementById("translationPanel");
+  const translationSlot = document.getElementById("translationKeySlot");
+  const dictationSlot = document.getElementById("dictationKeySlot");
+  if (apiKeyItem && translationPanel && translationSlot && dictationSlot) {
+    const wasLocal = apiKeyItem.parentElement === translationSlot;
+    if (wasLocal !== isLocal) translationPanel.open = false;
+    if (isLocal) translationSlot.appendChild(apiKeyItem);
+    else dictationSlot.after(apiKeyItem);
+    translationPanel.classList.toggle("hidden", !isLocal);
   }
-  if (description) {
-    description.textContent = translate(
-      isLocal ? "settings.translateCloud.description" : "settings.apiKey.description"
-    );
-  }
+  if (title) title.textContent = translate("settings.apiKey.title");
+  if (description) description.textContent = translate("settings.apiKey.description");
   uploadNote?.classList.toggle("hidden", !isLocal);
   translateSelect?.classList.toggle("hidden", !isLocal);
 
@@ -381,6 +381,7 @@ let localModelState = "absent"; // absent | partial | downloading | ready
 // onboarding wizard auto-switches there, so Settings must not show a second,
 // competing dialog.
 let localModelDownloadStartedHere = "";
+let inspectedLocalModel = null;
 let localModelSyncBound = false;
 let updatesPanelBound = false;
 let currentAppVersion = "";
@@ -395,7 +396,7 @@ function formatGB(bytes) {
 
 function selectedLocalModel() {
   const provider = document.getElementById("providerSelect")?.value;
-  return localModelForProvider(provider) || QWEN_LOCAL_MODEL;
+  return inspectedLocalModel || localModelForProvider(provider) || QWEN_LOCAL_MODEL;
 }
 
 function renderLocalModelPanel(status) {
@@ -411,7 +412,14 @@ function renderLocalModelPanel(status) {
   }
   localModelState = status.state;
   const provider = document.getElementById("providerSelect")?.value;
-  item.classList.toggle("hidden", !localModelForProvider(provider));
+  item.classList.toggle("hidden", !inspectedLocalModel && !localModelForProvider(provider));
+  const advanced = document.getElementById("engineAdvanced");
+  if (advanced) {
+    const visible = !!inspectedLocalModel || !!localModelForProvider(provider);
+    advanced.classList.toggle("hidden", !visible);
+    if (visible && status.state !== "ready") advanced.open = true;
+  }
+
 
   const pct = status.totalBytes ? status.downloadedBytes / status.totalBytes : 0;
   progressEl.value = Math.round(pct * 1000);
@@ -721,14 +729,10 @@ function setupGpuRuntimeSync() {
 }
 
 function revealLocalModelPanel(model = QWEN_LOCAL_MODEL) {
-  const providerSelect = document.getElementById("providerSelect");
-  const provider = model === QWEN_LOCAL_MODEL
-    ? LOCAL_QWEN_PROVIDER
-    : LOCAL_NEMOTRON_PROVIDER;
-  setSelectValue(providerSelect, provider, "groq");
-  // Same read-back as loadSettings: an engine this build doesn't offer lands on
-  // the fallback, and the dependent fields must follow the select, not the ask.
-  toggleProviderFields(providerSelect?.value || provider);
+  // Inspect/download without selecting an engine that is not yet usable.
+  inspectedLocalModel = model;
+  const advanced = document.getElementById("engineAdvanced");
+  if (advanced) advanced.open = true;
   void refreshLocalModelStatus();
   window.setTimeout(() => {
     document.getElementById("localModelItem")?.scrollIntoView({ block: "center" });
@@ -1007,6 +1011,7 @@ function handleTranslateProviderChange() {
 
 function handleProviderChange(event) {
   const providerChoice = event.target.value || "groq";
+  inspectedLocalModel = null;
   renderEngineCards();
   const provider = localModelForProvider(providerChoice) ? "local" : providerChoice;
   if (provider !== "local") {
@@ -1096,8 +1101,7 @@ function bindEventHandlers() {
     void requestMicrophonePermission();
   });
   document.getElementById("recheckPermissions")?.addEventListener("click", () => {
-    void checkMicrophonePermissionStatus();
-    void checkAccessibilityStatus();
+    void recheckPermissions();
   });
   document.getElementById("openDictionaryBtn")?.addEventListener("click", () => {
     // Dictation is where you configure a dictation; the dictionary is part of
@@ -1323,6 +1327,32 @@ function setupThemeSync() {
   });
 }
 
+async function recheckPermissions() {
+  const button = document.getElementById("recheckPermissions");
+  const feedback = document.getElementById("permissionRecheckFeedback");
+  if (!button || !feedback || button.disabled) return;
+  button.disabled = true;
+  button.textContent = translate("settings.permission.checking");
+  feedback.textContent = translate("settings.permission.checking");
+  feedback.setAttribute("aria-busy", "true");
+  try {
+    const [microphone, accessibility] = await Promise.all([
+      checkMicrophonePermissionStatus(), checkAccessibilityStatus(),
+    ]);
+    const failed = microphone == null || accessibility == null;
+    const granted = microphone && (accessibility?.granted || accessibility?.status === "not_required");
+    feedback.textContent = translate(`settings.permissions.${
+      failed ? "checkFailed" : granted ? "checked" : "needsAttention"
+    }`);
+  } catch {
+    feedback.textContent = translate("settings.permissions.checkFailed");
+  } finally {
+    button.disabled = false;
+    button.textContent = translate("settings.permissions.recheck");
+    feedback.setAttribute("aria-busy", "false");
+  }
+}
+
 async function checkMicrophonePermissionStatus() {
   if (!ipc) {
     return;
@@ -1359,6 +1389,7 @@ async function checkMicrophonePermissionStatus() {
     micButton?.classList.toggle("hidden", ok);
     permissionState.microphone = ok;
     renderPermissionSummary();
+    return ok;
   } catch (error) {
     console.error("Failed to check microphone permission:", error);
     statusElement.textContent = translate("settings.permission.error");
@@ -1366,6 +1397,7 @@ async function checkMicrophonePermissionStatus() {
     micButton?.classList.remove("hidden");
     permissionState.microphone = false;
     renderPermissionSummary();
+    return null;
   }
 }
 
@@ -1477,6 +1509,7 @@ async function loadSettings() {
   await initializeDependencies();
 
   try {
+    inspectedLocalModel = null;
     currentSettings = await ipc.invoke("get-settings");
     // Raw API keys come from a dedicated command — get_settings never ships
     // them to general readers. The main window fetches them only because it now
@@ -1569,15 +1602,42 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  // Keep whole-form writes ordered while model readiness IPC is in flight.
+  saveSettings.pending = (saveSettings.pending || Promise.resolve()).then(persistSettings);
+  return saveSettings.pending;
+}
+
+async function persistSettings() {
   try {
     await initializeDependencies();
 
-    const providerChoice = document.getElementById("providerSelect")?.value || "groq";
-    const localModel = localModelForProvider(providerChoice);
-    const provider = localModel ? "local" : providerChoice;
-    if (localModel && localModelState !== "ready") {
-      alert(translate("settings.localModel.notReady"));
-      return;
+    const providerSelect = document.getElementById("providerSelect");
+    const providerChoice = providerSelect?.value || "groq";
+    let localModel = localModelForProvider(providerChoice);
+    let provider = localModel ? "local" : providerChoice;
+    let rejectedEngine = false;
+    let cloudModel = document.getElementById("modelSelect")?.value || "";
+    if (localModel && (currentSettings.provider !== "local" || currentSettings.model !== localModel)) {
+      // Query the requested model, not the last panel's cached status.
+      const status = await ipc.invoke("get-local-model-status", localModel);
+      if (status.state !== "ready") {
+        inspectedLocalModel = localModel;
+        rejectedEngine = true;
+        provider = currentSettings.provider;
+        localModel = provider === "local" ? currentSettings.model : null;
+        cloudModel = currentSettings.model;
+        // A later edit may already be queued; do not repaint over it.
+        if (providerSelect.value === providerChoice) {
+          setSelectValue(providerSelect, providerForSettings(currentSettings), "groq");
+          if (!localModel) {
+            updateModelOptions(provider);
+            setSelectValue(document.getElementById("modelSelect"), cloudModel, cloudModel);
+          }
+          toggleProviderFields(providerSelect.value);
+          renderLocalModelPanel(status);
+          renderEngineCards();
+        }
+      }
     }
     const themeSelect = document.getElementById("themeSelect");
     const settings = {
@@ -1587,7 +1647,7 @@ async function saveSettings() {
       language: document.getElementById("languageSelect")?.value || "auto",
       uiLanguage: document.getElementById("uiLanguageSelect")?.value || "auto",
       uiTheme: normalizeThemePref(themeSelect ? themeSelect.value : "elegant"),
-      model: localModel || document.getElementById("modelSelect")?.value || "",
+      model: localModel || cloudModel,
       microphone: currentSettings.microphone,
       autoLaunch: !!document.getElementById("autoLaunchCheck")?.checked,
       startMinimized: !!document.getElementById("startMinimizedCheck")?.checked,
@@ -1601,7 +1661,9 @@ async function saveSettings() {
 
     await ipc.invoke("save-settings", settings);
     currentSettings = settings;
-    showSaveStatus("ok", translate("settings.saved"));
+    showSaveStatus(rejectedEngine ? "error" : "ok", translate(
+      rejectedEngine ? "settings.localModel.notReady" : "settings.saved"
+    ));
   } catch (error) {
     // Never an alert: a write can fail while the user is mid-edit, and a modal
     // there would eat the next keystroke. The marker persists instead.
@@ -1644,7 +1706,8 @@ async function showSettings(target = null) {
       return;
     }
 
-    activateSettingsTab(SETTINGS_TABS.includes(target) ? target : activeSettingsTab);
+    const resolvedTarget = target === "system" ? "app" : target === "engines" ? "dictation" : target;
+    activateSettingsTab(SETTINGS_TABS.includes(resolvedTarget) ? resolvedTarget : activeSettingsTab);
   } catch (error) {
     console.error("Failed to initialize settings page:", error);
     document.documentElement.setAttribute(

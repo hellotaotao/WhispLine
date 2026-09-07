@@ -3101,3 +3101,59 @@ for (const failure of ["consumer", "wav"]) {
       report.detail.includes("incomplete=true")));
   });
 }
+
+function consentButton() {
+  const listeners = new Set();
+  return {
+    addEventListener(_event, listener) { listeners.add(listener); },
+    removeEventListener(_event, listener) { listeners.delete(listener); },
+    click() { for (const listener of [...listeners]) listener(); },
+    listeners,
+  };
+}
+
+function consentPrompt() {
+  const VoiceInputPrompt = loadVoiceInputPrompt();
+  return createBarePrompt(VoiceInputPrompt, {
+    consentActions: { hidden: true },
+    consentAcceptBtn: consentButton(),
+    consentDeclineBtn: consentButton(),
+    promptElement: { classList: { remove() {} } },
+    waveContainer: { style: {} },
+    cancelNemotronLive() {},
+    finishQwenWorkerSession: async () => {},
+  });
+}
+
+test("translation consent settles and removes listeners when its session is cancelled", async () => {
+  const prompt = consentPrompt();
+  const session = { id: 1 };
+  prompt.recordingSessionId = 1;
+  const result = prompt.askTranslateConsent("Groq", session);
+  prompt.cancelRecordingSession(session);
+  assert.equal(prompt.consentActions.hidden, true);
+  assert.equal(prompt.consentAcceptBtn.listeners.size, 0);
+  assert.equal(await result, false);
+});
+
+test("translation consent belongs only to the newest session", async () => {
+  const prompt = consentPrompt();
+  prompt.recordingSessionId = 1;
+  const first = prompt.askTranslateConsent("Groq", { id: 1 });
+  prompt.recordingSessionId = 2;
+  const second = prompt.askTranslateConsent("OpenAI", { id: 2 });
+  assert.equal(prompt.consentAcceptBtn.listeners.size, 1);
+  prompt.consentAcceptBtn.click();
+  assert.equal(await first, false);
+  assert.equal(await second, true);
+  assert.equal(prompt.consentAcceptBtn.listeners.size, 0);
+});
+
+test("a stale translation session cannot paint a consent prompt over a new recording", async () => {
+  const prompt = consentPrompt();
+  prompt.recordingSessionId = 2;
+  prompt.isRecording = true;
+  const result = prompt.askTranslateConsent("Groq", { id: 1 });
+  assert.equal(prompt.consentActions.hidden, true);
+  assert.equal(await result, false);
+});

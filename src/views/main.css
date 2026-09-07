@@ -131,9 +131,10 @@ body {
    until there is something to act on. */
 .sidebar-version {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  line-height: 1.4;
   width: 100%;
   margin-top: 6px;
   padding: 8px 12px;
@@ -156,9 +157,11 @@ body {
 }
 
 .sidebar-version-action {
+  max-width: 100%;
   font-size: 11px;
   color: var(--text-soft);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .sidebar-version.update-ready {

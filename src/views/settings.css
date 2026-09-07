@@ -66,6 +66,7 @@
 }
 
 #settings-page .setting-group {
+  margin-bottom: 20px;
   overflow: hidden;
   border: 1px solid var(--panel-border);
   border-radius: 12px;
@@ -635,4 +636,38 @@
 .engine-status-warn {
   background: var(--pill-warn-bg);
   color: var(--pill-warn-text);
+}
+
+.translation-summary {
+  padding: 18px 20px;
+  cursor: pointer;
+}
+
+.translation-summary .setting-description {
+  display: block;
+  margin-top: 6px;
+}
+
+.translation-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+#translationPanel .setting-item {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--panel-border);
+}
+
+#translationPanel .setting-control {
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.permission-recheck-feedback:not(:empty) {
+  padding: 12px 20px;
+  font-size: 13px;
+  color: var(--text-soft);
+  border-bottom: 1px solid var(--panel-border);
 }

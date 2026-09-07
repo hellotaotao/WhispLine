@@ -64,19 +64,15 @@ pub fn normalize_local_compute(value: &str) -> &'static str {
   crate::local_asr::ComputePreference::parse(value).as_str()
 }
 
-/// Which cloud provider translate mode should use. An explicit choice wins as
-/// long as that provider has a key; anything else (unset, unknown, or a choice
-/// whose key was since cleared) falls back to the historical order — Groq
-/// first, then OpenAI — so an unconfigured install behaves as it always did.
-/// Returns "" when neither provider has a key.
+/// Keep an explicit upload destination even when its key is missing. Only an
+/// unconfigured install inherits the historical Groq-then-OpenAI default.
+/// Key validation belongs to the route resolver, not the settings payload.
 pub fn normalize_translate_provider(config: &AppConfig) -> &'static str {
-  let has_groq = !config.api_key_groq.trim().is_empty();
-  let has_openai = !config.api_key_openai.trim().is_empty();
   match config.translate_provider.trim() {
-    "groq" if has_groq => "groq",
-    "openai" if has_openai => "openai",
-    _ if has_groq => "groq",
-    _ if has_openai => "openai",
+    "groq" => "groq",
+    "openai" => "openai",
+    "" if !config.api_key_groq.trim().is_empty() => "groq",
+    "" if !config.api_key_openai.trim().is_empty() => "openai",
     _ => "",
   }
 }

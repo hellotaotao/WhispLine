@@ -294,37 +294,16 @@
       <div class="settings-tabs" role="tablist" aria-label="Settings sections" data-i18n="settings.tabsAria" data-i18n-attr="aria-label">
         <button class="settings-tab active" id="settings-tab-dictation" type="button" role="tab" aria-selected="true" aria-controls="settings-panel-dictation" tabindex="0" data-settings-tab="dictation">
           <span class="material-icons">keyboard_voice</span>
-          <span data-i18n="settings.section.dictation">Dictation</span>
+          <span data-i18n="settings.section.dictation">Dictation Settings</span>
         </button>
         <button class="settings-tab" id="settings-tab-app" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-app" tabindex="-1" data-settings-tab="app">
           <span class="material-icons">desktop_mac</span>
-          <span data-i18n="settings.section.app">App</span>
-        </button>
-        <button class="settings-tab" id="settings-tab-system" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-system" tabindex="-1" data-settings-tab="system">
-          <span class="material-icons">verified_user</span>
-          <span data-i18n="settings.section.system">System</span>
+          <span data-i18n="settings.section.app">App Settings</span>
         </button>
       </div>
 
       <div class="settings-panels">
         <section id="settings-panel-dictation" class="settings-panel active" role="tabpanel" aria-labelledby="settings-tab-dictation">
-          <div class="setting-group">
-            <div class="setting-item">
-              <div class="setting-info">
-                <div class="setting-title" data-i18n="settings.recordingShortcut.title">Recording shortcut</div>
-                <div class="setting-description" data-i18n="settings.recordingShortcut.description">
-                  Choose your preferred hold-to-record shortcut. Translation stays Shift + Alt.
-                </div>
-              </div>
-              <div class="setting-control">
-                <select class="input shortcut-select" id="shortcutSelect" title="Select recording shortcut" data-i18n="settings.recordingShortcut.selectTitle" data-i18n-attr="title">
-                  <option value="Ctrl+Shift">Ctrl + Shift</option>
-                  <option value="Ctrl+Alt">Ctrl + Alt</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
           <div class="setting-group">
             <div class="setting-item setting-item-stacked">
               <div class="setting-info">
@@ -340,14 +319,15 @@
               <div class="engine-cards" id="engineCards" role="radiogroup" aria-labelledby="engineCardsLabel"></div>
               <div class="setting-control setting-control-fallback">
                 <select class="input provider-select" id="providerSelect" title="Select transcription provider" data-i18n="settings.apiProvider.selectTitle" data-i18n-attr="title">
-                  <option value="groq">Groq</option>
                   <option value="openai">OpenAI</option>
+                  <option value="groq">Groq</option>
                   <option value="local-qwen" data-i18n="settings.apiProvider.localQwen">Local · Qwen3-ASR · ★ Recommended</option>
                   <option value="local-nemotron" data-i18n="settings.apiProvider.localNemotron">Local · Nemotron 3.5 ASR</option>
                 </select>
               </div>
             </div>
 
+            <div id="dictationKeySlot" hidden></div>
             <div class="setting-item" id="apiKeyItem">
               <div class="setting-info">
                 <div class="setting-title" id="apiKeyTitle" data-i18n="settings.apiKey.title">API Key</div>
@@ -389,52 +369,27 @@
               </div>
             </div>
 
-            <div class="setting-item hidden" id="nemotronLatencyItem">
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-item">
               <div class="setting-info">
-                <div class="setting-title" data-i18n="settings.nemotronLatency.title">Nemotron look-ahead</div>
-                <div class="setting-description" data-i18n="settings.nemotronLatency.description">
-                  Model look-ahead; total response time also includes audio and processing.
+                <div class="setting-title" data-i18n="settings.recordingShortcut.title">Recording shortcut</div>
+                <div class="setting-description" data-i18n="settings.recordingShortcut.description">
+                  Choose your preferred hold-to-record shortcut. Translation stays Shift + Alt.
                 </div>
               </div>
               <div class="setting-control">
-                <select class="input model-select" id="nemotronLatencySelect" title="Select Nemotron latency" data-i18n="settings.nemotronLatency.selectTitle" data-i18n-attr="title">
-                  <option value="560" data-i18n="settings.nemotronLatency.balanced">Lower latency · 0.56 s</option>
-                  <option value="1120" data-i18n="settings.nemotronLatency.accuracy">Higher accuracy · 1.12 s</option>
+                <select class="input shortcut-select" id="shortcutSelect" title="Select recording shortcut" data-i18n="settings.recordingShortcut.selectTitle" data-i18n-attr="title">
+                  <option value="Ctrl+Shift">Ctrl + Shift</option>
+                  <option value="Ctrl+Alt">Ctrl + Alt</option>
                 </select>
-              </div>
-            </div>
-
-            <div class="setting-item hidden" id="localComputeItem">
-              <div class="setting-info">
-                <div class="setting-title" data-i18n="settings.localCompute.title">GPU acceleration</div>
-                <div class="setting-description" id="localComputeStatus"></div>
-              </div>
-              <div class="setting-control">
-                <select class="input model-select" id="localComputeSelect" title="Select compute backend" data-i18n="settings.localCompute.selectTitle" data-i18n-attr="title">
-                  <option value="auto" data-i18n="settings.localCompute.auto">Automatic (currently CPU)</option>
-                  <option value="cpu" data-i18n="settings.localCompute.cpu">CPU</option>
-                  <option value="gpu" data-i18n="settings.localCompute.gpu">GPU (Vulkan)</option>
-                </select>
-                <progress id="localComputeProgress" class="hidden" max="1000" value="0"></progress>
-                <button class="btn btn-secondary hidden" id="localComputeActionBtn" type="button"></button>
-                <button class="btn btn-secondary hidden" id="localComputeDeleteBtn" type="button"></button>
-              </div>
-            </div>
-
-            <div class="setting-item hidden" id="localModelItem">
-              <div class="setting-info">
-                <div class="setting-title" data-i18n="settings.localModel.title">Local model</div>
-                <div class="setting-description" id="localModelStatus"></div>
-              </div>
-              <div class="setting-control">
-                <progress id="localModelProgress" class="hidden" max="1000" value="0"></progress>
-                <button class="btn btn-secondary" id="localModelActionBtn" type="button"></button>
-                <button class="btn btn-secondary hidden" id="localModelDeleteBtn" type="button"></button>
               </div>
             </div>
           </div>
 
-          <div class="setting-group">\n            <div class="setting-item">
+          <div class="setting-group" id="cloudDictationOptions">
+            <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-title" data-i18n="settings.transcriptionLanguage.title">Set default language</div>
                 <div class="setting-description" data-i18n="settings.transcriptionLanguage.description">
@@ -534,7 +489,9 @@
                   </optgroup>
                 </select>
               </div>
-            </div>\n\n            <div class="setting-item">
+            </div>
+
+            <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-title" data-i18n="settings.dictionaryLink.title">Dictionary</div>
                 <div class="setting-description" data-i18n="settings.dictionaryLink.description">
@@ -544,7 +501,63 @@
               <div class="setting-control">
                 <button class="btn btn-secondary" id="openDictionaryBtn" type="button" data-i18n="settings.dictionaryLink.open">Edit dictionary</button>
               </div>
-            </div>\n          </div>
+            </div>
+          </div>
+          <details class="setting-group hidden" id="engineAdvanced">
+            <summary class="translation-summary" data-i18n="settings.advanced">Advanced settings</summary>
+            <div class="setting-item hidden" id="nemotronLatencyItem">
+              <div class="setting-info">
+                <div class="setting-title" data-i18n="settings.nemotronLatency.title">Nemotron look-ahead</div>
+                <div class="setting-description" data-i18n="settings.nemotronLatency.description">
+                  Model look-ahead; total response time also includes audio and processing.
+                </div>
+              </div>
+              <div class="setting-control">
+                <select class="input model-select" id="nemotronLatencySelect" title="Select Nemotron latency" data-i18n="settings.nemotronLatency.selectTitle" data-i18n-attr="title">
+                  <option value="560" data-i18n="settings.nemotronLatency.balanced">Lower latency · 0.56 s</option>
+                  <option value="1120" data-i18n="settings.nemotronLatency.accuracy">Higher accuracy · 1.12 s</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="setting-item hidden" id="localComputeItem">
+              <div class="setting-info">
+                <div class="setting-title" data-i18n="settings.localCompute.title">GPU acceleration</div>
+                <div class="setting-description" id="localComputeStatus"></div>
+              </div>
+              <div class="setting-control">
+                <select class="input model-select" id="localComputeSelect" title="Select compute backend" data-i18n="settings.localCompute.selectTitle" data-i18n-attr="title">
+                  <option value="auto" data-i18n="settings.localCompute.auto">Automatic (currently CPU)</option>
+                  <option value="cpu" data-i18n="settings.localCompute.cpu">CPU</option>
+                  <option value="gpu" data-i18n="settings.localCompute.gpu">GPU (Vulkan)</option>
+                </select>
+                <progress id="localComputeProgress" class="hidden" max="1000" value="0"></progress>
+                <button class="btn btn-secondary hidden" id="localComputeActionBtn" type="button"></button>
+                <button class="btn btn-secondary hidden" id="localComputeDeleteBtn" type="button"></button>
+              </div>
+            </div>
+
+            <div class="setting-item hidden" id="localModelItem">
+              <div class="setting-info">
+                <div class="setting-title" data-i18n="settings.localModel.title">Local model</div>
+                <div class="setting-description" id="localModelStatus"></div>
+              </div>
+              <div class="setting-control">
+                <progress id="localModelProgress" class="hidden" max="1000" value="0"></progress>
+                <button class="btn btn-secondary" id="localModelActionBtn" type="button"></button>
+                <button class="btn btn-secondary hidden" id="localModelDeleteBtn" type="button"></button>
+              </div>
+            </div>
+          </details>
+
+          <details class="setting-group hidden" id="translationPanel">
+            <summary class="translation-summary">
+              <span class="setting-title" data-i18n="settings.translateCloud.title">Cloud translation (optional)</span>
+              <span class="setting-description" data-i18n="settings.translateCloud.description">Local dictation needs no API key. Expand only to set up English translation with Shift + Alt.</span>
+            </summary>
+            <div id="translationKeySlot"></div>
+          </details>
+
         </section>
 
         <section id="settings-panel-app" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-app" hidden>
@@ -629,10 +642,9 @@
               </div>
             </div>
           </div>
-        </section>
 
-        <section id="settings-panel-system" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-system" hidden>
-          <div class="setting-group">\n            <div class="setting-item permission-summary" id="permissionSummary">
+          <div class="setting-group">
+            <div class="setting-item permission-summary" id="permissionSummary">
               <div class="setting-info">
                 <div class="setting-title" id="permissionSummaryTitle" data-i18n="settings.permissions.allGranted">System permissions are in place</div>
                 <div class="setting-description" id="permissionSummaryDetail" data-i18n="settings.permissions.allGrantedDetail">
@@ -642,7 +654,11 @@
               <div class="setting-control">
                 <button class="link-btn" id="recheckPermissions" type="button" data-i18n="settings.permissions.recheck">Re-check</button>
               </div>
-            </div>\n\n            <div class="setting-item">
+            </div>
+
+            <div id="permissionRecheckFeedback" class="permission-recheck-feedback" role="status" aria-live="polite"></div>
+
+            <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-title" data-i18n="settings.microphone.title">Microphone Permission</div>
                 <div class="setting-description" data-i18n="settings.microphone.description">
@@ -657,7 +673,9 @@
                   Check Permission
                 </button>
               </div>
-            </div>\n\n            <div class="setting-item">
+            </div>
+
+            <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-title" data-i18n="settings.accessibility.title">Accessibility Permission</div>
                 <div class="setting-description" data-i18n="settings.accessibility.description">
@@ -672,7 +690,9 @@
                   Check Permission
                 </button>
               </div>
-            </div>\n\n            <div class="setting-item diagnostic-log-item">
+            </div>
+
+            <div class="setting-item diagnostic-log-item">
               <details id="diagnosticLogPanel" class="diagnostic-log-panel">
                 <summary>
                   <div class="setting-info">
@@ -705,7 +725,9 @@
                   ></textarea>
                 </div>
               </details>
-            </div>\n\n            <div class="setting-item">
+            </div>
+
+            <div class="setting-item">
               <div class="setting-info">
                 <div class="setting-title" data-i18n="settings.about.title">About</div>
                 <div class="setting-description settings-build-line" id="settingsBuildLine"></div>
@@ -713,7 +735,8 @@
               <div class="setting-control">
                 <button class="btn btn-secondary" id="revealAppBtn" type="button" data-i18n="settings.about.reveal">Show in Finder</button>
               </div>
-            </div>\n          </div>
+            </div>
+          </div>
         </section>
       </div>
     </div>

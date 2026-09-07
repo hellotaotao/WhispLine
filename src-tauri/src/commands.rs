@@ -2094,16 +2094,16 @@ pub fn resolve_transcription_route(
       return Err(TRANSLATE_NEEDS_CONSENT.into());
     }
     return match crate::settings::normalize_translate_provider(config) {
-      "groq" => Ok(TranscriptionRoute::Cloud {
+      "groq" if !config.api_key_groq.trim().is_empty() => Ok(TranscriptionRoute::Cloud {
         provider: "groq",
         api_key: config.api_key_groq.trim().into(),
       }),
-      "openai" => Ok(TranscriptionRoute::Cloud {
+      "openai" if !config.api_key_openai.trim().is_empty() => Ok(TranscriptionRoute::Cloud {
         provider: "openai",
         api_key: config.api_key_openai.trim().into(),
       }),
       _ => Err(
-        "Translation needs a cloud API key (the local model only transcribes). Add a Groq or OpenAI key in Settings."
+        "Translation needs a cloud API key for the selected provider. Add its API key in Settings."
           .into(),
       ),
     };
@@ -2827,14 +2827,14 @@ mod tests {
   }
 
   #[test]
-  fn local_translate_ignores_a_choice_whose_key_is_gone() {
-    // The user picked OpenAI, then cleared that key: fall back rather than
-    // failing with an empty bearer token.
-    let mut c = consented("local", "gsk", "");
-    c.translate_provider = "openai".into();
-    match resolve_transcription_route(&c, true).unwrap() {
-      TranscriptionRoute::Cloud { provider, .. } => assert_eq!(provider, "groq"),
-      other => panic!("expected groq fallback, got {other:?}"),
+  fn local_translate_rejects_an_explicit_provider_without_its_key() {
+    for (provider, groq, openai) in [("openai", "gsk", ""), ("groq", "", "osk")] {
+      let mut c = consented("local", groq, openai);
+      c.translate_provider = provider.into();
+      let err = resolve_transcription_route(&c, true).unwrap_err();
+      assert!(err.contains("API key"), "{err}");
+      let payload = settings::SettingsPayload::from_config(&c);
+      assert_eq!(payload.translate_provider, provider);
     }
   }
 

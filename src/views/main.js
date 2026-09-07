@@ -597,15 +597,17 @@ function renderReadiness({ hasKey, micOk, axOk, recordShortcut, translateShortcu
 const QWEN_LOCAL_MODEL = "qwen3-asr-0.6b-q8_0";
 const NEMOTRON_LOCAL_MODEL = "nemotron-3.5-asr-streaming-0.6b-q8_0";
 
+// Same order as the Settings engine cards — one list of engines shown in two
+// places should not read differently in each.
 const ENGINE_OPTIONS = [
-  { value: "groq", label: "Groq" },
-  { value: "openai", label: "OpenAI" },
   {
     value: "local-qwen",
     labelKey: "home.engineLocalQwen",
     model: QWEN_LOCAL_MODEL,
     recommended: true,
   },
+  { value: "openai", label: "OpenAI" },
+  { value: "groq", label: "Groq" },
   {
     value: "local-nemotron",
     labelKey: "home.engineLocalNemotron",
