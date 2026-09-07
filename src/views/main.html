@@ -165,7 +165,6 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <div class="logo">SayType</div>
-      <div id="appVersion" class="app-version"></div>
     </div>
 
     <div class="sidebar-nav">
@@ -192,6 +191,13 @@
         <span class="nav-item-icon material-icons">help</span>
         <span data-i18n="sidebar.help">Help</span>
       </button>
+      <!-- The tray's "Restart to update" is unreachable for anyone whose menu
+           bar has pushed the icon into the overflow, which left Settings →
+           App → scroll as the only route. This row is always on screen. -->
+      <button class="sidebar-version" id="sidebarVersion" type="button">
+        <span id="appVersion" class="app-version"></span>
+        <span id="sidebarVersionAction" class="sidebar-version-action"></span>
+      </button>
     </div>
   </div>
 
@@ -199,6 +205,7 @@
     <!-- Home Page -->
     <div id="home-page" class="page active">
       <div id="readiness-card" class="readiness-card"></div>
+      <div id="update-card" class="update-card hidden"></div>
       <div id="engine-card" class="engine-card"></div>
 
       <div class="recent-activity">

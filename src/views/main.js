@@ -108,6 +108,8 @@ async function initializeMainPage() {
     console.error("Failed to load app version", error);
   }
 
+  setupUpdateAffordances();
+
   bindEvents();
 
   // First launch (or the flag was never set): take over with the onboarding
@@ -647,6 +649,118 @@ function selectedEngineValue() {
   return normalizeLocalModel(cachedSettings.model) === NEMOTRON_LOCAL_MODEL
     ? "local-nemotron"
     : "local-qwen";
+}
+
+// --- Software update: two entry points outside Settings -------------------
+// The updater already broadcasts `update-status` (idle | checking | downloading
+// | ready | upToDate | error); until now only the Settings page listened, so a
+// downloaded build announced itself in the tray — invisible when the icon is in
+// the menu-bar overflow — and nowhere else.
+let updateStatus = { state: "idle", version: "" };
+
+function updateReady() {
+  return updateStatus.state === "ready" && !!updateStatus.version;
+}
+
+function renderSidebarVersion() {
+  const row = document.getElementById("sidebarVersion");
+  const action = document.getElementById("sidebarVersionAction");
+  if (!row || !action) {
+    return;
+  }
+  row.classList.toggle("update-ready", updateReady());
+  if (updateReady()) {
+    action.textContent = t("update.restartShort");
+    row.title = t("update.readyTitle", { version: updateStatus.version });
+  } else if (updateStatus.state === "downloading") {
+    action.textContent = t("update.downloadingShort", { version: updateStatus.version });
+    row.title = "";
+  } else if (updateStatus.state === "checking") {
+    action.textContent = t("update.checkingShort");
+    row.title = "";
+  } else {
+    action.textContent = t("update.checkShort");
+    row.title = "";
+  }
+}
+
+function renderUpdateCard() {
+  const card = document.getElementById("update-card");
+  if (!card) {
+    return;
+  }
+  // Nothing to restart into means no card at all — this row is not a place to
+  // report "you are up to date".
+  card.classList.toggle("hidden", !updateReady());
+  if (!updateReady()) {
+    card.replaceChildren();
+    return;
+  }
+
+  const icon = document.createElement("div");
+  icon.className = "readiness-icon update-card-icon";
+  icon.appendChild(makeIcon("system_update_alt"));
+
+  const titles = document.createElement("div");
+  titles.className = "update-card-titles";
+  const title = document.createElement("div");
+  title.className = "update-card-title";
+  title.textContent = t("update.cardTitle", { version: updateStatus.version });
+  const sub = document.createElement("div");
+  sub.className = "update-card-sub";
+  sub.textContent = t("update.cardHint");
+  titles.appendChild(title);
+  titles.appendChild(sub);
+
+  const restart = document.createElement("button");
+  restart.type = "button";
+  restart.className = "btn update-card-btn";
+  restart.textContent = t("update.restart");
+  restart.addEventListener("click", () => void installUpdate());
+
+  card.replaceChildren(icon, titles, restart);
+}
+
+async function installUpdate() {
+  try {
+    await ipc.invoke("install-update-and-restart");
+  } catch (error) {
+    console.error("Failed to install update:", error);
+    showNotification(String(error?.message || error), "warning");
+  }
+}
+
+function applyUpdateStatus(status) {
+  updateStatus = {
+    state: status?.state || "idle",
+    version: status?.version || "",
+  };
+  renderSidebarVersion();
+  renderUpdateCard();
+}
+
+function setupUpdateAffordances() {
+  renderSidebarVersion();
+  // The row is useful even if the updater channel never answers (dev builds
+  // skip update checks entirely) — it still routes to Settings. So a failure
+  // here must not take the rest of init down with it.
+  try {
+    ipc.on("update-status", (_event, payload) => applyUpdateStatus(payload));
+    ipc.invoke("get-update-status").then(applyUpdateStatus).catch(() => {});
+  } catch (error) {
+    console.warn("Update status unavailable:", error);
+  }
+
+  document.getElementById("sidebarVersion")?.addEventListener("click", () => {
+    // Ready: restart straight from here. Otherwise this is the one-click route
+    // to the update row that used to take three.
+    if (updateReady()) {
+      void installUpdate();
+      return;
+    }
+    void showPage("settings", { settingsTarget: "app" });
+    void ipc.invoke("check-for-updates").catch(() => {});
+  });
 }
 
 function renderEngineCard() {

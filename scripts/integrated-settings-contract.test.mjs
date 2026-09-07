@@ -217,6 +217,24 @@ test("new Settings page labels exist in both locales", () => {
   }
 });
 
+test("software update is reachable without the tray or three clicks", () => {
+  // The tray entry is invisible once the menu-bar icon overflows, which left
+  // Settings -> App -> scroll as the only route to a downloaded build.
+  assert.match(mainHtml, /id="sidebarVersion"/);
+  assert.match(mainHtml, /id="update-card"/);
+  assert.match(mainJs, /ipc\.on\("update-status"/);
+  assert.match(mainJs, /invoke\("install-update-and-restart"\)/);
+  assert.match(mainJs, /function renderUpdateCard/);
+  // The card is an announcement, not a status row: it exists only when a build
+  // is actually waiting.
+  assert.match(mainJs, /card\.classList\.toggle\("hidden", !updateReady\(\)\)/);
+  // Tray keeps its entry — this adds routes, it does not move one.
+  assert.ok(trayRs.includes("install-update"));
+  for (const key of ["restartShort", "cardTitle", "checkShort"]) {
+    assert.ok(i18nJs.includes(`${key}:`), `update.${key} copy is missing`);
+  }
+});
+
 test("App settings contains a collapsed diagnostic log viewer with refresh and copy", () => {
   const app = sectionSource("settings-panel-app");
   const details = app.match(/<details\b[^>]*id="diagnosticLogPanel"[^>]*>/)?.[0] || "";

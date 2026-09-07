@@ -122,9 +122,53 @@ body {
 }
 
 .app-version {
-  margin-top: 4px;
   font-size: 11px;
   color: var(--text-soft);
+}
+
+/* Version doubles as the update control: one click to check, or to restart
+   once a build is waiting. Quiet by default — this is not a call to action
+   until there is something to act on. */
+.sidebar-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sidebar-version:hover {
+  background: var(--nav-item-hover-bg);
+}
+
+.sidebar-version:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.sidebar-version-action {
+  font-size: 11px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.sidebar-version.update-ready {
+  background: var(--pill-ok-bg);
+}
+
+.sidebar-version.update-ready .app-version,
+.sidebar-version.update-ready .sidebar-version-action {
+  color: var(--pill-ok-text);
+  font-weight: 600;
 }
 
 .sidebar-nav {
@@ -369,6 +413,50 @@ body {
    interactive control gets its own section, it does NOT live inside the
    readiness card (that one is pure status display; burying the switcher
    there made it unfindable). Same switch as the tray's Engine submenu. */
+/* Home update card. Present only while a downloaded build waits — an
+   up-to-date app has nothing to say here. */
+.update-card {
+  margin-top: 12px;
+  padding: 15px 20px;
+  border-radius: 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--status-success);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.update-card.hidden {
+  display: none;
+}
+
+.update-card-icon {
+  background: var(--pill-ok-bg);
+  color: var(--pill-ok-text);
+}
+
+.update-card-titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.update-card-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.update-card-sub {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.update-card-btn {
+  flex: none;
+  font-weight: 600;
+}
+
 .engine-card {
   margin-top: 12px;
   background: var(--panel-bg);

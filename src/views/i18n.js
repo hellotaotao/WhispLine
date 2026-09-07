@@ -142,6 +142,16 @@
           lead: "Finish the items below and you're set — or head into the app; the readiness card on Home will keep track.",
         },
       },
+      update: {
+        checkShort: "Check for updates",
+        checkingShort: "Checking…",
+        downloadingShort: "Downloading {version}",
+        restartShort: "Restart to update",
+        readyTitle: "{version} is downloaded — restart to use it",
+        cardTitle: "{version} is ready",
+        cardHint: "Restart whenever suits you — it won't do it on its own.",
+        restart: "Restart to update",
+      },
       history: {
         title: "History",
         subtitle: "Your recent transcriptions",
@@ -566,6 +576,16 @@
           title: "还差一点",
           lead: "补齐下面几项就能用了；也可以先进入主界面，首页的就绪卡会随时提醒你。",
         },
+      },
+      update: {
+        checkShort: "检查更新",
+        checkingShort: "检查中…",
+        downloadingShort: "下载 {version}",
+        restartShort: "重启更新",
+        readyTitle: "{version} 已下好，重启即可用上",
+        cardTitle: "{version} 已经下好了",
+        cardHint: "什么时候重启由你决定，它不会自己跳。",
+        restart: "重启更新",
       },
       history: {
         title: "历史",
