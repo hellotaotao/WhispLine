@@ -104,7 +104,7 @@ test("local engines are provider choices while cloud providers retain model sele
 test("the engine is chosen from cards that show what a label cannot", () => {
   // A dropdown row reads "Local · Qwen3-ASR · ★ Recommended" and truncates.
   // The cards carry where the audio goes and whether the choice is usable yet.
-  assert.match(mainHtml, /id="engineCards"[^>]*role="radiogroup"/);
+  assert.match(mainHtml, /id="engineCards"[^>]*role="group"/);
   assert.match(settingsJs, /const ENGINE_CARDS = \[/);
   assert.match(settingsJs, /function renderEngineCards/);
   assert.match(settingsJs, /function engineStatus/);
@@ -218,7 +218,7 @@ test("Qwen is the recommended local engine and Nemotron exposes both latency pro
   assert.match(transcription, /id="nemotronLatencySelect"/);
   assert.match(transcription, /option value="560"/);
   assert.match(transcription, /option value="1120"/);
-  assert.match(settingsJs, /providerChoice !== LOCAL_NEMOTRON_PROVIDER/);
+  assert.match(settingsJs, /configurationProvider !== LOCAL_NEMOTRON_PROVIDER/);
   assert.match(settingsJs, /nemotronLatencyMs: Number/);
   assert.match(mainJs, /value: "local-qwen",[\s\S]*?recommended: true/);
   assert.match(commandsRs, /LOCAL_PROVIDER => crate::local_asr::QWEN_MODEL_ID/);
@@ -340,4 +340,12 @@ test("default settings prioritizes engines and collapses local maintenance", () 
   assert.match(panel, /<details[^>]*id="engineAdvanced"/);
   assert.match(panel, /id="cloudDictationOptions"/);
   assert.doesNotMatch(mainHtml, /data-settings-tab="engines"/);
+});
+
+test("engine configuration lives in a stable inline accordion drawer", () => {
+  assert.match(settingsJs, /function syncEngineDrawer/);
+  assert.match(settingsJs, /aria-expanded/);
+  const render = settingsJs.slice(settingsJs.indexOf('function renderEngineCards'), settingsJs.indexOf('function camelKey'));
+  assert.doesNotMatch(render, /host\.replaceChildren/);
+  assert.match(settingsCss, /\.engine-drawer/);
 });

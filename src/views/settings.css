@@ -671,3 +671,26 @@
   color: var(--text-soft);
   border-bottom: 1px solid var(--panel-border);
 }
+
+.engine-drawer {
+  background: var(--panel-bg);
+  border-left: 3px solid var(--accent);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.engine-drawer[hidden] { display: none; }
+
+#settings-page .engine-drawer .setting-group {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.engine-drawer #engineAdvanced > summary { display: none; }
+
+#settings-page .engine-drawer .setting-item {
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+}

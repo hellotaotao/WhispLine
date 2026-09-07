@@ -183,17 +183,13 @@ const ENGINE_CARDS = [
 ];
 
 function engineStatus(entry) {
-  if (entry.value === LOCAL_QWEN_PROVIDER) {
-    if (localModelState === "ready") {
-      return { key: "settings.engine.status.ready", tone: "ok" };
-    }
-    if (localModelState === "downloading") {
-      return { key: "settings.engine.status.downloading", tone: "busy" };
-    }
-    return { key: "settings.engine.status.needsDownload", tone: "warn" };
-  }
   if (entry.local) {
-    return { key: "settings.engine.status.local", tone: "" };
+    const status = localModelStatuses.get(localModelForProvider(entry.value));
+    if (!status) return { key: "settings.permission.checking", tone: "busy" };
+    if (status.state === "unknown") return { key: "settings.permission.error", tone: "warn" };
+    if (status.state === "ready") return { key: "settings.engine.status.ready", tone: "ok" };
+    if (status.state === "downloading") return { key: "settings.engine.status.downloading", tone: "busy" };
+    return { key: "settings.engine.status.needsDownload", tone: "warn" };
   }
   const field = entry.value === "groq" ? "apiKeyGroq" : "apiKeyOpenAI";
   const hasKey = !!document.getElementById(field)?.value.trim();
@@ -211,16 +207,28 @@ function renderEngineCards() {
   const offered = new Set(Array.from(select.options).map((option) => option.value));
   const selected = select.value;
 
-  host.replaceChildren(
-    ...ENGINE_CARDS.filter((entry) => offered.has(entry.value)).map((entry) => {
+  ENGINE_CARDS.filter((entry) => offered.has(entry.value)).forEach((entry) => {
       const active = entry.value === selected;
+      const existing = document.getElementById(`engine-choice-${entry.value}`);
+      if (existing) {
+        existing.classList.toggle("active", active);
+        existing.setAttribute("aria-pressed", String(active));
+        existing.querySelector(".engine-card-name > span").textContent = translate(`settings.engine.${camelKey(entry.value)}.name`);
+        existing.querySelector(".engine-card-desc").textContent = translate(`settings.engine.${camelKey(entry.value)}.description`);
+        const status = engineStatus(entry);
+        const badge = existing.querySelector(".engine-card-status");
+        badge.textContent = translate(status.key);
+        badge.className = `engine-card-status engine-status-${status.tone}`;
+        return;
+      }
       const card = document.createElement("button");
       card.type = "button";
       card.className = `engine-card-row${active ? " active" : ""}${
         entry.experimental ? " experimental" : ""
       }`;
-      card.setAttribute("role", "radio");
-      card.setAttribute("aria-checked", String(active));
+      card.id = `engine-choice-${entry.value}`;
+      card.setAttribute("aria-pressed", String(active));
+      card.setAttribute("aria-controls", `engine-drawer-${entry.value}`);
 
       const radio = document.createElement("span");
       radio.className = "engine-radio";
@@ -262,6 +270,9 @@ function renderEngineCards() {
       card.append(radio, icon, body, statusEl);
       card.addEventListener("click", () => {
         if (select.value === entry.value) {
+          inspectedLocalModel = null;
+          toggleProviderFields(entry.value);
+          renderEngineCards();
           return;
         }
         // Drive the select rather than duplicating its logic: `change` reaches
@@ -271,9 +282,44 @@ function renderEngineCards() {
         select.dispatchEvent(new Event("change", { bubbles: true }));
         renderEngineCards();
       });
-      return card;
-    })
-  );
+      const drawer = document.createElement("div");
+      drawer.id = `engine-drawer-${entry.value}`;
+      drawer.className = "engine-drawer";
+      drawer.hidden = true;
+      drawer.setAttribute("role", "region");
+      drawer.setAttribute("aria-labelledby", card.id);
+      host.append(card, drawer);
+    });
+  syncEngineDrawer();
+}
+
+function syncEngineDrawer() {
+  const selected = document.getElementById("providerSelect")?.value;
+  const inspected = inspectedLocalModel
+    ? (inspectedLocalModel === QWEN_LOCAL_MODEL ? LOCAL_QWEN_PROVIDER : LOCAL_NEMOTRON_PROVIDER)
+    : null;
+  const expanded = inspected || selected;
+  const local = !!localModelForProvider(expanded);
+  const drawer = document.getElementById(`engine-drawer-${expanded}`);
+  if (!drawer) return;
+  const move = (id) => {
+    const node = document.getElementById(id);
+    if (node && node.parentElement !== drawer) drawer.appendChild(node);
+  };
+  if (local) {
+    move("engineAdvanced");
+    const advanced = document.getElementById("engineAdvanced");
+    if (advanced) advanced.open = true;
+  } else {
+    move("apiKeyItem");
+    move("modelItem");
+  }
+  for (const entry of ENGINE_CARDS) {
+    const panel = document.getElementById(`engine-drawer-${entry.value}`);
+    if (panel) panel.hidden = entry.value !== expanded;
+    document.getElementById(`engine-choice-${entry.value}`)
+      ?.setAttribute("aria-expanded", String(entry.value === expanded));
+  }
 }
 
 function camelKey(providerValue) {
@@ -341,8 +387,7 @@ function toggleProviderFields(providerChoice) {
   if (apiKeyItem && translationPanel && translationSlot && dictationSlot) {
     const wasLocal = apiKeyItem.parentElement === translationSlot;
     if (wasLocal !== isLocal) translationPanel.open = false;
-    if (isLocal) translationSlot.appendChild(apiKeyItem);
-    else dictationSlot.after(apiKeyItem);
+    if (isLocal && apiKeyItem.parentElement !== translationSlot) translationSlot.appendChild(apiKeyItem);
     translationPanel.classList.toggle("hidden", !isLocal);
   }
   if (title) title.textContent = translate("settings.apiKey.title");
@@ -360,21 +405,27 @@ function toggleProviderFields(providerChoice) {
 
   apiKeyItem?.classList.remove("hidden");
   modelItem?.classList.toggle("hidden", isLocal);
-  nemotronLatencyItem?.classList.toggle("hidden", providerChoice !== LOCAL_NEMOTRON_PROVIDER);
+  const configurationProvider = inspectedLocalModel === NEMOTRON_LOCAL_MODEL
+    ? LOCAL_NEMOTRON_PROVIDER
+    : inspectedLocalModel === QWEN_LOCAL_MODEL ? LOCAL_QWEN_PROVIDER : providerChoice;
+  nemotronLatencyItem?.classList.toggle("hidden", configurationProvider !== LOCAL_NEMOTRON_PROVIDER);
   // GPU acceleration applies to the Qwen engine only: Nemotron runs on its
   // own runtime, and platforms without a GPU pack have nothing to switch.
   document
     .getElementById("localComputeItem")
     ?.classList.toggle(
       "hidden",
-      !gpuRuntimeSupported || providerChoice !== LOCAL_QWEN_PROVIDER
+      !gpuRuntimeSupported || configurationProvider !== LOCAL_QWEN_PROVIDER
     );
   const keyProvider = isLocal ? translateSelect?.value || "groq" : provider;
   fieldGroq.classList.toggle("hidden", keyProvider !== "groq");
   fieldOpenAI.classList.toggle("hidden", keyProvider !== "openai");
+  syncEngineDrawer();
 }
 
 // --- Local model panel (provider "local") ---
+const localModelStatuses = new Map();
+const localModelStatusRequests = new Map();
 let localModelState = "absent"; // absent | partial | downloading | ready
 // Whether the running download was started from this Settings page. Gates the
 // "switch to local?" prompt on ready: a download driven by the onboarding
@@ -461,14 +512,27 @@ function renderLocalModelPanel(status) {
 }
 
 async function refreshLocalModelStatus() {
-  if (!ipc) {
-    return;
+  if (!ipc) return;
+  const models = new Set([selectedLocalModel()]);
+  for (const option of document.getElementById("providerSelect")?.options || []) {
+    const model = localModelForProvider(option.value);
+    if (model) models.add(model);
   }
-  try {
-    renderLocalModelPanel(await ipc.invoke("get-local-model-status", selectedLocalModel()));
-  } catch (error) {
-    console.error("Failed to fetch local model status:", error);
-  }
+  await Promise.all([...models].map(async (model) => {
+    const request = (localModelStatusRequests.get(model) || 0) + 1;
+    localModelStatusRequests.set(model, request);
+    try {
+      const status = await ipc.invoke("get-local-model-status", model);
+      if (localModelStatusRequests.get(model) !== request) return;
+      localModelStatuses.set(model, status);
+      if (model === selectedLocalModel()) renderLocalModelPanel(status);
+    } catch (error) {
+      if (localModelStatusRequests.get(model) !== request) return;
+      localModelStatuses.set(model, { state: "unknown" });
+      console.error("Failed to fetch local model status:", model, error);
+    }
+  }));
+  renderEngineCards();
 }
 
 async function handleLocalModelAction() {
@@ -539,6 +603,14 @@ function setupLocalModelSync() {
   ipc.on("local-model-download-progress", (_event, payload) => {
     if (!payload) {
       return;
+    }
+    const model = payload.model || selectedLocalModel();
+    localModelStatusRequests.set(model, (localModelStatusRequests.get(model) || 0) + 1);
+    if (payload.state === "downloading") {
+      localModelStatuses.set(model, payload);
+      renderEngineCards();
+    } else {
+      void refreshLocalModelStatus();
     }
     if (payload.model && payload.model !== selectedLocalModel()) {
       return;
@@ -731,6 +803,7 @@ function setupGpuRuntimeSync() {
 function revealLocalModelPanel(model = QWEN_LOCAL_MODEL) {
   // Inspect/download without selecting an engine that is not yet usable.
   inspectedLocalModel = model;
+  toggleProviderFields(document.getElementById("providerSelect")?.value || "groq");
   const advanced = document.getElementById("engineAdvanced");
   if (advanced) advanced.open = true;
   void refreshLocalModelStatus();
