@@ -405,7 +405,8 @@
           auto: "Automatic (currently CPU)",
           cpu: "CPU",
           gpu: "GPU (Vulkan)",
-          statusCpu: "Running on the CPU. A discrete GPU is usually faster and leaves the CPU free for whatever you are typing into.",
+          statusCpu:
+            "Running on the CPU. A discrete GPU is usually faster; integrated graphics (Intel HD/UHD) measured about twice as slow here, so it is worth leaving on the CPU.",
           statusAbsent: "Needs a one-time {total} download of the Vulkan runtime.",
           statusDownloading: "Downloading the GPU runtime… {done} / {total}",
           statusReady: "Using {device}.",
@@ -883,7 +884,8 @@
           auto: "自动（当前为 CPU）",
           cpu: "CPU",
           gpu: "显卡（Vulkan）",
-          statusCpu: "当前用 CPU 运行。独立显卡通常更快，也能把 CPU 留给你正在使用的程序。",
+          statusCpu:
+            "当前用 CPU 运行。独立显卡通常更快；核显（Intel HD／UHD）实测比 CPU 慢约一倍，装了也建议留在 CPU。",
           statusAbsent: "需要一次性下载 {total} 的 Vulkan 运行时。",
           statusDownloading: "正在下载显卡运行时… {done} / {total}",
           statusReady: "正在使用 {device}。",
