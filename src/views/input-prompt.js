@@ -2980,7 +2980,8 @@ class VoiceInputPrompt {
           sessionId,
           undefined, // chunk-index: this is the whole-clip path
           session?.captureIncomplete ? true : undefined,
-          failureId
+          failureId,
+          session?.provider || "" // recording-start snapshot, independent of current Settings
         );
         return session ? await this.waitForSessionStage(session, "chunk-ipc",
           transcribe, TRANSCRIPTION_STAGE_TIMEOUT_MS) : await transcribe();

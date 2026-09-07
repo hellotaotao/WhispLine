@@ -1,3 +1,4 @@
+use crate::retry_error::RetryError;
 use crate::settings;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -45,18 +46,17 @@ pub fn append_entry_in(path: &Path, entry: Value, cap: usize) -> Result<Vec<Stri
     Vec::new()
   });
   entries.insert(0, entry);
-  let dropped = if entries.len() > cap {
-    let ids = entries[cap..]
-      .iter()
-      .filter_map(|e| e.get("audioId").and_then(Value::as_str).map(String::from))
-      .collect();
-    entries.truncate(cap);
-    ids
-  } else {
-    Vec::new()
-  };
+  let dropped = collect_dropped_audio(&mut entries, cap);
   write_history_entries_to(path, &entries)?;
   Ok(dropped)
+}
+
+fn collect_dropped_audio(entries: &mut Vec<Value>, cap: usize) -> Vec<String> {
+  let dropped = entries.iter().skip(cap)
+    .filter_map(|entry| entry.get("audioId").and_then(Value::as_str).map(String::from))
+    .collect();
+  entries.truncate(cap);
+  dropped
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -155,10 +155,7 @@ pub fn save_recovered_entry_in(
     "recovered": true,
     "recoveryKind": kind,
   }));
-  let dropped_audio_ids = entries.iter().skip(cap)
-    .filter_map(|entry| entry.get("audioId").and_then(Value::as_str).map(String::from))
-    .collect();
-  entries.truncate(cap);
+  let dropped_audio_ids = collect_dropped_audio(&mut entries, cap);
   write_history_entries_to(path, &entries)?;
   Ok(RecoveryWrite { entry_id: recovery_id.to_owned(), dropped_audio_ids })
 }
@@ -227,10 +224,7 @@ pub fn save_pending_audio_in(
     "audioId": recovery_id,
     "audioMime": mime,
   }));
-  let dropped_audio_ids = entries.iter().skip(cap)
-    .filter_map(|entry| entry.get("audioId").and_then(Value::as_str).map(String::from))
-    .collect();
-  entries.truncate(cap);
+  let dropped_audio_ids = collect_dropped_audio(&mut entries, cap);
   if let Err(error) = write_history_entries_to(path, &entries) {
     if let Err(cleanup_error) = fs::remove_file(&audio_path) {
       return Err(error.context(format!("recovery audio cleanup also failed: {cleanup_error}")));
@@ -327,12 +321,7 @@ pub fn append_failed_audio_in(
     "audioId": id,
     "audioMime": mime,
   }));
-  let dropped_audio_ids: Vec<String> = entries
-    .iter()
-    .skip(cap)
-    .filter_map(|entry| entry.get("audioId").and_then(Value::as_str).map(String::from))
-    .collect();
-  entries.truncate(cap);
+  let dropped_audio_ids = collect_dropped_audio(&mut entries, cap);
   if let Err(write_error) = write_history_entries_to(path, &entries) {
     // Never leave a clip on disk that no history row points at.
     if let Err(cleanup_error) = fs::remove_file(&audio_path) {
@@ -344,17 +333,39 @@ pub fn append_failed_audio_in(
   Ok(RecoveryWrite { entry_id: id, dropped_audio_ids })
 }
 
-// The counterpart to append_failed_audio: a retried upload that finally succeeds
-// turns its first attempt's row INTO that success, in place. Without this the
-// recording keeps a failure row it no longer deserves, sitting beside the text
-// it eventually produced. Only a still-pending row is claimed; the recording's
-// own timestamp is kept, since the retry is the same dictation seconds later.
-// Returns whether a row was resolved — the caller then drops the stored clip.
-pub fn resolve_failed_audio(failure_id: &str, text: &str) -> Result<bool> {
-  resolve_failed_audio_in(&settings::history_path()?, failure_id, text)
+// Empty automatic retries and all manual retry results use this transition.
+// Keep the row pending on empty text; release the clip only after nonempty text
+// is persisted. A competing result can only claim a still-pending row.
+pub fn finish_pending_transcription(id: &str, text: &str) -> Result<bool> {
+  finish_pending_transcription_in(&settings::history_path()?, &settings::debug_audio_dir()?, id, text)
+}
+
+// Partial text is preserved by the frontend; retain this clip but retire the
+// earlier upload error once retry succeeds. Never overwrite a settled row.
+pub fn refresh_incomplete_retry(id: &str, text: &str) -> Result<bool> {
+  refresh_incomplete_retry_in(&settings::history_path()?, id, text)
+}
+
+fn refresh_incomplete_retry_in(path: &Path, id: &str, text: &str) -> Result<bool> {
+  let reason = if text.trim().is_empty() { RetryError::NoSpeech } else { RetryError::CaptureIncomplete };
+  refresh_pending_failure_in(path, id, reason.code(), reason.code(), true)
+}
+
+pub fn finish_pending_transcription_in(path: &Path, audio_dir: &Path, id: &str, text: &str) -> Result<bool> {
+  if text.trim().is_empty() {
+    return refresh_pending_failure_in(path, id, RetryError::NoSpeech.code(), RetryError::NoSpeech.code(), true);
+  }
+  let resolved = resolve_failed_audio_in(path, id, text)?;
+  if resolved {
+    if let Err(error) = delete_debug_audio_in(audio_dir, id) {
+      log::warn!("failed to release resolved recording: {error:#}");
+    }
+  }
+  Ok(resolved)
 }
 
 pub fn resolve_failed_audio_in(path: &Path, failure_id: &str, text: &str) -> Result<bool> {
+  anyhow::ensure!(!text.trim().is_empty(), "cannot resolve a recording without text");
   let _guard = history_lock();
   let mut entries = read_history_entries_from(path)?;
   let Some(entry) = entries.iter_mut().find(|entry| {
@@ -362,6 +373,12 @@ pub fn resolve_failed_audio_in(path: &Path, failure_id: &str, text: &str) -> Res
   }) else {
     return Ok(false);
   };
+  settle_pending_entry(entry, failure_id, text);
+  write_history_entries_to(path, &entries)?;
+  Ok(true)
+}
+
+fn settle_pending_entry(entry: &mut Value, failure_id: &str, text: &str) {
   let timestamp = entry
     .get("timestamp")
     .cloned()
@@ -373,8 +390,66 @@ pub fn resolve_failed_audio_in(path: &Path, failure_id: &str, text: &str) -> Res
     "success": true,
     "error": null,
   });
+}
+
+// Build a fresh entry lazily: a retry resolving an existing row needs neither a
+// second History read nor a new debug-audio copy.
+pub fn record_transcription(
+  text: &str, failure_id: Option<&str>, cap: usize, make_entry: impl FnOnce() -> Value,
+) -> Result<Vec<String>> {
+  record_transcription_in(&settings::history_path()?, text, failure_id, cap, make_entry)
+}
+
+fn record_transcription_in(
+  path: &Path, text: &str, failure_id: Option<&str>, cap: usize, make_entry: impl FnOnce() -> Value,
+) -> Result<Vec<String>> {
+  anyhow::ensure!(!text.trim().is_empty(), "cannot record empty transcription");
+  anyhow::ensure!(cap > 0, "history capacity must be positive");
+  let _guard = history_lock();
+  let mut entries = read_history_entries_from(path).unwrap_or_else(|error| {
+    log::warn!("history unreadable, starting a fresh log: {error:#}");
+    Vec::new()
+  });
+  if let Some(id) = failure_id {
+    if let Some(entry) = entries.iter_mut().find(|entry| entry["id"] == id && entry["pending"] == true) {
+      let audio_id = entry["audioId"].as_str().map(str::to_owned);
+      settle_pending_entry(entry, id, text);
+      write_history_entries_to(path, &entries)?;
+      return Ok(audio_id.into_iter().collect());
+    }
+  }
+  entries.insert(0, make_entry());
+  let dropped = collect_dropped_audio(&mut entries, cap);
   write_history_entries_to(path, &entries)?;
-  Ok(true)
+  Ok(dropped)
+}
+
+// Audio I/O happens before acquiring the History lock. If deletion/cap eviction
+// wins while writing, remove the unreferenced clip instead of resurrecting a row.
+pub fn attach_debug_audio(id: &str, bytes: &[u8], mime: &str) -> Result<()> {
+  attach_debug_audio_in(&settings::history_path()?, &settings::debug_audio_dir()?, id, bytes, mime)
+}
+
+fn attach_debug_audio_in(path: &Path, audio_dir: &Path, id: &str, bytes: &[u8], mime: &str) -> Result<()> {
+  if let Err(error) = write_debug_audio_in(audio_dir, id, bytes, mime) {
+    let _ = delete_debug_audio_in(audio_dir, id);
+    return Err(error);
+  }
+  let attached = (|| -> Result<bool> {
+    let _guard = history_lock();
+    let mut entries = read_history_entries_from(path)?;
+    let Some(entry) = entries.iter_mut().find(|entry| entry["id"] == id && entry["success"] == true) else {
+      return Ok(false);
+    };
+    entry["audioId"] = json!(id);
+    entry["audioMime"] = json!(mime);
+    write_history_entries_to(path, &entries)?;
+    Ok(true)
+  })();
+  if !matches!(attached, Ok(true)) {
+    let _ = delete_debug_audio_in(audio_dir, id);
+  }
+  attached.map(|_| ())
 }
 
 pub fn read_history_entry(id: &str) -> Result<Option<Value>> {
@@ -402,6 +477,7 @@ pub fn refresh_pending_failure_in(
   if !retryable {
     entry["pending"] = json!(false);
     entry["audioId"] = Value::Null;
+    entry["audioMime"] = Value::Null;
   }
   write_history_entries_to(path, &entries)?;
   Ok(true)
@@ -459,14 +535,8 @@ pub fn delete_history_entry_in(path: &Path, id: &str) -> Result<()> {
   write_history_entries_to(path, &filtered)
 }
 
-pub fn update_history_entry(id: &str, new_entry: Value) -> Result<bool> {
-  update_history_entry_in(&settings::history_path()?, id, new_entry)
-}
-
-// Replaces the entry whose "id" matches, in place (keeping its list position),
-// with `new_entry`. Returns whether a match was found. Used by re-transcribe to
-// turn a "pending audio" placeholder back into a normal text entry without
-// reordering history.
+// Test utility for exercising basic replacement; retries use guarded transitions.
+#[cfg(test)]
 pub fn update_history_entry_in(path: &Path, id: &str, new_entry: Value) -> Result<bool> {
   let _guard = history_lock();
   let mut entries = read_history_entries_from(path)?;
@@ -828,20 +898,30 @@ mod tests {
     let id = saved.entry_id;
 
     // A retry that fails again keeps both the row and the clip.
-    let mut refreshed = read_history_entry_in(&path, &id).unwrap().unwrap();
-    refreshed["error"] = json!("connection reset");
-    refreshed["text"] = json!("Transcription failed: connection reset");
-    assert!(update_history_entry_in(&path, &id, refreshed).unwrap());
+    assert!(refresh_pending_failure_in(&path, &id,
+      "Transcription failed: connection reset", "connection reset", true).unwrap());
     let entry = read_history_entry_in(&path, &id).unwrap().unwrap();
     assert_eq!(entry["pending"], true);
     assert_eq!(entry["error"], "connection reset");
     assert_eq!(read_debug_audio_in(&audio_dir, &id).unwrap().0, vec![7, 7, 7]);
 
-    // The retry that succeeds replaces the row in place and releases the clip.
-    assert!(update_history_entry_in(&path, &id, json!({
-      "id": id, "text": "the words that were nearly lost", "success": true, "error": null,
-    })).unwrap());
-    delete_debug_audio_in(&audio_dir, &id).unwrap();
+    // Empty and scrubbed-to-empty results must preserve the original clip.
+    for raw in ["", "   ", "字幕由 Amara.org 社区提供。"] {
+      let text = crate::scrub::scrub_transcription(raw);
+      assert!(text.trim().is_empty());
+      assert!(finish_pending_transcription_in(&path, &audio_dir, &id, &text).unwrap());
+      let entry = read_history_entry_in(&path, &id).unwrap().unwrap();
+      assert_eq!(entry["pending"], true);
+      assert_eq!(entry["error"], "RETRY_NO_SPEECH");
+      assert_eq!(read_debug_audio_in(&audio_dir, &id).unwrap().0, vec![7, 7, 7]);
+    }
+    assert!(finish_pending_transcription_in(&path, &audio_dir, &id,
+      "the words that were nearly lost").unwrap());
+    let settled = read_history_entry_in(&path, &id).unwrap();
+    for text in ["", "late competing text"] {
+      assert!(!finish_pending_transcription_in(&path, &audio_dir, &id, text).unwrap());
+      assert_eq!(read_history_entry_in(&path, &id).unwrap(), settled);
+    }
 
     let entries = read_history_entries_from(&path).unwrap();
     assert_eq!(entries.len(), 2, "one recording must never occupy two rows");
@@ -883,8 +963,6 @@ mod tests {
     assert_eq!(read_debug_audio_in(&audio_dir, retry_id).unwrap().0, vec![4, 2]);
   }
 
-  // A row that has moved on — re-transcribed into text, or replaced — must never
-  // be overwritten by a late failure carrying its id.
   // The other half of the retry story: when the second attempt SUCCEEDS, the row
   // its failed first attempt created must become that success, not sit beside it
   // as a failure row for a recording that transcribed fine.
@@ -901,7 +979,9 @@ mod tests {
     ).unwrap();
     let failed_at = read_history_entry_in(&path, retry_id).unwrap().unwrap()["timestamp"].clone();
 
-    assert!(resolve_failed_audio_in(&path, retry_id, "the words that made it").unwrap());
+    let dropped = record_transcription_in(&path, "the words that made it", Some(retry_id), 100,
+      || panic!("resolving a failure must not create another entry or debug clip")).unwrap();
+    assert_eq!(dropped, vec![retry_id]);
 
     let entries = read_history_entries_from(&path).unwrap();
     assert_eq!(entries.len(), 2, "the failure row became the success, it did not multiply");
@@ -919,6 +999,90 @@ mod tests {
     assert_eq!(read_history_entries_from(&path).unwrap()[0]["text"], "the words that made it");
   }
 
+  #[test]
+  fn retry_result_preserves_audio_when_history_cannot_be_read() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("history.json");
+    let audio_dir = temp.path().join("audio");
+    write_debug_audio_in(&audio_dir, "failed-100-1", &[1, 2], "audio/wav").unwrap();
+    fs::write(&path, "corrupt history").unwrap();
+    for text in ["", "recovered words"] {
+      assert!(finish_pending_transcription_in(&path, &audio_dir, "failed-100-1", text).is_err());
+      assert_eq!(read_debug_audio_in(&audio_dir, "failed-100-1").unwrap().0, vec![1, 2]);
+    }
+  }
+
+  #[test]
+  fn incomplete_retry_refreshes_reason_without_releasing_audio() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("history.json");
+    let audio_dir = temp.path().join("audio");
+    let id = "failed-100-1";
+    append_failed_audio_in(&path, &audio_dir, Some(id), "timeout", "timeout",
+      &[1, 2], "audio/wav", true, 100).unwrap();
+    for (text, reason) in [("partial words", RetryError::CaptureIncomplete), ("", RetryError::NoSpeech)] {
+      assert!(refresh_incomplete_retry_in(&path, id, text).unwrap());
+      let entry = read_history_entry_in(&path, id).unwrap().unwrap();
+      assert_eq!(entry["error"], reason.code());
+      assert_eq!(entry["text"], reason.code());
+      assert_eq!(entry["pending"], true);
+      assert_eq!(entry["translate"], true);
+      assert_eq!(read_debug_audio_in(&audio_dir, id).unwrap().0, vec![1, 2]);
+    }
+    finish_pending_transcription_in(&path, &audio_dir, id, "manual result").unwrap();
+    assert!(!refresh_incomplete_retry_in(&path, id, "late partial").unwrap());
+    assert_eq!(read_history_entry_in(&path, id).unwrap().unwrap()["text"], "manual result");
+  }
+
+  #[test]
+  fn late_automatic_success_is_saved_beside_the_manual_result() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("history.json");
+    let audio_dir = temp.path().join("audio");
+    let id = "failed-100-1";
+    append_failed_audio_in(&path, &audio_dir, Some(id), "timeout", "timeout",
+      &[1], "audio/wav", false, 100).unwrap();
+    assert!(finish_pending_transcription_in(&path, &audio_dir, id, "manual words").unwrap());
+    assert!(record_transcription_in(&path, "automatic words", Some(id), 100,
+      || json!({"id": "automatic", "text": "automatic words", "success": true})).unwrap().is_empty());
+    let entries = read_history_entries_from(&path).unwrap();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0]["text"], "automatic words");
+    assert_eq!(entries[1]["text"], "manual words");
+    assert_eq!(entries[1]["id"], id);
+    delete_history_entry_in(&path, id).unwrap();
+    assert!(!finish_pending_transcription_in(&path, &audio_dir, id, "late manual").unwrap());
+    assert_eq!(read_history_entries_from(&path).unwrap().len(), 1);
+  }
+
+  #[test]
+  fn debug_audio_attachment_cleans_up_if_the_row_has_disappeared() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("history.json");
+    let audio_dir = temp.path().join("audio");
+    append_entry_in(&path, json!({"id": "success", "text": "words", "success": true}), 100).unwrap();
+    attach_debug_audio_in(&path, &audio_dir, "success", &[1, 2], "audio/wav").unwrap();
+    assert_eq!(read_history_entry_in(&path, "success").unwrap().unwrap()["audioId"], "success");
+    assert_eq!(read_debug_audio_in(&audio_dir, "success").unwrap().0, vec![1, 2]);
+    delete_history_entry_in(&path, "success").unwrap();
+    attach_debug_audio_in(&path, &audio_dir, "success", &[3], "audio/wav").unwrap();
+    assert!(read_debug_audio_in(&audio_dir, "success").is_err());
+    assert!(read_history_entries_from(&path).unwrap().is_empty());
+  }
+
+  #[test]
+  fn successful_transcription_honors_capacity_and_reports_evicted_audio() {
+    let temp = TempDir::new().unwrap();
+    let path = temp.path().join("history.json");
+    append_entry_in(&path, json!({"id": "old", "audioId": "old-audio"}), 1).unwrap();
+    assert_eq!(record_transcription_in(&path, "new", None, 1,
+      || json!({"id": "new", "text": "new"})).unwrap(), vec!["old-audio"]);
+    assert_eq!(read_history_entries_from(&path).unwrap().len(), 1);
+    assert!(record_transcription_in(&path, "new", None, 0,
+      || panic!("invalid cap must not build an entry")).is_err());
+  }
+
+  // A settled row must never be overwritten by a late failure.
   #[test]
   fn a_retry_id_belonging_to_a_settled_row_starts_a_fresh_one() {
     let temp = TempDir::new().unwrap();
@@ -1007,6 +1171,7 @@ mod tests {
     let entry = read_history_entry_in(&path, id).unwrap().unwrap();
     assert_eq!(entry["pending"], false);
     assert!(entry["audioId"].is_null());
+    assert!(entry["audioMime"].is_null());
   }
 
   #[test]

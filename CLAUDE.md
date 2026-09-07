@@ -215,12 +215,19 @@ hotkey, transcribes speech via a cloud Whisper API, and inserts the text into th
   missing API key returns before any request is built, and is exactly the
   failure a user fixes and retries. Two cases are *not* recorded here because
   the frontend already owns them: a chunked dictation (`chunk_index.is_some()`)
-  and a `capture_incomplete` session (`preserveRecoveryAudio` runs before the
-  request). A hung decode is handed over only on the **local** route
+  and a **local, non-translation** `capture_incomplete` session
+  (`preserveRecoveryAudio` runs before the request).
+  A successful retry of incomplete cloud/translation capture refreshes any
+  pending failure reason to incomplete/no-speech, retaining its clip while the
+  frontend preserves partial text. Cloud/translation
+  capture-incomplete failures are saved by Rust, including route-resolution
+  errors. Incomplete/hang recovery uses the recording-start provider snapshot
+  carried by `recovery-provider`, matching the frontend even if Settings change
+  mid-recording. A hung decode is handed over only for **local-origin** sessions
   (`frontend_owns_hang_recovery`) — the frontend's recovery gate requires
   `provider === "local" && !translateMode`, so gating on `is_hang_error` alone
   made every *cloud* timeout vanish from History with no row and no audio.
-  **One recording, one row — including across the frontend's retry.**
+  **Reuse a pending row across automatic retries.**
   `transcribeWithRetry` auto-retries a hung/timed-out upload, and
   `isRetryableTranscriptionError` does *not* check the provider, so a cloud
   timeout is re-uploaded too. Both attempts therefore carry the same
@@ -228,10 +235,18 @@ hotkey, transcribes speech via a cloud Whisper API, and inserts the text into th
   `valid_stable_recovery_id` because it becomes a filename): a second failure
   refreshes the first attempt's row instead of adding one, and a second attempt
   that **succeeds** turns that row into the success in place
-  (`history::resolve_failed_audio`), dropping the clip only then. Without the
-  shared id one recording leaves two rows and two clips, and a successful retry
+  (`history::record_transcription`), dropping the clip only then. The success
+  path resolves or appends under one lock/read; it builds debug audio only for
+  a new row. Debug audio is written after releasing the History lock, then
+  attached only if the row still exists; otherwise the clip is cleaned up.
+  Empty retry results refresh the reason to "No speech detected"
+  and retain the pending row and clip. Without the shared id one recording
+  leaves two rows and two clips, and a successful retry
   leaves the failure row orphaned beside its own text. An id whose row has
-  already settled is never reused — a fresh one is minted.
+  already settled is never reused for a failure — a fresh one is minted.
+  A late automatic success targeting a settled row appends a fresh row, keeping
+  both results: its text is still returned for insertion and must remain findable
+  in History. Manual retries never overwrite an already-settled row.
   `retranscribe_pending` re-runs the clip through whichever engine is configured
   **now**, not the one that failed: the cause is usually a key, a network or a
   model the user has since fixed, and pinning the row to its original provider
@@ -239,16 +254,24 @@ hotkey, transcribes speech via a cloud Whisper API, and inserts the text into th
   because it is a mode, not an engine. Every failure past loading the row goes
   through `refresh_failed_row`, so the recorded reason is never left blaming a
   cause the user has since fixed — a toast does not survive closing the window.
-  Failure refresh reads the current row under the History lock and only updates
-  a still-pending row: a late manual retry failure cannot overwrite an automatic
-  retry's successful text. Audio reads retain I/O error kinds; only confirmed
-  `NotFound` clears `pending` and `audioId`, while other read errors keep retry
-  available and report the underlying cause.
-  Known gap: for a **cloud or translate-mode** `capture_incomplete`
-  session the clip is held in memory only — `persistRecoveryAudio` defers
-  non-local audio (`routeDeferred`) and Rust defers to the frontend, so neither
-  writes it to disk and it dies with the process. Partial *text* is unaffected;
-  it has its own acknowledged path (`preserveCompletedChunks`).
+  Both success and failure read the current row under the History lock and only
+  update a still-pending row: a late manual retry cannot overwrite an automatic
+  retry's successful text. Manual retries use `history::finish_pending_transcription`,
+  which retains audio on empty text and deletes it only after saving nonempty
+  text. Audio reads retain I/O error kinds; only confirmed
+  `NotFound` clears `pending`, `audioId`, and `audioMime`, while other read errors
+  keep retry available. Detailed filesystem errors stay in logs; History and
+  toasts receive a path-free explanation. Built-in retry errors persist/return
+  `RETRY_*` codes from the typed `retry_error.rs` registry; `RetryFailure`
+  distinguishes built-in codes from engine text without inspecting prefixes.
+  `i18n.js` exports the bilingual renderer used by `main.js`. Codes are part of
+  the persisted History format: retain old translations when retiring codes,
+  and migrate stored rows before renaming/reusing a code. The Node contract test
+  checks every registry code and an append-only legacy-code fixture.
+  Remaining limitation: cloud/translation incomplete audio that never reaches
+  `transcribe_audio`, or whose request succeeds, is still only held in frontend
+  memory (`routeDeferred`). Rust persists the clip on request failure. Partial
+  *text* has its own acknowledged path (`preserveCompletedChunks`).
 
 - `platform/` — the platform abstraction layer (`mod.rs` contract + `macos.rs` / `fallback.rs`).
   All `#[cfg(target_os)]` capabilities — synthetic text insertion, Accessibility/Microphone
@@ -616,4 +639,5 @@ pass — TODO.md #1, confirmed by this experiment as the long-term direction.
   stays in History and the prompt offers a manual "Copy" button (`copy_to_clipboard`).
 - There is no JS runtime dependency: the frontend is plain static HTML/CSS/JS. All business
   logic (transcription, settings, history, hotkey, insertion) lives in Rust.
+- Run `npm test` for all `src/views/*.test.mjs` and `scripts/*.test.mjs`; CI uses the same entry point.
 - Rust unit tests exist (e.g. `history.rs`, `settings.rs`); run with `cargo test` in `src-tauri/`.

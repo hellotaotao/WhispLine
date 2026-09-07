@@ -83,7 +83,7 @@ jobs:
       # same line works on all three OS legs and every *.test.mjs in these dirs
       # — including future ones — joins CI automatically.
       - name: Run Node tests
-        run: node --test "src/views/*.test.mjs" "scripts/*.test.mjs"
+        run: npm test
 
       - name: Run Rust tests
         run: cargo test

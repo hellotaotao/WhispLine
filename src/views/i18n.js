@@ -173,6 +173,18 @@
         saveError: "Error saving dictionary: {message}",
       },
       activity: {
+        retryErrors: {
+          historyRead: "Could not read History. Please try again.",
+          entryMissing: "This history entry no longer exists.",
+          notPending: "This history entry is no longer pending.",
+          audioMissing: "The recording for this entry is no longer available.",
+          audioRead: "Could not read the recording. Please try again.",
+          settingsRead: "Could not read Settings. Please try again.",
+          resultSave: "Could not save the retry result. Please try again.",
+          audioFormat: "The local engine cannot read this recording’s format. Switch to a cloud engine in Settings to re-transcribe it.",
+          noSpeech: "No speech detected",
+          captureIncomplete: "Recording incomplete. Audio retained for retry.",
+        },
         copyTitle: "Copy text",
         deleteTitle: "Delete",
         playTitle: "Play recording (debug)",
@@ -571,6 +583,18 @@
         saveError: "保存词典出错：{message}",
       },
       activity: {
+        retryErrors: {
+          historyRead: "无法读取历史记录，请重试。",
+          entryMissing: "这条历史记录已不存在。",
+          notPending: "这条历史记录已不再等待重试。",
+          audioMissing: "这条记录的录音已不可用。",
+          audioRead: "无法读取录音，请重试。",
+          settingsRead: "无法读取设置，请重试。",
+          resultSave: "无法保存重试结果，请重试。",
+          audioFormat: "本地引擎无法读取此录音格式，请在设置中切换到云端引擎后重试。",
+          noSpeech: "未检测到语音",
+          captureIncomplete: "录音采集不完整，已保留录音以便重试。",
+        },
         copyTitle: "复制文本",
         deleteTitle: "删除",
         playTitle: "播放录音（调试）",
@@ -912,7 +936,27 @@
     return currentLanguage === "zh" ? "zh-CN" : "en-US";
   }
 
+  // Persistent History text/error codes: keep translations for retired codes.
+  // Renaming a code requires a data migration, not just editing this lookup.
+  function localizeRetryError(reason) {
+    const keys = {
+      RETRY_HISTORY_READ: "historyRead",
+      RETRY_ENTRY_MISSING: "entryMissing",
+      RETRY_NOT_PENDING: "notPending",
+      RETRY_AUDIO_MISSING: "audioMissing",
+      RETRY_AUDIO_READ: "audioRead",
+      RETRY_SETTINGS_READ: "settingsRead",
+      RETRY_RESULT_SAVE: "resultSave",
+      RETRY_AUDIO_FORMAT: "audioFormat",
+      RETRY_NO_SPEECH: "noSpeech",
+      RETRY_CAPTURE_INCOMPLETE: "captureIncomplete",
+    };
+    const key = Object.hasOwn(keys, reason) ? keys[reason] : null;
+    return key ? t(`activity.retryErrors.${key}`) : reason;
+  }
+
   window.SayTypeI18n = {
+    localizeRetryError,
     initI18n,
     setLanguage,
     getLanguage,

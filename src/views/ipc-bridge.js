@@ -139,6 +139,7 @@
         "chunk-index": 4, // chunked local path only; omitted for whole-clip decodes
         "capture-incomplete": 5, // partial capture is persisted through recovery
         "failure-id": 6, // stable across transcribeWithRetry's automatic retry
+        "recovery-provider": 7, // recording-start provider snapshot
       },
     },
     "save-pending-transcription": {

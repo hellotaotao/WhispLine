@@ -1,7 +1,7 @@
 document.documentElement.setAttribute("data-main-js-ran", "1");
 
 const ipc = window.__SAYTYPE_IPC__;
-const { initI18n, setLanguage, applyI18n, t, getLocale } = window.SayTypeI18n;
+const { initI18n, setLanguage, applyI18n, t, getLocale, localizeRetryError } = window.SayTypeI18n;
 
 const THEME_PREFS = new Set(["auto", "midnight", "elegant"]);
 const RECENT_LIMIT = 12;
@@ -1499,8 +1499,13 @@ function dateGroupLabel(timestamp) {
   });
 }
 
+function activityDisplayText(activity) {
+  const savedText = (activity.text ?? "").toString();
+  return activity.success === false ? localizeRetryError(savedText) : savedText;
+}
+
 function buildActivityRow(activity) {
-  const rawText = (activity.text ?? "").toString();
+  const rawText = activityDisplayText(activity);
   // A hung local decode that the input-prompt saved for recovery: no text yet,
   // just a stored clip the user can re-transcribe (see retranscribe_pending).
   const isPending = activity.pending === true;
@@ -1599,7 +1604,7 @@ async function retranscribePending(id, btn) {
   } catch (error) {
     console.error("re-transcribe failed:", error);
     // Tauri rejects with the command's Err value, a raw string for Result<_, String>.
-    const reason = (typeof error === "string" ? error : error?.message || "").trim();
+    const reason = localizeRetryError((typeof error === "string" ? error : error?.message || "").trim());
     showNotification(
       reason
         ? t("activity.retranscribeFailedReason", { reason })
@@ -1718,7 +1723,7 @@ function renderHistory() {
 
   const filtered = historyQuery
     ? cachedActivities.filter((activity) =>
-        (activity.text ?? "").toString().toLowerCase().includes(historyQuery)
+        activityDisplayText(activity).toLowerCase().includes(historyQuery)
       )
     : cachedActivities;
 

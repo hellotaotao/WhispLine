@@ -1,3 +1,4 @@
+use crate::retry_error::{RetryError, RetryFailure};
 use crate::hotkey;
 use crate::history;
 use crate::platform::{self, InsertResult};
@@ -908,27 +909,34 @@ fn record_successful_transcription(
       text.chars().count()
     );
   }
-  if text.is_empty() {
+  if text.trim().is_empty() {
+    if let Some(id) = failure_id {
+      if let Err(error) = history::finish_pending_transcription(id, &text) {
+        log::warn!("failed to record empty retry result: {error:#}");
+      }
+      let _ = app.emit("activity-updated", ());
+    }
     return text;
   }
-  // An upload the frontend retried already left a failure row for this exact
-  // recording. Turn that row into this success rather than appending beside it,
-  // and only now drop its clip — the audio outlives the failure, not the text.
-  let resolved = failure_id.is_some_and(|id| match history::resolve_failed_audio(id, &text) {
-    Ok(true) => {
-      let _ = history::delete_debug_audio(id);
-      true
-    }
-    Ok(false) => false,
-    Err(error) => {
-      log::warn!("failed to resolve the earlier failure row {id}: {error:#}");
-      false
-    }
+  // Resolve a prior failure or append the success in one locked History write.
+  let mut debug_entry_id = None;
+  let saved = history::record_transcription(&text, failure_id, 100, || {
+    let entry = activity_entry(&text, true, None);
+    debug_entry_id = entry["id"].as_str().map(str::to_owned);
+    entry
   });
-  if !resolved {
-    if let Err(error) = append_activity(&text, true, None, audio_for_debug) {
-      log::warn!("failed to record transcription in history: {error:#}");
+  match saved {
+    Ok(dropped) => {
+      if let (Some(id), Some((audio, mime))) = (debug_entry_id, audio_for_debug) {
+        if let Err(error) = history::attach_debug_audio(&id, &audio, &mime) {
+          log::warn!("failed to attach debug audio: {error:#}");
+        }
+      }
+      for id in dropped {
+        let _ = history::delete_debug_audio(&id);
+      }
     }
+    Err(error) => log::warn!("failed to record transcription in history: {error:#}"),
   }
   let _ = app.emit("activity-updated", ());
   text
@@ -1053,6 +1061,8 @@ pub async fn transcribe_audio(
     .and_then(|value| value.to_str().ok())
     .map(|value| value == "true")
     .unwrap_or(false);
+  let recovery_provider = headers.get("recovery-provider")
+    .and_then(|value| value.to_str().ok()).unwrap_or("");
   let mime = headers
     .get("mime-type")
     .and_then(|value| value.to_str().ok())
@@ -1095,16 +1105,17 @@ pub async fn transcribe_audio(
   // re-transcribes. Route resolution runs before any request is built, so
   // returning straight out of it would drop the clip the retry needs. Guards
   // match the failure arm below: the frontend owns recovery for chunked and
-  // capture-incomplete sessions.
+  // local, non-translation capture-incomplete sessions.
+  let frontend_owns_recovery = frontend_owns_audio_recovery(
+    recovery_provider, translate_mode, chunk_index, capture_incomplete,
+  );
   let route = match resolve_transcription_route(&config, translate_mode) {
     Ok(route) => route,
     Err(error) => {
-      if chunk_index.is_none() && !capture_incomplete {
-        let mode = if translate_mode { "Translation" } else { "Transcription" };
+      if !frontend_owns_recovery {
         record_failed_transcription(
           &app,
           failure_id.as_deref(),
-          &format!("{mode} failed: {error}"),
           &error,
           &audio_buffer,
           &mime,
@@ -1133,10 +1144,10 @@ pub async fn transcribe_audio(
     id: request_id,
   };
 
-  // Keep a copy of the exact bytes we send until the request comes back. A
+  // Keep bytes only when this command owns recovery. A
   // failed transcription is re-runnable from History, so this copy is kept in
   // release too — unlike the dev-only playback copy the success arm attaches.
-  let audio_for_recovery = audio_buffer.clone();
+  let audio_for_recovery = (!frontend_owns_recovery).then(|| audio_buffer.clone());
 
   let result = tokio::select! {
     _ = cancellation.cancelled() => Err(anyhow::anyhow!("TRANSCRIPTION_CANCELLED")),
@@ -1171,7 +1182,16 @@ pub async fn transcribe_audio(
     // per chunk so the streamed preview matches the recorded text.
     // Partial whole clips are also saved through the frontend recovery path.
     Ok(raw) if chunk_index.is_some() || capture_incomplete => {
-      Ok(crate::scrub::scrub_transcription(&raw))
+      let text = crate::scrub::scrub_transcription(&raw);
+      if capture_incomplete && !frontend_owns_recovery {
+        if let Some(id) = failure_id.as_deref() {
+          if let Err(error) = history::refresh_incomplete_retry(id, &text) {
+            log::warn!("failed to refresh incomplete retry: {error:#}");
+          }
+          let _ = app.emit("activity-updated", ());
+        }
+      }
+      Ok(text)
     }
     // Dev-only on the success path: history can play the recording back (for
     // diagnosing first-word drop / quality). Never in release.
@@ -1179,35 +1199,27 @@ pub async fn transcribe_audio(
       &app,
       &raw,
       failure_id.as_deref(),
-      cfg!(debug_assertions).then(|| (audio_for_recovery, mime.clone())),
+      audio_for_recovery.filter(|_| cfg!(debug_assertions)).map(|audio| (audio, mime.clone())),
     )),
     Err(error) => {
       if is_cancellation_error(&error) {
         return Err("TRANSCRIPTION_CANCELLED".into());
       }
 
-      let mode = if translate_mode {
-        "Translation"
-      } else {
-        "Transcription"
-      };
-      let message = format!("{mode} failed: {}", error);
-      // capture_incomplete sessions are already preserved by the frontend before
-      // the request goes out, so a row here would be the second one for one
-      // recording — the same reason the Ok arm above defers to it.
-      if !frontend_owns_hang_recovery(&error, &route)
-        && chunk_index.is_none()
-        && !capture_incomplete
-      {
-        record_failed_transcription(
-          &app,
-          failure_id.as_deref(),
-          &message,
-          &error.to_string(),
-          &audio_for_recovery,
-          &mime,
-          translate_mode,
-        );
+      // Only local, non-translation recovery is persisted by the frontend.
+      if !frontend_owns_hang_recovery(&error, recovery_provider, translate_mode) && !frontend_owns_recovery {
+        if let Some(audio) = audio_for_recovery.as_deref() {
+          record_failed_transcription(
+            &app, failure_id.as_deref(), &error.to_string(), audio, &mime, translate_mode,
+          );
+        } else {
+          log::error!("recovery audio missing for a backend-owned failure");
+          let message = transcription_failure_message(translate_mode, &error.to_string());
+          if let Err(write_error) = append_activity(&message, false, Some(error.to_string())) {
+            log::warn!("failed to record transcription error: {write_error:#}");
+          }
+          let _ = app.emit("activity-updated", ());
+        }
       }
       Err(error.to_string())
     }
@@ -1693,32 +1705,19 @@ fn broadcast_settings_updates(app: &AppHandle, config: &AppConfig) -> Result<()>
   Ok(())
 }
 
-fn append_activity(
-  text: &str,
-  success: bool,
-  error: Option<String>,
-  audio: Option<(Vec<u8>, String)>,
-) -> Result<()> {
-  let id = history::next_entry_id();
-  let mut entry = json!({
-    "id": id,
+// Pure construction: debug-audio persistence must stay outside the History lock.
+fn activity_entry(text: &str, success: bool, error: Option<String>) -> Value {
+  json!({
+    "id": history::next_entry_id(),
     "text": text,
     "timestamp": Utc::now().to_rfc3339(),
     "success": success,
     "error": error,
-  });
-  // Dev-only: persist the original audio and link it to this entry.
-  if let Some((bytes, mime)) = audio {
-    match history::write_debug_audio(&id, &bytes, &mime) {
-      Ok(()) => {
-        entry["audioId"] = json!(id);
-        entry["audioMime"] = json!(mime);
-      }
-      Err(e) => log::warn!("failed to save debug audio: {e:#}"),
-    }
-  }
-  // Serialized read-modify-write; drop the audio files of entries falling off
-  // the 100-entry cap.
+  })
+}
+
+fn append_activity(text: &str, success: bool, error: Option<String>) -> Result<()> {
+  let entry = activity_entry(text, success, error);
   for aid in history::append_entry(entry, 100)? {
     let _ = history::delete_debug_audio(&aid);
   }
@@ -1734,13 +1733,13 @@ fn append_activity(
 fn record_failed_transcription(
   app: &AppHandle,
   failure_id: Option<&str>,
-  message: &str,
   error: &str,
   audio: &[u8],
   mime: &str,
   translate: bool,
 ) {
-  match history::append_failed_audio(failure_id, message, error, audio, mime, translate, 100) {
+  let message = transcription_failure_message(translate, error);
+  match history::append_failed_audio(failure_id, &message, error, audio, mime, translate, 100) {
     Ok(saved) => {
       for audio_id in saved.dropped_audio_ids {
         let _ = history::delete_debug_audio(&audio_id);
@@ -1750,12 +1749,17 @@ fn record_failed_transcription(
       log::warn!("failed to keep the clip for re-transcription: {audio_error:#}");
       // Best-effort: surface the original API error to the user, not a
       // secondary history-write error.
-      if let Err(err) = append_activity(message, false, Some(error.to_owned()), None) {
+      if let Err(err) = append_activity(&message, false, Some(error.to_owned())) {
         log::warn!("failed to record failed transcription in history: {err:#}");
       }
     }
   }
   let _ = app.emit("activity-updated", ());
+}
+
+fn transcription_failure_message(translate: bool, error: &str) -> String {
+  let mode = if translate { "Translation" } else { "Transcription" };
+  format!("{mode} failed: {error}")
 }
 
 // Re-records why a stored clip still has no text, after EVERY failure that gets
@@ -1770,12 +1774,15 @@ fn refresh_failed_row(
   app: &AppHandle,
   id: &str,
   translate: bool,
-  error: &str,
+  failure: RetryFailure<'_>,
   retryable: bool,
 ) -> String {
-  let mode = if translate { "Translation" } else { "Transcription" };
+  let (message, error) = match failure {
+    RetryFailure::BuiltIn(error) => (error.code().to_owned(), error.code()),
+    RetryFailure::Engine(error) => (transcription_failure_message(translate, error), error),
+  };
   if let Err(write_error) = history::refresh_pending_failure(
-    id, &format!("{mode} failed: {error}"), error, retryable,
+    id, &message, error, retryable,
   ) {
     log::warn!("failed to refresh the reason on history entry {id}: {write_error:#}");
   }
@@ -1880,8 +1887,14 @@ pub async fn retranscribe_pending(
   id: String,
 ) -> Result<String, String> {
   let entry = history::read_history_entry(&id)
-    .map_err(stringify_error)?
-    .ok_or_else(|| "This history entry no longer exists.".to_string())?;
+    .map_err(|error| {
+      log::warn!("re-transcribe could not read History: {error:#}");
+      RetryError::HistoryRead.code().to_owned()
+    })?
+    .ok_or_else(|| RetryError::EntryMissing.code().to_string())?;
+  if entry["pending"] != true {
+    return Err(RetryError::NotPending.code().into());
+  }
   let translate = entry.get("translate").and_then(Value::as_bool).unwrap_or(false);
 
   let (bytes, mime) = match history::read_debug_audio(&id) {
@@ -1891,15 +1904,15 @@ pub async fn retranscribe_pending(
       let missing = error.downcast_ref::<std::io::Error>()
         .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound);
       let reason = if missing {
-        "The recording for this entry is no longer available.".to_owned()
+        RetryError::AudioMissing
       } else {
-        format!("Could not read the recording: {error:#}")
+        RetryError::AudioRead
       };
       return Err(refresh_failed_row(
         &app,
         &id,
         translate,
-        &reason,
+        RetryFailure::BuiltIn(reason),
         !missing,
       ));
     }
@@ -1907,12 +1920,13 @@ pub async fn retranscribe_pending(
   let config = match settings::read_config() {
     Ok(config) => config,
     Err(error) => {
-      return Err(refresh_failed_row(&app, &id, translate, &stringify_error(error), true))
+      log::warn!("re-transcribe could not read settings: {error:#}");
+      return Err(refresh_failed_row(&app, &id, translate, RetryFailure::BuiltIn(RetryError::SettingsRead), true))
     }
   };
   let route = match resolve_transcription_route(&config, translate) {
     Ok(route) => route,
-    Err(error) => return Err(refresh_failed_row(&app, &id, translate, &error, true)),
+    Err(error) => return Err(refresh_failed_row(&app, &id, translate, RetryFailure::Engine(&error), true)),
   };
   // Name the setting to change instead of letting mtmd's decoder fail on a
   // container it cannot read. Only reachable on Windows/Linux — macOS captures
@@ -1922,7 +1936,7 @@ pub async fn retranscribe_pending(
       &app,
       &id,
       translate,
-      "The local engine cannot read this recording's format. Switch to a cloud engine in Settings to re-transcribe it.",
+      RetryFailure::BuiltIn(RetryError::AudioFormat),
       true,
     ));
   }
@@ -1947,32 +1961,17 @@ pub async fn retranscribe_pending(
   let raw = match result {
     Ok(raw) => raw,
     Err(error) => {
-      return Err(refresh_failed_row(&app, &id, translate, &error.to_string(), true))
+      return Err(refresh_failed_row(&app, &id, translate, RetryFailure::Engine(&error.to_string()), true))
     }
   };
   let text = crate::scrub::scrub_transcription(&raw);
 
-  let entry = if text.trim().is_empty() {
-    // Re-transcribe produced no speech — resolve out of the pending state rather
-    // than looping, and drop the audio (retrying silence won't help).
-    json!({
-      "id": id,
-      "text": "",
-      "timestamp": Utc::now().to_rfc3339(),
-      "success": false,
-      "error": "No speech detected",
-    })
-  } else {
-    json!({
-      "id": id,
-      "text": text,
-      "timestamp": Utc::now().to_rfc3339(),
-      "success": true,
-      "error": null,
-    })
-  };
-  history::update_history_entry(&id, entry).map_err(stringify_error)?;
-  let _ = history::delete_debug_audio(&id);
+  if !history::finish_pending_transcription(&id, &text).map_err(|error| {
+    log::warn!("failed to save retry result: {error:#}");
+    RetryError::ResultSave.code().to_owned()
+  })? {
+    return Err(RetryError::NotPending.code().into());
+  }
   let _ = app.emit("activity-updated", ());
   Ok(text)
 }
@@ -2034,6 +2033,13 @@ fn build_transcription_prompt(model: &str, language: &str, dictionary: &str) -> 
   } else {
     Some(dict.to_string())
   }
+}
+
+fn frontend_owns_audio_recovery(
+  provider: &str, translate: bool, chunk_index: Option<u32>, capture_incomplete: bool,
+) -> bool {
+  chunk_index.is_some()
+    || (capture_incomplete && provider == crate::local_asr::LOCAL_PROVIDER && !translate)
 }
 
 #[derive(Debug)]
@@ -2241,14 +2247,15 @@ fn is_hang_error(error: &anyhow::Error) -> bool {
 
 /// Whether the frontend, not `transcribe_audio`, records this failure.
 ///
-/// A hung LOCAL decode is auto-retried by the frontend, which on final give-up
+/// A session captured with the local provider is auto-retried; on final give-up
 /// saves a single "pending audio" entry (`save_pending_transcription`); a row per
 /// attempt here would double-log one recording. That hand-off is local-only —
 /// the frontend's recovery gate requires `provider === "local" && !translateMode`
-/// — so a cloud request that times out is nobody else's to record and must be
+/// — use its recording-start snapshot even if Settings changed during capture.
+/// A cloud-origin session that times out is nobody else's to record and must be
 /// kept here like any other failure, or it would vanish from History entirely.
-fn frontend_owns_hang_recovery(error: &anyhow::Error, route: &TranscriptionRoute) -> bool {
-  is_hang_error(error) && matches!(route, TranscriptionRoute::Local)
+fn frontend_owns_hang_recovery(error: &anyhow::Error, recovery_provider: &str, translate: bool) -> bool {
+  is_hang_error(error) && recovery_provider == crate::local_asr::LOCAL_PROVIDER && !translate
 }
 
 fn accessibility_status(prompt: bool) -> AccessibilityStatus {
@@ -2289,6 +2296,18 @@ pub fn install_update_and_restart(app: AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn incomplete_audio_recovery_matches_the_frontend_persistence_gate() {
+    for provider in ["local", "groq", "openai"] {
+      for translate in [false, true] {
+        assert_eq!(frontend_owns_audio_recovery(provider, translate, None, true),
+          provider == "local" && !translate);
+        assert!(!frontend_owns_audio_recovery(provider, translate, None, false));
+        assert!(frontend_owns_audio_recovery(provider, translate, Some(0), true));
+      }
+    }
+  }
+
   #[test]
   fn audio_probe_detail_drops_control_characters_and_caps_length() {
     // A device label comes from the OS, so a newline in it must not be able to
@@ -2496,17 +2515,18 @@ mod tests {
   // kept by transcribe_audio or it disappears from History entirely.
   #[test]
   fn only_a_local_hang_is_handed_to_the_frontend_to_record() {
-    let cloud = TranscriptionRoute::Cloud { provider: "groq", api_key: "k".into() };
     let hang = anyhow::anyhow!("local ASR stalled mid-decode — treating as hung");
     let timeout = anyhow::anyhow!("error sending request: operation timed out");
     let refused = anyhow::anyhow!("API key not configured");
 
-    assert!(frontend_owns_hang_recovery(&hang, &TranscriptionRoute::Local));
-    assert!(frontend_owns_hang_recovery(&timeout, &TranscriptionRoute::Local));
-    assert!(!frontend_owns_hang_recovery(&timeout, &cloud));
-    assert!(!frontend_owns_hang_recovery(&hang, &cloud));
-    assert!(!frontend_owns_hang_recovery(&refused, &TranscriptionRoute::Local));
-    assert!(!frontend_owns_hang_recovery(&refused, &cloud));
+    assert!(frontend_owns_hang_recovery(&hang, "local", false));
+    assert!(frontend_owns_hang_recovery(&timeout, "local", false));
+    assert!(!frontend_owns_hang_recovery(&timeout, "groq", false));
+    assert!(!frontend_owns_hang_recovery(&hang, "groq", false));
+    assert!(!frontend_owns_hang_recovery(&refused, "local", false));
+    assert!(!frontend_owns_hang_recovery(&refused, "groq", false));
+    assert!(!frontend_owns_hang_recovery(&timeout, "local", true));
+    assert!(!frontend_owns_hang_recovery(&timeout, "", false));
   }
 
   // --- Engine switch: model reset + config preservation ---

@@ -1,6 +1,7 @@
 mod ax_cloud;
 mod commands;
 mod history;
+mod retry_error;
 mod hotkey;
 mod local_asr;
 mod native_capture;
