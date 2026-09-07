@@ -470,3 +470,16 @@
   color: var(--danger-text);
   font-weight: 500;
 }
+
+/* Permission summary: the collapsed form of the two permission rows. Hidden
+   whenever something is actually missing, in which case the detail rows with
+   their fix buttons take over. */
+#settings-page .permission-summary.hidden,
+#settings-page .setting-item.hidden {
+  display: none;
+}
+
+#settings-page .settings-build-line {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}

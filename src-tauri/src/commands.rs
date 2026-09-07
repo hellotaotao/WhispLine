@@ -851,7 +851,7 @@ pub fn get_build_info() -> BuildInfo {
 
 pub fn open_settings(app: AppHandle) -> Result<(), String> {
   log::info!("command:open_settings");
-  show_main_settings(&app, "voice-input")
+  show_main_settings(&app, "dictation")
 }
 
 #[tauri::command]

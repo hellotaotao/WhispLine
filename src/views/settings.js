@@ -60,9 +60,13 @@ let themeSyncBound = false;
 let pendingAccessibilityRecheck = false;
 let accessibilityRecheckTimer = null;
 let settingsInitialized = false;
-let activeSettingsTab = "voice-input";
+let activeSettingsTab = "dictation";
 
-const SETTINGS_TABS = ["voice-input", "transcription", "app"];
+// Grouped by what the user came here to do, not by what kind of setting it is:
+// Dictation holds everything one dictation touches (shortcut, engine, language,
+// dictionary), App is how the app itself looks and starts, System is
+// permissions and diagnostics — the things you set up once and never revisit.
+const SETTINGS_TABS = ["dictation", "app", "system"];
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -560,6 +564,7 @@ async function handleGpuRuntimeDelete() {
     }
     currentSettings.localCompute = "auto";
     await refreshGpuRuntimeStatus();
+    void renderBuildLine();
   } catch (error) {
     console.error("Failed to remove the GPU runtime:", error);
   }
@@ -915,7 +920,7 @@ function handleUiLanguageChange(event) {
 }
 
 function activateSettingsTab(tabName, focus = false) {
-  const target = SETTINGS_TABS.includes(tabName) ? tabName : "voice-input";
+  const target = SETTINGS_TABS.includes(tabName) ? tabName : "dictation";
   activeSettingsTab = target;
 
   document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
@@ -977,6 +982,20 @@ function bindEventHandlers() {
     ?.addEventListener("change", handleTranslateProviderChange);
   checkPermissionButton?.addEventListener("click", () => {
     void requestMicrophonePermission();
+  });
+  document.getElementById("recheckPermissions")?.addEventListener("click", () => {
+    void checkMicrophonePermissionStatus();
+    void checkAccessibilityStatus();
+  });
+  document.getElementById("openDictionaryBtn")?.addEventListener("click", () => {
+    // Dictation is where you configure a dictation; the dictionary is part of
+    // that, even though its editor is its own page.
+    window.showPage?.("dictionary");
+  });
+  document.getElementById("revealAppBtn")?.addEventListener("click", () => {
+    void ipc.invoke("reveal-app-in-finder").catch((error) => {
+      console.error("Failed to reveal the app:", error);
+    });
   });
   checkAccessibilityButton?.addEventListener("click", () => {
     void handleAccessibilityPermission();
@@ -1056,6 +1075,23 @@ function bindEventHandlers() {
   pageEventsBound = true;
 }
 
+// Permissions are install-time state, not a setting anyone returns to. When
+// both are granted the two rows collapse into one line; the moment one is
+// missing they expand again, with the button that fixes it.
+const permissionState = { microphone: null, accessibility: null };
+
+function renderPermissionSummary() {
+  const allGranted =
+    permissionState.microphone === true && permissionState.accessibility === true;
+  document.getElementById("permissionSummary")?.classList.toggle("hidden", !allGranted);
+  for (const id of ["permissionStatus", "accessibilityStatus"]) {
+    document
+      .getElementById(id)
+      ?.closest(".setting-item")
+      ?.classList.toggle("hidden", allGranted);
+  }
+}
+
 function renderAccessibilityStatus(result) {
   const statusElement = document.getElementById("accessibilityStatus");
   if (!statusElement) {
@@ -1081,6 +1117,8 @@ function renderAccessibilityStatus(result) {
 
   // Once granted there's nothing to act on, so hide the check button.
   document.getElementById("checkAccessibility")?.classList.toggle("hidden", ok);
+  permissionState.accessibility = ok;
+  renderPermissionSummary();
 }
 
 function scheduleAccessibilityRecheck() {
@@ -1204,11 +1242,15 @@ async function checkMicrophonePermissionStatus() {
       statusElement.className = "permission-status denied";
     }
     micButton?.classList.toggle("hidden", ok);
+    permissionState.microphone = ok;
+    renderPermissionSummary();
   } catch (error) {
     console.error("Failed to check microphone permission:", error);
     statusElement.textContent = translate("settings.permission.error");
     statusElement.className = "permission-status denied";
     micButton?.classList.remove("hidden");
+    permissionState.microphone = false;
+    renderPermissionSummary();
   }
 }
 
@@ -1290,6 +1332,29 @@ async function recheckAccessibilityPermission() {
     console.error("Failed to recheck accessibility permission:", error);
     renderAccessibilityStatus(null);
     return null;
+  }
+}
+
+// The About row mirrors the sidebar's build string; dev builds carry the
+// counter and provenance, official builds are a bare version.
+async function renderBuildLine() {
+  const element = document.getElementById("settingsBuildLine");
+  if (!element) {
+    return;
+  }
+  try {
+    const info = await ipc.invoke("get-build-info");
+    if (!info) {
+      return;
+    }
+    const parts = [`SayType ${info.version}`];
+    if (info.channel !== "official") {
+      parts.push(`dev.${info.buildNumber}`);
+      parts.push(`${info.gitHash}${info.gitDirty ? " (dirty)" : ""}`);
+    }
+    element.textContent = parts.join(" · ");
+  } catch (error) {
+    console.error("Failed to read build info:", error);
   }
 }
 
@@ -1458,7 +1523,7 @@ async function showSettings(target = null) {
     }
 
     if (typeof target === "string" && target.startsWith("local-model")) {
-      activateSettingsTab("transcription");
+      activateSettingsTab("dictation");
       const model = target.split(":", 2)[1] || QWEN_LOCAL_MODEL;
       revealLocalModelPanel(model);
       return;

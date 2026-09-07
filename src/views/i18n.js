@@ -212,9 +212,9 @@
         pageSubtitle: "Changes take effect immediately",
         tabsAria: "Settings sections",
         section: {
-          voiceInput: "Voice Input",
-          transcription: "Transcription",
+          dictation: "Dictation",
           app: "App",
+          system: "System",
         },
         recordingShortcut: {
           title: "Recording shortcut",
@@ -390,6 +390,22 @@
         },
         saved: "Saved",
         saveError: "Couldn't save — the last change was not kept.",
+        permissions: {
+          allGranted: "System permissions are in place",
+          allGrantedDetail:
+            "Microphone and Accessibility are both granted — recording and automatic insertion work.",
+          recheck: "Re-check",
+        },
+        dictionaryLink: {
+          title: "Dictionary",
+          description:
+            "Proper nouns and terms you say often, passed to the cloud engines so they come out spelled your way.",
+          open: "Edit dictionary",
+        },
+        about: {
+          title: "About",
+          reveal: "Show in Finder",
+        },
       },
       axCloud: {
         hint: "Drag me into the list",
@@ -646,9 +662,9 @@
         pageSubtitle: "改动即时生效",
         tabsAria: "设置分类",
         section: {
-          voiceInput: "语音输入",
-          transcription: "转写",
+          dictation: "听写",
           app: "应用",
+          system: "系统",
         },
         recordingShortcut: {
           title: "录音快捷键",
@@ -822,6 +838,20 @@
         },
         saved: "已保存",
         saveError: "没能保存——刚才那次改动没生效。",
+        permissions: {
+          allGranted: "系统权限齐了",
+          allGrantedDetail: "麦克风、辅助功能都已授权——录音和自动插入文字都能用。",
+          recheck: "重新检查",
+        },
+        dictionaryLink: {
+          title: "词典",
+          description: "常说的专有名词和术语，发给云端引擎，让它照你的写法出字。",
+          open: "编辑词典",
+        },
+        about: {
+          title: "关于",
+          reveal: "在 Finder 中显示",
+        },
       },
       axCloud: {
         hint: "把我拖进列表",

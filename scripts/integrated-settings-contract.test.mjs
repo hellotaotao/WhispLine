@@ -40,7 +40,7 @@ test("main sidebar treats Settings as a normal page", () => {
 
 test("Settings uses three horizontal accessible tabs", () => {
   assert.match(mainHtml, /class="settings-tabs"[^>]*role="tablist"/);
-  for (const tab of ["voice-input", "transcription", "app"]) {
+  for (const tab of ["dictation", "app", "system"]) {
     assert.match(mainHtml, new RegExp(`data-settings-tab="${tab}"`));
     assert.match(mainHtml, new RegExp(`id="settings-panel-${tab}"`));
   }
@@ -50,29 +50,26 @@ test("Settings uses three horizontal accessible tabs", () => {
   assert.match(settingsJs, /event\.key === "ArrowLeft"/);
 });
 
-test("existing settings are redistributed by purpose", () => {
-  const voiceInput = sectionSource("settings-panel-voice-input");
+test("settings are grouped by what the user came to do", () => {
+  // Dictation owns everything one dictation touches. Language and the engine
+  // used to sit in different tabs even though changing one changes whether the
+  // other applies at all.
+  const dictation = sectionSource("settings-panel-dictation");
   for (const id of [
     "shortcutSelect",
-    "languageSelect",
-    "permissionStatus",
-    "accessibilityStatus",
-  ]) {
-    assert.match(voiceInput, new RegExp(`id="${id}"`));
-  }
-
-  const transcription = sectionSource("settings-panel-transcription");
-  for (const id of [
     "providerSelect",
     "apiKeyGroq",
     "apiKeyOpenAI",
     "modelSelect",
     "nemotronLatencySelect",
     "localModelItem",
+    "languageSelect",
+    "openDictionaryBtn",
   ]) {
-    assert.match(transcription, new RegExp(`id="${id}"`));
+    assert.match(dictation, new RegExp(`id="${id}"`));
   }
 
+  // App is how the app itself looks and starts.
   const app = sectionSource("settings-panel-app");
   for (const id of [
     "uiLanguageSelect",
@@ -83,10 +80,25 @@ test("existing settings are redistributed by purpose", () => {
   ]) {
     assert.match(app, new RegExp(`id="${id}"`));
   }
+
+  // System is set-up-once state: permissions, logs, build. Not day-to-day.
+  const system = sectionSource("settings-panel-system");
+  for (const id of [
+    "permissionSummary",
+    "permissionStatus",
+    "accessibilityStatus",
+    "diagnosticLogPanel",
+    "settingsBuildLine",
+  ]) {
+    assert.match(system, new RegExp(`id="${id}"`));
+  }
+  // Permissions collapse to one row when nothing needs doing.
+  assert.match(settingsJs, /function renderPermissionSummary/);
+  assert.match(settingsJs, /permissionState\.accessibility = ok/);
 });
 
 test("local engines are provider choices while cloud providers retain model selection", () => {
-  const transcription = sectionSource("settings-panel-transcription");
+  const transcription = sectionSource("settings-panel-dictation");
   assert.match(transcription, /option value="local-nemotron"/);
   assert.match(transcription, /option value="local-qwen"/);
   assert.doesNotMatch(transcription, /option value="local"/);
@@ -190,7 +202,7 @@ test("backend routes every Settings entry into the main window", () => {
 });
 
 test("Qwen is the recommended local engine and Nemotron exposes both latency profiles", () => {
-  const transcription = sectionSource("settings-panel-transcription");
+  const transcription = sectionSource("settings-panel-dictation");
   assert.match(transcription, /option value="local-qwen"[^>]*>Local · Qwen3-ASR · ★ Recommended<\/option>/);
   assert.match(transcription, /id="nemotronLatencyItem"/);
   assert.match(transcription, /id="nemotronLatencySelect"/);
@@ -205,13 +217,13 @@ test("Qwen is the recommended local engine and Nemotron exposes both latency pro
 test("new Settings page labels exist in both locales", () => {
   for (const value of [
     'pageTitle: "Settings"',
-    'voiceInput: "Voice Input"',
-    'transcription: "Transcription"',
+    'dictation: "Dictation"',
     'app: "App"',
+    'system: "System"',
     'pageTitle: "设置"',
-    'voiceInput: "语音输入"',
-    'transcription: "转写"',
+    'dictation: "听写"',
     'app: "应用"',
+    'system: "系统"',
   ]) {
     assert.ok(i18nJs.includes(value), `missing i18n entry: ${value}`);
   }
@@ -235,9 +247,10 @@ test("software update is reachable without the tray or three clicks", () => {
   }
 });
 
-test("App settings contains a collapsed diagnostic log viewer with refresh and copy", () => {
-  const app = sectionSource("settings-panel-app");
-  const details = app.match(/<details\b[^>]*id="diagnosticLogPanel"[^>]*>/)?.[0] || "";
+test("System settings contains a collapsed diagnostic log viewer with refresh and copy", () => {
+  const system = sectionSource("settings-panel-system");
+  const app = system;
+  const details = system.match(/<details\b[^>]*id="diagnosticLogPanel"[^>]*>/)?.[0] || "";
 
   assert.ok(details, "diagnostic log details is missing");
   assert.doesNotMatch(details, /\sopen(?:\s|=|>)/, "diagnostic log details must start collapsed");
