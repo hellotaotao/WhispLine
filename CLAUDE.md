@@ -60,7 +60,7 @@ notary service and staples the ticket; Windows (NSIS/MSI) and Linux
 on real machines). Every leg also emits **minisign-signed auto-update artifacts**
 plus a merged `latest.json` manifest (via `tauri.release.conf.json`'s
 `createUpdaterArtifacts` — kept out of the main config so local builds never
-need the updater key). Everything lands on a **draft** GitHub Release.
+need the updater key). Everything lands on a **published** GitHub Release (`releaseDraft: false`).
 Notarization is intentionally CI-only: it uploads the build to Apple and waits
 minutes, whereas local signing is instant (local builds skip it).
 
@@ -75,7 +75,7 @@ minutes, whereas local signing is instant (local builds skip it).
 > **Release notes are AI-generated in CI** (also optional). After the build, the
 > workflow runs `scripts/generate-release-notes.mjs` — commits from the previous
 > `v*` tag to the current one → Claude API (`claude-sonnet-5`) → bilingual
-> (EN + 中文) user-facing notes written into the draft release via `gh release
+> (EN + 中文) user-facing notes written into the published release via `gh release
 > edit`. Requires the `ANTHROPIC_API_KEY` secret; if it's absent or the call
 > fails, the step warns and the release keeps the default body — never blocks.
 > Debug locally with `node scripts/generate-release-notes.mjs <tag> --dry-run`
