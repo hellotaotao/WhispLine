@@ -154,6 +154,129 @@ async function initializeDependencies() {
   ({ initI18n, setLanguage, applyI18n, t } = dependencies.i18nApi);
 }
 
+// Keep the original selects as value holders; buttons use the same change path.
+function renderSettingChoices() {
+  for (const id of ["uiLanguageSelect", "themeSelect", "modelSelect"]) {
+    const select = document.getElementById(id);
+    if (!select) continue;
+    let group = document.getElementById(`${id}Choices`);
+    if (!group) {
+      group = document.createElement("div");
+      group.id = `${id}Choices`;
+      group.className = id === "themeSelect" ? "theme-choices" : "segmented-choices";
+      group.setAttribute("role", "group");
+      select.after(group);
+      select.hidden = true;
+      select.addEventListener("change", renderSettingChoices);
+    }
+    group.setAttribute("aria-label", select.title);
+    const order = id === "themeSelect" ? ["auto", "elegant", "midnight"]
+      : id === "uiLanguageSelect" ? ["auto", "zh", "en"] : null;
+    const options = Array.from(select.options);
+    if (order) options.sort((a, b) => order.indexOf(a.value) - order.indexOf(b.value));
+    if (id === "modelSelect") {
+      renderModelChoices(select, group, options);
+      continue;
+    }
+    const signature = options.map(option => option.value).join("|");
+    if (group.dataset.options !== signature) {
+      group.replaceChildren();
+      group.dataset.options = signature;
+      for (const option of options) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.value = option.value;
+        button.className = "setting-choice";
+        if (id === "themeSelect") {
+          const swatch = document.createElement("span");
+          swatch.className = `theme-swatch theme-swatch-${option.value}`;
+          swatch.setAttribute("aria-hidden", "true");
+          button.appendChild(swatch);
+        }
+        const label = document.createElement("span");
+        label.className = "choice-label";
+        button.appendChild(label);
+        button.addEventListener("click", () => {
+          if (select.value === button.dataset.value) return;
+          select.value = button.dataset.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        group.appendChild(button);
+      }
+    }
+    for (const button of group.children) {
+      const option = options.find(option => option.value === button.dataset.value);
+      const modelLabels = {
+        "whisper-large-v3-turbo": "Large V3 Turbo",
+        "whisper-large-v3": "Large V3",
+        "gpt-transcribe": "GPT Transcribe",
+      };
+      button.querySelector(".choice-label").textContent = id === "modelSelect"
+        ? modelLabels[option.value] || option.textContent : option.textContent;
+      button.title = option.textContent;
+      button.setAttribute("aria-pressed", String(button.dataset.value === select.value));
+      button.disabled = select.disabled;
+    }
+  }
+}
+
+// Rates and tradeoffs verified against OpenAI/Groq model documentation.
+// https://developers.openai.com/api/docs/models/gpt-transcribe
+// https://console.groq.com/docs/speech-to-text
+function renderModelChoices(select, group, options) {
+  const single = options.length === 1;
+  const hint = select.closest(".setting-item")?.querySelector(".setting-description");
+  if (hint) {
+    const key = single ? "settings.modelSingleHint" : "settings.modelMultipleHint";
+    hint.setAttribute("data-i18n", key);
+    hint.textContent = translate(key);
+  }
+  const signature = options.map(option => option.value).join("|");
+  group.className = single ? "model-info" : "segmented-choices model-choices";
+  if (group.dataset.options !== signature) {
+    group.replaceChildren();
+    group.dataset.options = signature;
+    for (const option of options) {
+      const item = document.createElement(single ? "div" : "button");
+      item.dataset.value = option.value;
+      item.className = single ? "model-summary" : "setting-choice model-choice";
+      if (!single) {
+        item.type = "button";
+        item.addEventListener("click", () => {
+          if (select.value === item.dataset.value) return;
+          select.value = item.dataset.value;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      }
+      for (const className of ["model-name", "model-recommended", "model-price", "model-detail"]) {
+        const span = document.createElement("span");
+        span.className = className;
+        item.appendChild(span);
+      }
+      group.appendChild(item);
+    }
+  }
+  const metadata = {
+    "gpt-transcribe": ["GPT Transcribe", "modelOpenaiPrice", "modelOpenaiDetail"],
+    "whisper-large-v3-turbo": ["Large V3 Turbo", "modelTurboPrice", "modelTurboDetail"],
+    "whisper-large-v3": ["Large V3", "modelV3Price", "modelV3Detail"],
+  };
+  for (const item of group.children) {
+    const value = item.dataset.value;
+    const data = metadata[value] || [value, "", ""];
+    item.querySelector(".model-name").textContent = data[0];
+    item.querySelector(".model-price").textContent = data[1] ? translate(`settings.${data[1]}`) : "";
+    item.querySelector(".model-detail").textContent = data[2] ? translate(`settings.${data[2]}`) : "";
+    const recommended = item.querySelector(".model-recommended");
+    recommended.hidden = value !== "whisper-large-v3-turbo";
+    recommended.textContent = translate("settings.engine.recommended");
+    if (!single) {
+      item.setAttribute("aria-pressed", String(value === select.value));
+      item.disabled = select.disabled;
+    }
+  }
+}
+
 function updateModelOptions(provider) {
   const select = document.getElementById("modelSelect");
   if (!select) {
@@ -170,6 +293,7 @@ function updateModelOptions(provider) {
       : label;
     select.appendChild(option);
   });
+  renderSettingChoices();
 }
 
 // The engine list, in the order it is offered. Cloud rows carry the key state,
@@ -199,6 +323,7 @@ function engineStatus(entry) {
 }
 
 function renderEngineCards() {
+  renderSettingChoices();
   const host = document.getElementById("engineCards");
   const select = document.getElementById("providerSelect");
   if (!host || !select) {
@@ -1660,6 +1785,7 @@ async function loadSettings() {
       startMinimizedCheck.checked = !!currentSettings.startMinimized;
     }
 
+    renderSettingChoices();
     await refreshLocalModelStatus();
     await refreshGpuRuntimeStatus();
     await Promise.all([

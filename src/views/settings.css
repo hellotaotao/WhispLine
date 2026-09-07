@@ -312,8 +312,8 @@
 #settings-page .switch {
   position: relative;
   display: inline-flex;
-  width: 42px;
-  height: 24px;
+  width: 50px;
+  height: 30px;
 }
 
 #settings-page .switch input {
@@ -337,22 +337,22 @@
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--app-text);
+  background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform 0.18s;
 }
 
 #settings-page .switch input:checked + .slider {
   border-color: var(--accent);
-  background: var(--accent-soft-bg);
+  background: var(--accent);
 }
 
 #settings-page .switch input:checked + .slider::before {
-  transform: translateX(18px);
-  background: var(--accent);
+  transform: translateX(20px);
+  background: #fff;
 }
 
 #settings-page .switch input:focus-visible + .slider {
@@ -558,8 +558,8 @@
 
 .engine-radio {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 1.5px solid var(--panel-border-strong);
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -694,3 +694,88 @@
   gap: 12px;
   padding: 16px;
 }
+
+#settings-page select[hidden] { display: none; }
+
+.segmented-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--panel-bg-subtle);
+  max-width: 100%;
+}
+
+.setting-choice {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+.segmented-choices .setting-choice { flex: 1; }
+.segmented-choices .setting-choice[aria-pressed="true"] {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+  color: var(--app-text);
+  box-shadow: 0 1px 4px rgba(0,0,0,.14);
+  font-weight: 600;
+}
+
+.setting-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-choices { display: flex; gap: 12px; }
+.theme-choices .setting-choice { padding: 0; width: 88px; }
+.theme-swatch {
+  display: block;
+  height: 54px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.theme-swatch-elegant { background: linear-gradient(135deg,#f4f0e9,#e5ece7); }
+.theme-swatch-midnight { background: linear-gradient(135deg,#7274db,#704aa5); }
+.theme-swatch-auto { background: linear-gradient(90deg,#eeeee7 50%,#7863bf 50%); }
+.theme-choices .setting-choice[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
+.theme-choices .setting-choice[aria-pressed="true"] .theme-swatch { outline: 2px solid var(--accent); outline-offset: -2px; }
+.engine-drawer { padding: 4px 16px 16px 36px; background: var(--accent-soft-bg); }
+#settings-page .engine-drawer .setting-item {
+  margin-top: 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  min-height: 0;
+}
+#settings-page .engine-drawer .setting-info { flex: 0 0 auto; }
+#settings-page .engine-drawer .setting-control { flex: 1; min-width: 0; }
+#modelSelectChoices { width: 100%; }
+@media (max-width: 760px) {
+  .theme-choices { gap: 8px; }
+  .theme-choices .setting-choice { width: 72px; }
+  .engine-drawer { padding-left: 12px; padding-right: 12px; }
+}
+
+#uiLanguageSelectChoices { width: max-content; }
+#uiLanguageSelectChoices .setting-choice { white-space: nowrap; }
+.theme-choices { align-items: flex-start; }
+
+#settings-page .engine-drawer #engineAdvanced {
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+}
+#settings-page .engine-drawer .setting-info { flex: 1 1 180px; min-width: 0; }
+#settings-page .engine-drawer .setting-control { flex: 2 1 240px; min-width: 0; }
+#settings-page .engine-drawer select { max-width: 100%; }
+.model-info { width: 100%; }
+.model-summary { padding: 4px 0; }
+.model-name { font-weight: 600; }
+.model-price, .model-detail { display: block; margin-top: 6px; font-size: 12px; line-height: 1.5; }
+.model-price { color: var(--accent); font-weight: 600; }
+.model-detail { color: var(--text-muted); font-weight: 400; }
+.model-recommended { margin-left: 6px; font-size: 11px; color: var(--pill-ok-text); background: var(--pill-ok-bg); border-radius: 4px; padding: 2px 5px; }
+.model-choice { text-align: left; min-width: 180px; }

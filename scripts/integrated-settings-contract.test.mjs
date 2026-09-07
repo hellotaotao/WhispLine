@@ -349,3 +349,21 @@ test("engine configuration lives in a stable inline accordion drawer", () => {
   assert.doesNotMatch(render, /host\.replaceChildren/);
   assert.match(settingsCss, /\.engine-drawer/);
 });
+
+test("reference-style settings controls retain select-backed values", () => {
+  for (const id of ['uiLanguageSelect','themeSelect','modelSelect']) {
+    assert.match(settingsJs, new RegExp(`"${id}"`));
+  }
+  assert.match(settingsJs, /function renderSettingChoices/);
+  assert.match(settingsCss, /\.theme-swatch/);
+  assert.match(settingsCss, /\.segmented-choices/);
+});
+
+test("cloud models explain cost and tradeoffs without a single-choice button", () => {
+  assert.match(settingsJs, /function renderModelChoices/);
+  assert.match(settingsJs, /options\.length === 1/);
+  assert.match(i18nJs, /\$0\.04/);
+  assert.match(i18nJs, /\$0\.111/);
+  assert.match(i18nJs, /modelTurboDetail/);
+  assert.match(settingsCss, /#engineAdvanced\s*\{[^}]*background:\s*transparent/);
+});
