@@ -123,8 +123,8 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "SayType ${{ github.ref_name }}"
           releaseBody: "下载对应平台的安装包。"
-          # Verify all platform artifacts before publishing the updater rollout.
-          releaseDraft: true
+          # 直接发布正式版:发布即自动更新放量(见 RELEASING.md)。
+          releaseDraft: false
           prerelease: false
           # 生成并合并 latest.json(自动更新清单);Windows 以 NSIS .exe 为准。
           includeUpdaterJson: true
