@@ -25,7 +25,7 @@ let currentThemePref = "elegant";
 // default (settings.rs default_model / save_onboarding_api_key /
 // perform_transcription_request's empty-model fallback). `recommended` adds a
 // localized "★ 推荐" tag to the label. Turbo over lv3 is evidence-backed: the
-// 2026-07-03 punctuation sweep (CLAUDE.md) showed lv3 collapse to zero
+// 2026-07-03 punctuation sweep (docs/cloud-transcription.md) showed lv3 collapse to zero
 // punctuation on run-on Chinese speech while turbo+seed punctuates.
 //
 // OpenAI is deliberately ONE row. `gpt-transcribe` ($0.0045/min, 2026-07-28)

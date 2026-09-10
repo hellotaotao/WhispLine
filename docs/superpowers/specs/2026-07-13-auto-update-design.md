@@ -1,7 +1,7 @@
 # Automatic Updates — Design
 
 **Date:** 2026-07-13
-**Status:** Approved (brainstormed with Tao; see decisions below)
+**Status:** Implemented (`a5e3c15` onward; v1.4.0 was the first updater-capable release). Design record; later changes are not reflected here. In particular, the draft-then-Publish rollout gate described below was replaced by direct publishing (`releaseDraft: false`, see RELEASING.md).
 
 ## Problem
 

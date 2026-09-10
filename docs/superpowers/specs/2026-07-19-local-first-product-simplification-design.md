@@ -1,5 +1,7 @@
 # Local-first 产品收敛与翻译功能移除 — 设计
 
+> **Historical design — status checked 2026-09-09:** Local-first has shipped; translation is retained with explicit provider and consent. The removal plan below is not current work. See [Product pathway](../../PRODUCT_PATHWAY.md).
+
 日期：2026-07-19
 
 最近更新：2026-07-29
@@ -616,6 +618,8 @@ cargo check
 ```text
 docs/superpowers/specs/2026-07-22-local-asr-long-audio-chunking-design.md
 ```
+
+（2026-09-11 注：该草案已于 2026-08-29 实现，原文件已删除，内容合并进 `docs/local-asr.md`。）
 
 它处理长录音分段和 release 后尾延迟，不属于本轮产品收敛。两份设计的关系是：
 

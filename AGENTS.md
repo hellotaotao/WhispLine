@@ -1,22 +1,27 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-SayType is a **Tauri 2** app. The Rust backend lives in `src-tauri/src/` (`lib.rs`, `commands.rs`, `hotkey.rs`, `settings.rs`, `history.rs`, `tray.rs`, `state.rs`). The web frontend (HTML/CSS/JS for the `main`, `settings`, and `input-prompt` windows) lives in `src/views/`, served directly with no bundler. App config is in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`; macOS entitlements are in `build/`; icons in `src-tauri/icons/` and `assets/`.
+`CLAUDE.md` is the maintained guide to this repository: architecture, the invariants to respect, and
+where each topic is documented. Read it before changing code. This file is a short summary for agents
+that don't load `CLAUDE.md`.
 
-## Build, Test, and Development Commands
+## Project structure
+SayType is a **Tauri 2 + Rust** app (Electron was removed; don't reintroduce it). The Rust backend lives in `src-tauri/src/`; the frontend is plain HTML/CSS/JS with no bundler, in `src/views/`. App config: `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`; macOS entitlements in `build/`; icons in `src-tauri/icons/` and `assets/`.
+
+## Build, test, and development commands
 - `npm install` installs JS tooling (only `@tauri-apps/cli`). Building also needs a Rust toolchain (`rustup`).
 - `npm run dev` (or `npm start`) launches `tauri dev`.
-- `npm run build` builds for the host; use `npm run build:mac`, `npm run build:win`, or `npm run build:linux` for targeted builds.
-- `cd src-tauri && cargo test` runs the Rust unit tests; `cargo check` verifies compilation.
+- `npm test` runs every `src/views/*.test.mjs` and `scripts/*.test.mjs`, the same entry point CI uses.
+- `cargo test --manifest-path src-tauri/Cargo.toml` runs the Rust unit tests.
+- `npm run build` builds for the host; `npm run build:mac`, `build:win` and `build:linux` target a platform.
 
-## Coding Style & Naming Conventions
-There is no enforced lint/format config. In Rust, match the existing 2-space-indent style and run `cargo fmt` if available. In the frontend, match existing patterns: 2-space indentation, semicolons, descriptive action-oriented names. Keep UI strings in `src/views/i18n.js`. Renderer↔backend communication goes through `src/views/ipc-bridge.js` (`window.__SAYTYPE_IPC__`) — do not call Tauri APIs directly from window scripts.
+## Coding style
+Match the surrounding code: 2-space indentation in Rust and JS, semicolons in JS, descriptive names. Keep UI strings in `src/views/i18n.js`. Renderer↔backend communication goes through `src/views/ipc-bridge.js` (`window.__SAYTYPE_IPC__`); don't call Tauri APIs directly from window scripts. A new IPC command is wired in three places (`commands.rs`, the `invoke_handler!` list in `lib.rs`, the `ipc-bridge.js` maps), and `scripts/ipc-contract.test.mjs` enforces it.
 
-## Testing Guidelines
-Rust logic should have `cargo test` coverage (see `history.rs`, `settings.rs`). For UI/behavior changes do a manual pass: `npm run dev`, then verify tray/menu actions, the recording flow, permission prompts, and text insertion. Note platform-specific behavior in the PR (insertion and the global hotkey are macOS-only today).
+## Platforms
+Platform-specific code lives behind `src-tauri/src/platform/` with `#[cfg(target_os)]` gates. Text insertion and the global hotkey are implemented for macOS, Windows and Linux, but only macOS is verified on real machines. Note platform-specific behavior in commits and PRs.
 
-## Commit & Pull Request Guidelines
-History uses short, imperative messages, often with conventional prefixes (`feat:`, `fix(tauri):`, `refactor(ui):`). Follow that pattern. PRs should include a concise summary, testing notes, and screenshots/clips for UI changes. Call out permission-related updates (macOS Accessibility/Microphone) explicitly.
+## Commits and pull requests
+Use short imperative messages with conventional prefixes (`feat:`, `fix(settings):`, `docs:`). Include testing notes, and screenshots for UI changes. Call out macOS Accessibility/Microphone permission changes explicitly.
 
-## Security & Configuration Tips
-API keys are entered in-app and stored in the app's JSON config via `settings.rs`; never commit secrets. When adding an IPC command, wire it in `commands.rs`, register it in `lib.rs`, and add it to the `ipc-bridge.js` maps. If you change permissions or entitlements, update `build/entitlements.mac.plist` and document any new OS prompts in `README.md`.
+## Security and configuration
+API keys are entered in the app and stored in its JSON config via `settings.rs`; never commit secrets. `TODO.md` is a local, gitignored planning file; don't commit it. If you change permissions or entitlements, update `build/entitlements.mac.plist` and document new OS prompts in `README.md`.

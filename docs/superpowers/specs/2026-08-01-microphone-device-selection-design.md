@@ -1,7 +1,7 @@
 # Microphone Device Selection
 
 **Date:** 2026-08-01
-**Status:** Approved for planning
+**Status:** Partly implemented. macOS native capture opens the device named by the `microphone` setting (`67a7f0c`), but as of 1.15.1 there is no picker in the UI, so capture uses the system default input in practice. The UI described below is not built.
 
 ## Problem
 

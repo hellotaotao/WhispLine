@@ -1,6 +1,6 @@
 # Dev build identifier — design
 
-2026-07-18
+2026-07-18 · **Status:** implemented (`6416df5`); design record, later changes are not reflected here
 
 ## Problem
 

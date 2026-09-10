@@ -1,8 +1,8 @@
 //! Local Qwen3-ASR backend (provider "local"): on-demand assets (2 GGUF files
 //! + a pinned llama.cpp release binary), resumable downloads, and
-//! inference via llama-mtmd-cli. The CLI's chat mode keeps one worker warm for
-//! a short idle window; a one-shot subprocess remains the compatibility
-//! fallback. See docs/superpowers/specs/2026-07-12-local-asr-qwen3-design.md.
+//! inference via llama-mtmd-cli. A chat-mode worker is prewarmed and leased to
+//! one recording session; a one-shot subprocess remains the compatibility
+//! fallback. See docs/local-asr.md.
 use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::Digest;

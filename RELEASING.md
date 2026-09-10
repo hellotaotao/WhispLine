@@ -2,97 +2,192 @@
 
 **English** · [中文说明 ↓](#发布中文)
 
-SayType ships installers for **macOS, Windows, and Linux** to the project's
-[GitHub Releases](https://github.com/hellotaotao/saytype/releases) page. They
-are built automatically by the
-[`Release`](.github/workflows/release.yml) GitHub Actions workflow — you never
-build or upload them by hand.
+SayType ships installers for **macOS, Windows and Linux** on the project's
+[GitHub Releases](https://github.com/hellotaotao/saytype/releases) page. They are built by the
+[`Release`](.github/workflows/release.yml) GitHub Actions workflow; nothing is built or uploaded by
+hand.
 
 ## What the workflow does
 
-Pushing a tag shaped like `vX.Y.Z` triggers a **3-platform matrix**, which:
+Pushing a tag shaped like `vX.Y.Z` runs a **3-platform matrix**:
 
-1. **macOS** — builds a **universal** binary (Intel + Apple Silicon) via
-   `tauri build --target universal-apple-darwin`, signs it with your Developer
-   ID and notarizes it with Apple — **if** the signing secrets are configured
-   (see [below](#one-time-setup-signing--notarization)).
-2. **Windows** — builds NSIS `.exe` + `.msi`; **Linux** — AppImage/deb/rpm.
-   Both unsigned (and unverified on real machines).
-3. Every leg also emits minisign-signed **auto-update artifacts** plus a merged
-   `latest.json` manifest (requires the `TAURI_SIGNING_PRIVATE_KEY` secrets).
-4. Generates bilingual AI release notes via the Claude API (optional — needs
-   the `ANTHROPIC_API_KEY` secret; skipped with a warning if absent).
-5. Uploads everything to a **draft** GitHub Release named after the tag.
+1. **macOS**: a **universal** binary (Intel + Apple Silicon) via
+   `tauri build --target universal-apple-darwin`, signed with Developer ID, notarized and stapled,
+   **if** the signing secrets are configured (see [One-time setup](#one-time-setup)).
+2. **Windows**: NSIS `.exe` + `.msi`. **Linux**: AppImage, deb, rpm. Both are unsigned, and neither is
+   verified on real machines.
+3. Every leg emits minisign-signed **auto-update artifacts** and merges them into one `latest.json`.
+   `createUpdaterArtifacts` is set only in `tauri.release.conf.json`, so local builds never need the
+   updater key.
+4. A follow-up job writes bilingual AI release notes into the release (optional, see
+   [Release notes](#release-notes)).
+5. The release is **published directly** (`releaseDraft: false`).
 
-You then review the draft on the Releases page and click **Publish**. (To skip
-the manual publish step, set `releaseDraft: false` in the workflow.) Publishing
-is also the **auto-update rollout gate**: installed clients only see
-*published* releases, so a draft rolls out to no one.
+Publishing is also the **auto-update rollout**. Installed clients (v1.4.0 and later) check
+`releases/latest/download/latest.json` at startup and every 24 hours, download in the background, and
+offer "Restart to update" in the tray and in Settings. The release becomes public as soon as the first
+leg uploads, so a client that checks during the ~15–25 minute build may find `latest.json` missing, or
+without its platform yet. That check fails quietly (it is logged) and the next one succeeds.
 
-> The workflow only runs on `v*` tag pushes — ordinary commits never trigger it,
-> so the file sits dormant until you cut a release.
+> The workflow only runs on `v*` tag pushes; ordinary commits never trigger it.
 
 ## Cutting a release
 
-The version shown in the main window and Settings is compiled from `Cargo.toml`
-through `env!("CARGO_PKG_VERSION")`, so the version must live in the committed
-files and the tag simply mirrors it.
+The version shown in the app is compiled from `Cargo.toml` (`env!("CARGO_PKG_VERSION")`), and the
+workflow builds whatever version is in the tagged commit. So bump and commit first, then tag:
 
 ```bash
-npm run version:tauri:patch              # bump 1.0.x -> 1.0.(x+1) in package.json, tauri.conf.json, Cargo.toml
-git commit -am "chore: release v1.0.90"  # commit the version bump
-git tag v1.0.90 && git push origin v1.0.90
+npm run version:tauri:patch        # or: node scripts/bump-tauri-version.js 1.2.0
+git commit -am "chore(release): bump version to X.Y.Z"
+git tag vX.Y.Z && git push origin main --tags
 ```
 
-Then watch the **Actions** tab. The first run takes ~15–25 min (two
-architectures plus the notarization queue); later runs are faster thanks to the
-Rust cache.
+Then watch the **Actions** tab. A first run takes ~15–25 min (two architectures plus the notary
+queue); later runs are faster thanks to the Rust cache.
 
-> Don't run `npm run build:mac` to cut a release — it produces a local
-> dev-channel build. When `scripts/sign.env` is configured, the build is signed
-> with the configured local identity, but is not notarized by default. With the
-> release secrets configured, official release artifacts are signed, notarized,
-> and stapled in CI.
-> Releasing is just bump → commit → tag → push.
+> Don't use `npm run build:mac` to cut a release. It produces a local dev-channel build, signed with
+> the identity in `scripts/sign.env` if that file exists and never notarized.
 
-## One-time setup: signing & notarization
+### If a release is bad
 
-Without these secrets the workflow still **succeeds**, but the `.dmg` is
-**unsigned**: downloaders hit a Gatekeeper warning and must right-click → Open
-(or run `xattr -cr /Applications/SayType.app`). To produce an installer that
-opens cleanly, add the secrets below under
-**Settings → Secrets and variables → Actions → New repository secret**.
+Clients follow `releases/latest`, which resolves to the newest published, non-prerelease release.
+Turning the bad release back into a draft (or deleting it) points `latest` at the previous version
+again, so clients that haven't updated stop being offered it. Clients that already updated stay on
+the bad version until a newer one is published, so the real fix is another patch release.
 
-Requires a paid Apple Developer account and a **Developer ID Application**
-certificate.
+<a id="one-time-setup"></a>
+
+## One-time setup
+
+### Signing & notarization (macOS)
+
+Without these secrets the workflow still **succeeds**, but the `.dmg` is **unsigned**: downloaders
+hit a Gatekeeper warning and must right-click → Open (or run `xattr -cr /Applications/SayType.app`).
+The "Configure Apple signing" step passes the `APPLE_*` values to tauri-cli only when
+`APPLE_CERTIFICATE` is set, so adding them later needs no workflow change.
+
+Notarization means Apple scans the signed app and returns a ticket that is **stapled into the
+bundle**, so Gatekeeper lets other Macs run it without the "unidentified developer" warning. It
+requires the Hardened Runtime (already on) and a **Developer ID Application** certificate. The
+`Apple Development` certificate used for local builds is a different type, and the notary service
+rejects it.
 
 | Secret | How to get it |
 | --- | --- |
-| `APPLE_SIGNING_IDENTITY` | The full `Developer ID Application: Name (TEAMID)` string from `security find-identity -v -p codesigning` |
-| `APPLE_TEAM_ID` | The 10-character ID in the parentheses above (also on your [Membership page](https://developer.apple.com/account#MembershipDetailsCard)) |
+| `APPLE_SIGNING_IDENTITY` | The full `Developer ID Application: Name (TEAMID)` string from `security find-identity -v -p codesigning`. This repo: `Developer ID Application: Tao Wang (CU3VTR9MRH)` |
+| `APPLE_TEAM_ID` | The 10-character ID in the parentheses above (this repo: `CU3VTR9MRH`) |
 | `APPLE_CERTIFICATE` | Base64 of the exported `.p12` (see below) |
-| `APPLE_CERTIFICATE_PASSWORD` | The password you set when exporting the `.p12` |
-| `APPLE_ID` | Your Apple Developer account email |
-| `APPLE_PASSWORD` | An [app-specific password](https://appleid.apple.com) (Sign-In and Security → App-Specific Passwords) — **not** your login password |
+| `APPLE_CERTIFICATE_PASSWORD` | The password set when exporting the `.p12` |
+| `APPLE_ID` | The Apple Developer account email |
+| `APPLE_PASSWORD` | An [app-specific password](https://appleid.apple.com) (Sign-In and Security → App-Specific Passwords), **not** the login password |
 
-**Exporting the certificate:** In Keychain Access → *login* keychain →
-*My Certificates*, find the `Developer ID Application` entry (expand it to
-confirm it has a private key), right-click → Export as `.p12` with a password,
-then copy its base64 to the clipboard:
+**Creating and exporting the certificate:** create a *Developer ID Application* certificate in
+Xcode → Settings → Accounts → (team) → Manage Certificates → `+`, or at
+[developer.apple.com](https://developer.apple.com/account/resources/certificates/list). In Keychain
+Access → *login* → *My Certificates*, expand the entry to confirm it has a private key, export it as
+a password-protected `.p12`, then:
 
 ```bash
 base64 -i ~/Desktop/certificate.p12 | pbcopy   # paste into APPLE_CERTIFICATE
 ```
 
-If `security find-identity` shows no `Developer ID Application` certificate,
-create one at
-[developer.apple.com](https://developer.apple.com/account/resources/certificates/list)
-(Certificates → ➕ → Developer ID Application), download the `.cer`, and
-double-click to install it before exporting.
+`tauri-action` imports the certificate into a temporary keychain and signs; because the `APPLE_ID` /
+`APPLE_PASSWORD` / `APPLE_TEAM_ID` trio is present, it then notarizes and staples. An App Store
+Connect API key (`APPLE_API_ISSUER` / `APPLE_API_KEY` / `APPLE_API_KEY_PATH`) can replace the trio.
+`tauri.conf.json` keeps `signingIdentity: null` on purpose: in CI the environment variable takes over,
+and local builds are unaffected.
 
-`tauri.conf.json` keeps `signingIdentity: null` on purpose — in CI the
-`APPLE_SIGNING_IDENTITY` environment variable takes over, so local builds are
-unaffected.
+### Updater signing key
+
+| Secret | Value |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/saytype-updater.key` (minisign). **Back it up: if this key is lost, installed clients can never auto-update again.** |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The key's password (also in the local `scripts/sign.env`) |
+
+The bundler reads only `TAURI_SIGNING_PRIVATE_KEY` (a path or the contents); a `_PATH` variant is
+ignored. The matching public key is in `tauri.conf.json`.
+
+<a id="release-notes"></a>
+
+### Release notes
+
+After the build, the workflow runs `scripts/generate-release-notes.mjs`: commits from the previous
+`v*` tag to this one → Claude API (`claude-sonnet-5`) → bilingual (EN + 中文) user-facing notes,
+written into the release with `gh release edit`. It needs the `ANTHROPIC_API_KEY` secret; if that is
+missing or the call fails, the step warns and the release keeps its default body. Debug locally with
+`node scripts/generate-release-notes.mjs <tag> --dry-run` (prints the prompt, no API call). Design:
+`docs/superpowers/specs/2026-07-12-ai-release-notes-design.md`.
+
+## Verifying
+
+**Notarization**, on the downloaded app:
+
+- `spctl -a -t exec -vv SayType.app` → `accepted … source=Notarized Developer ID`
+- `xcrun stapler validate SayType.app` → `The validate action worked!`
+
+**Auto-update end to end without publishing**, using `src-tauri/tauri.updater-e2e.conf.json`
+(localhost endpoint). This replaces `/Applications/SayType.app` and temporarily bumps the version
+files. Don't run `scripts/collect-artifacts.js` during it, or it overwrites the archived installer in
+`dist/`.
+
+1. Quit SayType and build the "old" version:
+   `CI=true sh -c '. ./scripts/sign.env; npx tauri build --target aarch64-apple-darwin --config src-tauri/tauri.updater-e2e.conf.json'`.
+   Replace `/Applications/SayType.app` with
+   `src-tauri/target/aarch64-apple-darwin/release/bundle/macos/SayType.app`.
+2. Run `npm run version:tauri:patch` (don't commit) and build again with the same command. Check that
+   `SayType.app.tar.gz` and its `.sig` exist in that bundle directory.
+3. Copy the `.tar.gz` into a scratch directory and write a `latest.json` next to it: the new `version`,
+   and a `platforms["darwin-aarch64"]` entry whose `signature` is the `.sig` contents and whose `url`
+   is `http://127.0.0.1:8765/SayType.app.tar.gz`. Serve that directory with
+   `python3 -m http.server 8765`.
+4. Restore the version files with
+   `git checkout -- package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock`,
+   open the installed app and use Settings → "Check for updates". Expect checking → downloading →
+   ready, a "Restart to update to vX.Y.Z" tray entry, a relaunch into the new version, and dictation
+   still working with no new permission prompts.
+5. Stop the server and reinstall the real build with `npm run build:mac:install`.
+
+## Troubleshooting
+
+- **Notarization fails with 401.** GitHub secrets are write-only, so validate the app-specific
+  password locally with
+  `xcrun notarytool history --apple-id <apple-id> --team-id CU3VTR9MRH --password <password>`. If that
+  works, `gh secret set APPLE_PASSWORD` and re-run the failed job; the tag doesn't need to be pushed
+  again. Changing the Apple ID login password revokes every app-specific password.
+- **Only the release build fails to compile.** `ci.yml` builds macOS for arm64 only, while releases
+  build universal. `#[cfg]` code that misses the `macos` + `x86_64` combination compiles locally and in
+  CI, then fails on the tag. Reproduce with
+  `rustup target add x86_64-apple-darwin && cargo check --target x86_64-apple-darwin`.
+
+## Distribution
+
+GitHub Releases hosts the installers and is the auto-update source (the endpoint is baked into
+`tauri.conf.json`). That is reliable outside mainland China. Inside China GitHub is slow, so update
+checks and downloads there are best-effort: timeouts are logged and never crash. macOS builds stay
+universal.
+
+**Planned website download button (not built).** Keep the site a pure static frontend with no
+backend, which also avoids ICP filing: only mainland-hosted sites need 备案, and only mainland
+hosting/CDN would actually fix China speed, so defer that until China is a real market. Point the
+button at the newest DMG with a little client-side JS:
+
+```html
+<a id="dl-mac" href="https://github.com/hellotaotao/saytype/releases/latest">Download for macOS</a>
+<script>
+fetch('https://api.github.com/repos/hellotaotao/saytype/releases/latest')
+  .then(r => r.json())
+  .then(rel => {
+    const dmg = rel.assets.find(a => a.name.endsWith('.dmg'));
+    if (dmg) document.getElementById('dl-mac').href = dmg.browser_download_url;
+  })
+  .catch(() => {}); // falls back to the releases page if the API is unavailable
+</script>
+```
+
+GitHub's anonymous API limit (60 per hour) is per visitor IP, so a download button never hits it. The
+zero-JS alternative, uploading a version-less `SayType-macOS.dmg` with every release, adds a CI step
+and clutters the releases page. Putting the updater endpoint behind an own domain only makes sense as
+part of the China bundle.
 
 ---
 
@@ -104,82 +199,146 @@ unaffected.
 
 SayType 面向 **macOS、Windows、Linux** 三平台发布安装包到项目的
 [GitHub Releases](https://github.com/hellotaotao/saytype/releases) 页面。安装包由
-[`Release`](.github/workflows/release.yml) GitHub Actions workflow 自动构建——你不需要
-手动构建或上传。
+[`Release`](.github/workflows/release.yml) GitHub Actions workflow 自动构建,不需要手动构建或上传。
 
 ## workflow 做了什么
 
-推送形如 `vX.Y.Z` 的 tag 会触发一个**三平台矩阵**,它会:
+推送形如 `vX.Y.Z` 的 tag 会触发一个**三平台矩阵**:
 
-1. **macOS** —— 通过 `tauri build --target universal-apple-darwin` 构建**通用**二进制
-   (Intel + Apple Silicon),用你的 Developer ID 签名并向 Apple 公证——**前提是**配置了
-   签名 secrets(见[下文](#一次性配置签名与公证))。
-2. **Windows** —— 构建 NSIS `.exe` + `.msi`;**Linux** —— AppImage/deb/rpm。
-   两者均未签名(也未在真机验证过)。
-3. 每条腿还会产出 minisign 签名的**自动更新产物**,并合并出 `latest.json` 清单
-   (需要 `TAURI_SIGNING_PRIVATE_KEY` 相关 secrets)。
-4. 通过 Claude API 生成中英双语的 AI 发布说明(可选——需要 `ANTHROPIC_API_KEY`
-   secret;缺失时告警跳过,不阻塞)。
-5. 把所有产物上传到一个以该 tag 命名的**草稿** GitHub Release。
+1. **macOS**:通过 `tauri build --target universal-apple-darwin` 构建**通用**二进制(Intel + Apple
+   Silicon),用 Developer ID 签名、公证并 staple,**前提是**配置了签名 secrets(见[一次性配置](#一次性配置))。
+2. **Windows**:NSIS `.exe` + `.msi`;**Linux**:AppImage、deb、rpm。两者都没签名,也都没在真机上验证过。
+3. 每条腿都产出 minisign 签名的**自动更新产物**,并合并成一个 `latest.json`。`createUpdaterArtifacts`
+   只写在 `tauri.release.conf.json` 里,所以本地构建永远不需要更新密钥。
+4. 随后的 job 把中英双语的 AI 发布说明写进 release(可选,见[发布说明](#发布说明))。
+5. release **直接发布**(`releaseDraft: false`)。
 
-随后你在 Releases 页面检查该草稿并点击 **Publish**。(若想跳过手动发布这一步,把
-workflow 里的 `releaseDraft` 设为 `false`。)Publish 同时也是**自动更新的发布闸门**:
-已安装的客户端只能看到*已发布*的 release,草稿对它们不可见。
+发布同时就是**自动更新放量**。已安装的客户端(v1.4.0 起)在启动时和每 24 小时检查一次
+`releases/latest/download/latest.json`,后台下载,然后在托盘和设置里提供"重启以更新"。第一条腿上传后
+release 就公开了,所以在约 15–25 分钟的构建期间检查更新的客户端,可能拿不到 `latest.json`,或者里面还没有
+自己平台的条目。这次检查会静默失败(写日志),下一次就正常了。
 
-> 该 workflow 只在推送 `v*` tag 时运行——普通提交不会触发,所以平时它一直休眠,直到你
-> 发版。
+> 该 workflow 只在推送 `v*` tag 时运行,普通提交不会触发。
 
 ## 发布一个版本
 
-主窗口和「设置」中显示的版本号,是编译时通过 `env!("CARGO_PKG_VERSION")` 从
-`Cargo.toml` 读取的,所以版本号必须写在提交的文件里,tag 只是与之对应的镜像。
+应用里显示的版本号是编译时从 `Cargo.toml` 读取的(`env!("CARGO_PKG_VERSION")`),workflow 构建的也是被打
+tag 的那个提交里的版本。所以先 bump 并提交,再打 tag:
 
 ```bash
-npm run version:tauri:patch              # 把 package.json、tauri.conf.json、Cargo.toml 里的 1.0.x 升到 1.0.(x+1)
-git commit -am "chore: release v1.0.90"  # 提交这次版本号变更
-git tag v1.0.90 && git push origin v1.0.90
+npm run version:tauri:patch        # 或:node scripts/bump-tauri-version.js 1.2.0
+git commit -am "chore(release): bump version to X.Y.Z"
+git tag vX.Y.Z && git push origin main --tags
 ```
 
-然后去 **Actions** 标签查看。首次运行约需 15–25 分钟(两种架构 + 公证排队);之后因为有
-Rust 缓存会更快。
+然后去 **Actions** 标签查看。首次运行约需 15–25 分钟(两种架构 + 公证排队);之后有 Rust 缓存会更快。
 
-> 不要用 `npm run build:mac` 来发版——它产出的是本地 dev-channel 构建。配置
-> `scripts/sign.env` 后,本地构建会使用其中配置的 identity 签名,但默认不进行公证。
-> 配置 release secrets 后,正式发布产物由 CI 完成签名、公证和 ticket stapling。
-> 发版流程仍然是 bump → commit → tag → push。
+> 不要用 `npm run build:mac` 发版。它产出的是本地 dev-channel 构建:有 `scripts/sign.env` 时用其中的
+> identity 签名,但从不公证。
 
-<a id="一次性配置签名与公证"></a>
+### 发出去的版本有问题
 
-## 一次性配置:签名与公证
+客户端跟随 `releases/latest`,它指向最新的、已发布且不是 prerelease 的 release。把有问题的 release 改回草稿
+(或删掉)后,`latest` 会重新指向上一个版本,还没更新的客户端就不会再收到它。已经更新的客户端会一直停在这个
+版本,直到有更新的版本发布,所以真正的修复是再发一个补丁版本。
 
-没有这些 secrets,workflow 仍然会**成功**,只是 `.dmg` 是**未签名**的:下载者会遇到
-Gatekeeper 警告,必须右键 → 打开(或运行 `xattr -cr /Applications/SayType.app`)。要
-产出可以直接打开的安装包,在 **Settings → Secrets and variables → Actions →
-New repository secret** 下添加下列 secrets。
+<a id="一次性配置"></a>
 
-需要付费的 Apple Developer 账号,以及一个 **Developer ID Application** 证书。
+## 一次性配置
+
+### 签名与公证(macOS)
+
+没有这些 secrets,workflow 仍然会**成功**,只是 `.dmg` **没有签名**:下载者会遇到 Gatekeeper 警告,必须右键
+→ 打开(或运行 `xattr -cr /Applications/SayType.app`)。"Configure Apple signing" 步骤只在设置了
+`APPLE_CERTIFICATE` 时才把 `APPLE_*` 传给 tauri-cli,所以之后再补 secrets 也不用改 workflow。
+
+公证就是 Apple 扫描签过名的 app,返回一张 ticket 并 **staple 进 bundle**,别的 Mac 上 Gatekeeper 才会放行、
+不再提示"身份不明的开发者"。前提是 Hardened Runtime(已开启)和 **Developer ID Application** 证书。本地构建用的
+`Apple Development` 证书是另一种类型,公证服务会拒绝。
 
 | Secret | 怎么获取 |
 | --- | --- |
-| `APPLE_SIGNING_IDENTITY` | `security find-identity -v -p codesigning` 输出里那串完整的 `Developer ID Application: 名字 (TEAMID)` |
-| `APPLE_TEAM_ID` | 上面括号里的 10 位 ID(也可在你的 [Membership 页](https://developer.apple.com/account#MembershipDetailsCard) 查到) |
+| `APPLE_SIGNING_IDENTITY` | `security find-identity -v -p codesigning` 输出里完整的 `Developer ID Application: 名字 (TEAMID)`。本仓库:`Developer ID Application: Tao Wang (CU3VTR9MRH)` |
+| `APPLE_TEAM_ID` | 上面括号里的 10 位 ID(本仓库:`CU3VTR9MRH`) |
 | `APPLE_CERTIFICATE` | 导出的 `.p12` 的 base64(见下文) |
-| `APPLE_CERTIFICATE_PASSWORD` | 你导出 `.p12` 时设置的密码 |
-| `APPLE_ID` | 你的 Apple Developer 账号邮箱 |
-| `APPLE_PASSWORD` | 一个 [App 专用密码](https://appleid.apple.com)(登录与安全 → App 专用密码)——**不是**你的登录密码 |
+| `APPLE_CERTIFICATE_PASSWORD` | 导出 `.p12` 时设置的密码 |
+| `APPLE_ID` | Apple Developer 账号邮箱 |
+| `APPLE_PASSWORD` | 一个 [App 专用密码](https://appleid.apple.com)(登录与安全 → App 专用密码),**不是**登录密码 |
 
-**导出证书:** 在钥匙串访问 → *登录* 钥匙串 → *我的证书* 中,找到 `Developer ID
-Application` 条目(展开确认它带有私钥),右键 → 导出为带密码的 `.p12`,然后把它的
-base64 复制到剪贴板:
+**创建并导出证书:** 在 Xcode → 设置 → 账户 →(团队)→ 管理证书 → `+` 里创建 *Developer ID Application* 证书,
+或者去 [developer.apple.com](https://developer.apple.com/account/resources/certificates/list) 创建。在钥匙串访问
+→ *登录* → *我的证书* 里展开该条目,确认带私钥,导出为带密码的 `.p12`,然后:
 
 ```bash
 base64 -i ~/Desktop/certificate.p12 | pbcopy   # 粘贴到 APPLE_CERTIFICATE
 ```
 
-如果 `security find-identity` 没有显示任何 `Developer ID Application` 证书,去
-[developer.apple.com](https://developer.apple.com/account/resources/certificates/list)
-(Certificates → ➕ → Developer ID Application)创建一个,下载 `.cer` 并双击安装后,再
-导出。
+`tauri-action` 会把证书导入临时钥匙串并签名;因为 `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` 三项都在,它接着
+完成公证和 staple。也可以用 App Store Connect API key(`APPLE_API_ISSUER` / `APPLE_API_KEY` /
+`APPLE_API_KEY_PATH`)代替这三项。`tauri.conf.json` 特意保持 `signingIdentity: null`:CI 里由环境变量接管,本地
+构建不受影响。
 
-`tauri.conf.json` 特意保持 `signingIdentity: null`——在 CI 里由 `APPLE_SIGNING_IDENTITY`
-环境变量接管,因此不影响本地构建。
+### 更新签名密钥
+
+| Secret | 值 |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | `~/.tauri/saytype-updater.key` 的内容(minisign)。**务必备份:丢了这把钥匙,已安装的客户端就再也无法自动更新。** |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 这把钥匙的密码(本地 `scripts/sign.env` 里也有) |
+
+bundler 只认 `TAURI_SIGNING_PRIVATE_KEY`(路径或内容都行),`_PATH` 变体不生效。对应的公钥在 `tauri.conf.json` 里。
+
+<a id="发布说明"></a>
+
+### 发布说明
+
+构建完成后,workflow 运行 `scripts/generate-release-notes.mjs`:取上一个 `v*` tag 到本 tag 之间的提交 →
+Claude API(`claude-sonnet-5`)→ 面向用户的中英双语说明,用 `gh release edit` 写进 release。它需要
+`ANTHROPIC_API_KEY` secret;缺失或调用失败时只告警,release 保留默认正文。本地调试用
+`node scripts/generate-release-notes.mjs <tag> --dry-run`(打印 prompt,不调用 API)。设计:
+`docs/superpowers/specs/2026-07-12-ai-release-notes-design.md`。
+
+## 验证
+
+**公证**,对下载下来的 app:
+
+- `spctl -a -t exec -vv SayType.app` → `accepted … source=Notarized Developer ID`
+- `xcrun stapler validate SayType.app` → `The validate action worked!`
+
+**不发布也能跑通自动更新全链路**,用 `src-tauri/tauri.updater-e2e.conf.json`(localhost 端点)。这会替换
+`/Applications/SayType.app` 并临时改版本号文件。过程中不要运行 `scripts/collect-artifacts.js`,否则会覆盖
+`dist/` 里归档的安装包。
+
+1. 退出 SayType,构建"旧"版本:
+   `CI=true sh -c '. ./scripts/sign.env; npx tauri build --target aarch64-apple-darwin --config src-tauri/tauri.updater-e2e.conf.json'`。
+   用 `src-tauri/target/aarch64-apple-darwin/release/bundle/macos/SayType.app` 替换 `/Applications/SayType.app`。
+2. 运行 `npm run version:tauri:patch`(不要提交),用同一条命令再构建一次。确认该 bundle 目录里有
+   `SayType.app.tar.gz` 和对应的 `.sig`。
+3. 把 `.tar.gz` 复制到一个临时目录,在旁边写一个 `latest.json`:`version` 填新版本号,
+   `platforms["darwin-aarch64"]` 的 `signature` 填 `.sig` 的内容、`url` 填
+   `http://127.0.0.1:8765/SayType.app.tar.gz`。然后在该目录运行 `python3 -m http.server 8765`。
+4. 用 `git checkout -- package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock`
+   还原版本号文件,打开已安装的 app,设置 →"检查更新"。应依次看到检查中 → 下载中 → 已就绪,托盘出现
+   "重启以更新到 vX.Y.Z",重启后是新版本,听写照常,没有新的权限弹窗。
+5. 停掉服务,用 `npm run build:mac:install` 装回正常构建。
+
+## 排查
+
+- **公证报 401。** GitHub secret 只能写不能读,所以在本地验证 App 专用密码:
+  `xcrun notarytool history --apple-id <apple-id> --team-id CU3VTR9MRH --password <密码>`。能跑通就
+  `gh secret set APPLE_PASSWORD`,再重跑失败的 job,tag 不用重推。改 Apple ID 登录密码会吊销全部 App 专用密码。
+- **只有发版构建编译失败。** `ci.yml` 里 macOS 只构建 arm64,发版构建的是 universal。漏了 `macos` + `x86_64`
+  组合的 `#[cfg]` 代码在本地和 CI 都能过,到打 tag 时才失败。本地复现:
+  `rustup target add x86_64-apple-darwin && cargo check --target x86_64-apple-darwin`。
+
+## 分发
+
+GitHub Releases 托管安装包,也是自动更新的来源(端点写死在 `tauri.conf.json` 里)。在中国大陆以外稳定可靠;大陆
+访问 GitHub 慢,那里的更新检查和下载只能尽力而为,超时会写日志,不会崩溃。macOS 继续构建通用二进制。
+
+**计划中的官网下载按钮(还没做)。** 官网保持纯静态前端、不要后端,这样也不需要 ICP 备案:只有托管在大陆的站点
+才需要备案,而真正能解决大陆速度的也只有大陆托管/CDN,所以等中国成为真实市场再一起做。按钮用几行前端 JS 指向
+最新的 DMG,代码见英文部分。
+
+GitHub 匿名 API 限额(每小时 60 次)按访客 IP 计算,下载按钮碰不到。不写 JS 的替代方案是每次发版额外上传一个不带
+版本号的 `SayType-macOS.dmg`,但要多一个 CI 步骤,还会让 releases 页面更乱。给更新端点套自己的域名,只在做大陆那
+一揽子方案时才值得。

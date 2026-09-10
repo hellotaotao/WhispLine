@@ -1,7 +1,7 @@
 # AI-Generated Release Notes in CI — Design
 
 **Date:** 2026-07-12
-**Status:** Approved (brainstormed with Tao; see decisions below)
+**Status:** Implemented (`0e9974b`). Design record; later changes are not reflected here. Releases are now published directly instead of as drafts (see RELEASING.md).
 
 ## Problem
 
