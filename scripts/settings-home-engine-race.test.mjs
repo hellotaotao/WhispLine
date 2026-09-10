@@ -17,7 +17,7 @@ function harness() {
     document: { getElementById: id => id === "themeSelect" ? { value: "midnight" } : null },
     normalizeThemePref: value => value, translate: key => key,
     renderEngineCards() {}, renderEngineActivation() {}, showSaveStatus() {}, console: { error() {} },
-    engineUndoTarget: null, engineActivationMessage: "", engineTargetLabel: target => target.model,
+    engineActivationMessage: "", engineTargetLabel: target => target.model,
     ipc: { invoke: async (command, payload) => {
       calls.push([command, payload?.model || payload]);
       if (command === "get-local-model-status") return { state: "ready" };

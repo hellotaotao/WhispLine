@@ -843,3 +843,5 @@
 @media (prefers-reduced-motion: reduce) {
   .engine-card-chevron { transition: none; }
 }
+
+.engine-activation[hidden] { display: none; }

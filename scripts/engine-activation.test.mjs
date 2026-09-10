@@ -71,7 +71,7 @@ test("failed activation leaves persisted engine unchanged and reports failure", 
     const h = harness(options);
     assert.equal(await h.context.activateInspectedEngine(), false);
     assert.equal(h.context.currentSettings.model, small);
-    assert.equal(vm.runInContext("engineUndoTarget", h.context), null);
+    assert.notEqual(vm.runInContext("engineActivationMessage", h.context), "");
     assert.equal(vm.runInContext("engineSwitchPending", h.context), false);
   }
 });
@@ -82,18 +82,18 @@ test("cloud Use requires a key but key editing alone never activates", async () 
   assert.equal(h.saved.length, 0);
   assert.equal(h.context.currentSettings.model, small);
 });
-test("Undo revalidates prior model, preserves current engine when prior assets disappeared", async () => {
+test("explicit switch back revalidates model readiness", async () => {
   let missing = false;
   const h = harness({ status: model => ({ state: missing && model === small ? "absent" : "ready" }) });
   assert.equal(await h.context.activateInspectedEngine(), true);
   assert.equal(h.context.currentSettings.model, large);
   missing = true;
-  assert.equal(await vm.runInContext("activateEngine(engineUndoTarget, true)", h.context), false);
+  assert.equal(await h.context.activateEngine({ provider: "local", model: small }), false);
   assert.equal(h.context.currentSettings.model, large);
   missing = false;
-  assert.equal(await vm.runInContext("activateEngine(engineUndoTarget, true)", h.context), true);
+  assert.equal(await h.context.activateEngine({ provider: "local", model: small }), true);
   assert.equal(h.context.currentSettings.model, small);
-  assert.equal(vm.runInContext("engineUndoTarget", h.context), null);
+  assert.equal(vm.runInContext("engineActivationMessage", h.context), "");
 });
 test("download completion updates availability without activation or a confirmation", () => {
   const h = harness(); let listener;
@@ -135,4 +135,18 @@ test("inspecting active Groq restores its actual model and retains an unsaved cl
   h.context.inspectEngine("groq");
   assert.equal(h.fields.modelSelect.value, "whisper-large-v3-turbo");
   assert.equal(h.saved.length, 0);
+});
+
+test("active local engine hides redundant actions while failures remain visible", () => {
+  const h = harness();
+  for (const id of ["engineUseBtn", "engineActivation", "engineActivationStatus", "engineCloudNotice"]) h.fields[id] = {};
+  h.fields.providerSelect.value = "local-qwen";
+  h.context.renderEngineActivation();
+  assert.equal(h.fields.engineUseBtn.hidden, true);
+  assert.equal(h.fields.engineActivation.hidden, true);
+  vm.runInContext('engineActivationMessage = "Failed to switch"', h.context);
+  h.context.renderEngineActivation();
+  assert.equal(h.fields.engineActivation.hidden, false);
+  assert.equal(h.fields.engineActivationStatus.textContent, "Failed to switch");
+  assert.doesNotMatch(source, /engineUndoTarget|engineUndoBtn|settings\.engine\.activated/);
 });

@@ -1309,9 +1309,7 @@ function bindEventHandlers() {
 
   providerSelect?.addEventListener("change", handleProviderChange);
   document.getElementById("engineUseBtn")?.addEventListener("click", () => void activateInspectedEngine());
-  document.getElementById("engineUndoBtn")?.addEventListener("click", () => {
-    if (engineUndoTarget) void activateEngine({ ...engineUndoTarget }, true);
-  });
+
   document.getElementById("modelSelect")?.addEventListener("change", renderEngineActivation);
   document
     .getElementById("translateProviderSelect")
@@ -1825,7 +1823,6 @@ async function loadSettings() {
 }
 
 let engineSwitchPending = false;
-let engineUndoTarget = null;
 let engineActivationMessage = "";
 
 function inspectedEngineTarget() {
@@ -1855,17 +1852,15 @@ function renderEngineActivation() {
   if (!button) return;
   const target = inspectedEngineTarget();
   const active = target.provider === currentSettings.provider && target.model === currentSettings.model;
+  button.hidden = active;
   button.disabled = engineSwitchPending || active;
-  button.textContent = translate(engineSwitchPending ? "settings.engine.switching" : active ? "settings.engine.active" : "settings.engine.use", { model: engineTargetLabel(target) });
+  button.textContent = translate(engineSwitchPending ? "settings.engine.switching" : "settings.engine.use", { model: engineTargetLabel(target) });
   const notice = document.getElementById("engineCloudNotice");
   if (notice) notice.hidden = target.provider === "local";
   const message = document.getElementById("engineActivationStatus");
   if (message) message.textContent = engineActivationMessage;
-  const undo = document.getElementById("engineUndoBtn");
-  if (undo) {
-    undo.hidden = !engineUndoTarget;
-    undo.disabled = engineSwitchPending;
-  }
+  const panel = document.getElementById("engineActivation");
+  if (panel) panel.hidden = active && target.provider === "local" && !engineActivationMessage;
 }
 
 async function activateInspectedEngine() {
@@ -1873,16 +1868,14 @@ async function activateInspectedEngine() {
   return activateEngine(inspectedEngineTarget());
 }
 
-async function activateEngine(target, undo = false) {
+async function activateEngine(target) {
   if (engineSwitchPending) return false;
   const intent = { provider: target.provider, model: target.model };
   engineSwitchPending = true;
   engineActivationMessage = "";
   renderEngineActivation();
   try {
-    const success = await queueSettingsSave(intent);
-    if (success && undo) engineUndoTarget = null;
-    return success;
+    return await queueSettingsSave(intent);
   } finally {
     engineSwitchPending = false;
     renderEngineCards();
@@ -1934,7 +1927,6 @@ function runEngineChange(change) {
       return await change({ ...currentSettings });
     } finally {
       await refreshSettingsSnapshot();
-      engineUndoTarget = null;
       engineActivationMessage = "";
       if (settingsInitialized) renderEngineCards();
     }
@@ -1982,8 +1974,7 @@ async function persistSettings(intent = null) {
     if (saved === false) throw new Error(translate("settings.saveError"));
     currentSettings = { ...currentSettings, ...settings };
     if (intent) {
-      engineUndoTarget = previous;
-      engineActivationMessage = translate("settings.engine.activated", { model: engineTargetLabel(target) });
+      engineActivationMessage = "";
     }
     showSaveStatus("ok", translate("settings.saved"));
     renderEngineCards();
