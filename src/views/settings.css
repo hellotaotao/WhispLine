@@ -556,18 +556,53 @@
   opacity: 0.75;
 }
 
-.engine-radio {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1.5px solid var(--panel-border-strong);
-  transition: border-color 0.15s, box-shadow 0.15s;
+.engine-details-toggle {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.engine-card-row.active .engine-radio {
-  border: 5px solid var(--accent);
+/* Keep the hit target generous while the visible control stays compact. */
+.engine-select-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
 }
+.engine-select-button::before {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--panel-border-strong);
+  border-radius: 5px;
+  background: var(--panel-bg);
+}
+.engine-select-button .material-icons { position: relative; font-size: 14px; opacity: 0; }
+.engine-select-button[aria-pressed="true"] { color: white; }
+.engine-select-button[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+.engine-select-button[aria-pressed="true"] .material-icons { opacity: 1; }
+.engine-select-button[aria-pressed="false"]:hover .material-icons { opacity: .4; }
+.engine-select-button:focus-visible,
+.engine-details-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .engine-card-icon {
   flex: none;
@@ -674,7 +709,7 @@
 
 .engine-drawer {
   background: var(--panel-bg);
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--panel-border);
   border-bottom: 1px solid var(--panel-border);
 }
 
@@ -742,7 +777,7 @@
 .theme-swatch-auto { background: linear-gradient(90deg,#eeeee7 50%,#7863bf 50%); }
 .theme-choices .setting-choice[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
 .theme-choices .setting-choice[aria-pressed="true"] .theme-swatch { outline: 2px solid var(--accent); outline-offset: -2px; }
-.engine-drawer { padding: 4px 16px 16px 36px; background: var(--accent-soft-bg); }
+.engine-drawer { padding: 4px 16px 16px 36px; background: var(--panel-bg); }
 #settings-page .engine-drawer .setting-item {
   margin-top: 10px;
   background: var(--panel-bg);
@@ -779,3 +814,32 @@
 .model-detail { color: var(--text-muted); font-weight: 400; }
 .model-recommended { margin-left: 6px; font-size: 11px; color: var(--pill-ok-text); background: var(--pill-ok-bg); border-radius: 4px; padding: 2px 5px; }
 .model-choice { text-align: left; min-width: 180px; }
+
+.engine-activation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+.engine-activation .setting-note { flex-basis: 100%; margin: 0; }
+#engineActivationStatus { font-size: 13px; }
+
+.engine-card-chevron {
+  flex: 0 0 auto;
+  color: var(--text-soft);
+  transition: transform 0.15s ease;
+}
+
+.engine-details-toggle[aria-expanded="true"] .engine-card-chevron {
+  transform: rotate(180deg);
+}
+
+.engine-details-toggle[aria-expanded="true"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .engine-card-chevron { transition: none; }
+}

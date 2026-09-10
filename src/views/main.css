@@ -465,43 +465,42 @@ body {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 14px;
-  padding: 14px 20px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 13px;
+  padding: 16px 20px;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
 }
 
-.engine-titles {
-  flex: 1;
-  min-width: 150px;
-}
-
-.engine-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
+.engine-header { display: flex; align-items: center; gap: 8px; }
+.engine-title { font-size: 14px; font-weight: 600; }
 .engine-sub {
   font-size: 12px;
+  line-height: 18px;
+  min-height: 36px;
   color: var(--text-soft);
-  margin-top: 2px;
 }
-
 .engine-seg {
-  display: inline-flex;
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  flex-wrap: nowrap;
   gap: 3px;
-  padding: 3px;
+  padding: 4px;
   border-radius: 10px;
   background: var(--panel-bg-subtle);
   border: 1px solid var(--panel-border);
 }
-
 .engine-seg-btn {
-  display: inline-flex;
+  display: flex;
+  flex: 1 0 128px;
+  min-width: 128px;
+  height: 78px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
+  gap: 4px;
+  padding: 6px 8px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -510,35 +509,26 @@ body {
   font-weight: 500;
   cursor: pointer;
 }
-
-.engine-seg-btn:hover {
-  background: var(--panel-bg);
-  color: var(--app-text);
-}
-
-.engine-seg-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
+.engine-name { font-weight: 600; white-space: nowrap; }
+.engine-seg-btn:hover { background: var(--panel-bg); color: var(--app-text); }
+.engine-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .engine-seg-btn.active {
   background: var(--panel-bg-strong);
   color: var(--app-text);
-  font-weight: 600;
-  box-shadow:
-    inset 0 0 0 1px var(--panel-border-strong),
-    0 1px 3px rgba(0, 0, 0, 0.14);
+  box-shadow: inset 0 0 0 1px var(--panel-border-strong), 0 1px 3px rgba(0,0,0,.14);
 }
-
 .engine-tag {
   font-size: 10px;
   font-weight: 600;
+  line-height: 14px;
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--pill-ok-bg);
   color: var(--pill-ok-text);
   white-space: nowrap;
 }
+.engine-tag-empty { visibility: hidden; }
+.engine-readiness { font-size: 10px; line-height: 14px; white-space: nowrap; }
 
 .readiness-shortcuts {
   display: flex;

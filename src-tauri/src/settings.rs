@@ -219,7 +219,7 @@ impl SettingsPayload {
     Self::from_config_with(config, crate::local_asr::assets_ready_for(&config.model))
   }
 
-  /// `local_model_ready` injected for tests (assets_ready() reads the real
+  /// `local_model_ready` injected for tests (assets_ready_for() reads the real
   /// app data dir). For provider=="local", has_api_key means "the selected
   /// provider is usable" — assets downloaded — so the readiness UI works
   /// unchanged.

@@ -4,14 +4,20 @@ use tauri::{AppHandle, Manager};
 
 /// The tray exposes cloud providers and concrete local engines. Labels are
 /// English-only like the rest of the tray menu.
-const ENGINES: [(&str, &str, &str, Option<&str>); 4] = [
+const ENGINES: [(&str, &str, &str, Option<&str>); 5] = [
   ("engine-groq", "Groq (cloud)", "groq", None),
   ("engine-openai", "OpenAI (cloud)", "openai", None),
   (
     "engine-local-qwen",
-    "Local · Qwen3-ASR",
+    "Local · Qwen3-ASR 0.6B",
     "local",
     Some(crate::local_asr::QWEN_MODEL_ID),
+  ),
+  (
+    "engine-local-qwen-large",
+    "Local · Qwen3-ASR 1.7B (experimental)",
+    "local",
+    Some(crate::local_asr::QWEN_LARGE_MODEL_ID),
   ),
   (
     "engine-local-nemotron",
@@ -59,6 +65,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         app,
         crate::local_asr::LOCAL_PROVIDER,
         Some(crate::local_asr::NEMOTRON_MODEL_ID),
+      ),
+      "engine-local-qwen-large" => switch_engine(
+        app,
+        crate::local_asr::LOCAL_PROVIDER,
+        Some(crate::local_asr::QWEN_LARGE_MODEL_ID),
       ),
       "engine-local-qwen" => switch_engine(
         app,
@@ -122,7 +133,7 @@ fn build_menu(
   // Engine quick-switch: local checkmarks include the selected model. Kept
   // fresh by refresh_menu(), which every settings write triggers.
   let config = crate::settings::read_config().unwrap_or_default();
-  let engine = Submenu::with_id(app, "engine", "Engine", true)?;
+  let engine = Submenu::with_id(app, "engine", "Choose engine…", true)?;
   for (id, label, provider, model) in available_engines() {
     engine.append(&CheckMenuItem::with_id(
       app,
@@ -151,27 +162,24 @@ fn engine_selected(
   model.is_none_or(|model| crate::local_asr::normalize_local_model_id(&config.model) == model)
 }
 
-/// Handle an Engine submenu click. A missing local model opens its matching
-/// download panel instead of switching to an unusable backend.
+fn engine_settings_target(provider: &str, local_model: Option<&str>) -> String {
+  let choice = match local_model {
+    Some(crate::local_asr::QWEN_LARGE_MODEL_ID) => "local-qwen-large",
+    Some(crate::local_asr::NEMOTRON_MODEL_ID) => "local-nemotron",
+    Some(_) => "local-qwen",
+    None => provider,
+  };
+  format!("engine:{choice}")
+}
+
+/// Open engine details; activation only happens after confirmation in Settings.
 fn switch_engine(app: &AppHandle, provider: &str, local_model: Option<&str>) {
-  if let Some(model) = local_model {
-    if !crate::local_asr::assets_ready_for(model) {
-      if let Err(error) = crate::commands::show_local_model_panel(app, model) {
-        log::error!("tray:open-local-model-panel error={error}");
-      }
-      refresh_menu(app);
-      return;
-    }
-    if let Err(error) = crate::commands::apply_local_model_change(app, model) {
-      log::error!("tray:engine-switch-failed provider={provider} model={model} error={error}");
-      refresh_menu(app);
-    }
-    return;
+  let target = engine_settings_target(provider, local_model);
+  if let Err(error) = crate::commands::show_main_settings(app, &target) {
+    log::error!("tray:open-engine-details target={target} error={error}");
   }
-  if let Err(error) = crate::commands::apply_provider_change(app, provider) {
-    log::error!("tray:engine-switch-failed provider={provider} error={error}");
-    refresh_menu(app);
-  }
+  // Native check items may toggle on click; restore the actual configured engine.
+  refresh_menu(app);
 }
 
 /// Rebuild the tray menu from current state — provider checkmark and, when an
@@ -203,6 +211,19 @@ pub fn refresh_menu(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn engine_entrypoints_target_details_for_every_engine() {
+    for (provider, model, target) in [
+      ("groq", None, "engine:groq"),
+      ("openai", None, "engine:openai"),
+      ("local", Some(crate::local_asr::QWEN_MODEL_ID), "engine:local-qwen"),
+      ("local", Some(crate::local_asr::QWEN_LARGE_MODEL_ID), "engine:local-qwen-large"),
+      ("local", Some(crate::local_asr::NEMOTRON_MODEL_ID), "engine:local-nemotron"),
+    ] {
+      assert_eq!(engine_settings_target(provider, model), target);
+    }
+  }
 
   #[test]
   fn local_engine_checkmark_includes_the_model() {

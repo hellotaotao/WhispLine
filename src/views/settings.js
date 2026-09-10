@@ -13,8 +13,10 @@ const READY_TIMEOUT_MS = 3000;
 const READY_POLL_MS = 25;
 const THEME_PREFS = new Set(["auto", "midnight", "elegant"]);
 const QWEN_LOCAL_MODEL = "qwen3-asr-0.6b-q8_0";
+const QWEN_LARGE_LOCAL_MODEL = "qwen3-asr-1.7b-q8_0";
 const NEMOTRON_LOCAL_MODEL = "nemotron-3.5-asr-streaming-0.6b-q8_0";
 const LOCAL_QWEN_PROVIDER = "local-qwen";
+const LOCAL_QWEN_LARGE_PROVIDER = "local-qwen-large";
 const LOCAL_NEMOTRON_PROVIDER = "local-nemotron";
 let currentThemePref = "elegant";
 
@@ -54,6 +56,8 @@ const modelOptions = {
 };
 
 let currentSettings = {};
+const engineCloudDrafts = new Map();
+let expandedEngineProvider = null;
 let pageEventsBound = false;
 let shortcutSyncBound = false;
 let themeSyncBound = false;
@@ -301,6 +305,7 @@ function updateModelOptions(provider) {
 // is usable at all, which a bare dropdown could not show.
 const ENGINE_CARDS = [
   { value: LOCAL_QWEN_PROVIDER, local: true, icon: "memory", recommended: true },
+  { value: LOCAL_QWEN_LARGE_PROVIDER, local: true, icon: "memory", experimental: true },
   { value: "openai", local: false, icon: "cloud" },
   { value: "groq", local: false, icon: "cloud" },
   { value: LOCAL_NEMOTRON_PROVIDER, local: true, icon: "memory", experimental: true },
@@ -322,6 +327,22 @@ function engineStatus(entry) {
     : { key: "settings.engine.status.needsKey", tone: "warn" };
 }
 
+function updateEngineSelectButton(button, entry, active) {
+  const name = translate(`settings.engine.${camelKey(entry.value)}.name`);
+  button.setAttribute("aria-pressed", String(active));
+  button.setAttribute("aria-label", translate(active ? "settings.engine.activeModel" : "settings.engine.use", { model: name }));
+  button.title = button.getAttribute("aria-label");
+  button.disabled = engineSwitchPending;
+}
+
+async function selectSettingsEngine(choice) {
+  if (engineSwitchPending) return;
+  inspectEngine(choice);
+  const target = inspectedEngineTarget();
+  if (target.provider === currentSettings.provider && target.model === currentSettings.model) return;
+  await activateEngine(target);
+}
+
 function renderEngineCards() {
   renderSettingChoices();
   const host = document.getElementById("engineCards");
@@ -330,33 +351,42 @@ function renderEngineCards() {
     return;
   }
   const offered = new Set(Array.from(select.options).map((option) => option.value));
-  const selected = select.value;
+  const selected = providerForSettings(currentSettings);
 
   ENGINE_CARDS.filter((entry) => offered.has(entry.value)).forEach((entry) => {
       const active = entry.value === selected;
       const existing = document.getElementById(`engine-choice-${entry.value}`);
       if (existing) {
-        existing.classList.toggle("active", active);
-        existing.setAttribute("aria-pressed", String(active));
+        existing.parentElement.classList.toggle("active", active);
+        updateEngineSelectButton(existing.parentElement.querySelector(".engine-select-button"), entry, active);
         existing.querySelector(".engine-card-name > span").textContent = translate(`settings.engine.${camelKey(entry.value)}.name`);
         existing.querySelector(".engine-card-desc").textContent = translate(`settings.engine.${camelKey(entry.value)}.description`);
         const status = engineStatus(entry);
         const badge = existing.querySelector(".engine-card-status");
-        badge.textContent = translate(status.key);
+        badge.textContent = active ? translate("settings.engine.activeModel", { model: engineTargetLabel(currentSettings) }) : translate(status.key);
         badge.className = `engine-card-status engine-status-${status.tone}`;
         return;
       }
       const card = document.createElement("button");
       card.type = "button";
-      card.className = `engine-card-row${active ? " active" : ""}${
+      const row = document.createElement("div");
+      row.className = `engine-card-row${active ? " active" : ""}${
         entry.experimental ? " experimental" : ""
       }`;
+      card.className = "engine-details-toggle";
       card.id = `engine-choice-${entry.value}`;
-      card.setAttribute("aria-pressed", String(active));
       card.setAttribute("aria-controls", `engine-drawer-${entry.value}`);
 
-      const radio = document.createElement("span");
-      radio.className = "engine-radio";
+      const activation = document.createElement("button");
+      activation.type = "button";
+      activation.className = "engine-select-button";
+      const check = document.createElement("span");
+      check.className = "material-icons";
+      check.textContent = "check";
+      check.setAttribute("aria-hidden", "true");
+      activation.appendChild(check);
+      updateEngineSelectButton(activation, entry, active);
+      activation.addEventListener("click", () => void selectSettingsEngine(entry.value));
 
       const icon = document.createElement("span");
       icon.className = "engine-card-icon material-icons";
@@ -390,40 +420,35 @@ function renderEngineCards() {
       const status = engineStatus(entry);
       const statusEl = document.createElement("span");
       statusEl.className = `engine-card-status${status.tone ? ` engine-status-${status.tone}` : ""}`;
-      statusEl.textContent = translate(status.key);
+      statusEl.textContent = active ? translate("settings.engine.activeModel", { model: engineTargetLabel(currentSettings) }) : translate(status.key);
 
-      card.append(radio, icon, body, statusEl);
-      card.addEventListener("click", () => {
-        if (select.value === entry.value) {
-          inspectedLocalModel = null;
-          toggleProviderFields(entry.value);
-          renderEngineCards();
-          return;
-        }
-        // Drive the select rather than duplicating its logic: `change` reaches
-        // handleProviderChange and the page-level commit exactly as a native
-        // selection would.
-        select.value = entry.value;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-        renderEngineCards();
-      });
+      const chevron = document.createElement("span");
+      chevron.className = "engine-card-chevron material-icons";
+      chevron.textContent = "expand_more";
+      chevron.setAttribute("aria-hidden", "true");
+      card.append(icon, body, statusEl, chevron);
+      card.addEventListener("click", () => inspectEngine(entry.value, { toggle: true }));
       const drawer = document.createElement("div");
       drawer.id = `engine-drawer-${entry.value}`;
       drawer.className = "engine-drawer";
       drawer.hidden = true;
       drawer.setAttribute("role", "region");
       drawer.setAttribute("aria-labelledby", card.id);
-      host.append(card, drawer);
+      row.append(activation, card);
+      host.append(row, drawer);
     });
   syncEngineDrawer();
+  renderEngineActivation();
 }
 
 function syncEngineDrawer() {
-  const selected = document.getElementById("providerSelect")?.value;
-  const inspected = inspectedLocalModel
-    ? (inspectedLocalModel === QWEN_LOCAL_MODEL ? LOCAL_QWEN_PROVIDER : LOCAL_NEMOTRON_PROVIDER)
-    : null;
-  const expanded = inspected || selected;
+  const expanded = expandedEngineProvider;
+  for (const entry of ENGINE_CARDS) {
+    const panel = document.getElementById(`engine-drawer-${entry.value}`);
+    if (panel) panel.hidden = entry.value !== expanded;
+    document.getElementById(`engine-choice-${entry.value}`)
+      ?.setAttribute("aria-expanded", String(entry.value === expanded));
+  }
   const local = !!localModelForProvider(expanded);
   const drawer = document.getElementById(`engine-drawer-${expanded}`);
   if (!drawer) return;
@@ -439,12 +464,7 @@ function syncEngineDrawer() {
     move("apiKeyItem");
     move("modelItem");
   }
-  for (const entry of ENGINE_CARDS) {
-    const panel = document.getElementById(`engine-drawer-${entry.value}`);
-    if (panel) panel.hidden = entry.value !== expanded;
-    document.getElementById(`engine-choice-${entry.value}`)
-      ?.setAttribute("aria-expanded", String(entry.value === expanded));
-  }
+  move("engineActivation");
 }
 
 function camelKey(providerValue) {
@@ -452,6 +472,7 @@ function camelKey(providerValue) {
 }
 
 function localModelForProvider(provider) {
+  if (provider === LOCAL_QWEN_LARGE_PROVIDER) return QWEN_LARGE_LOCAL_MODEL;
   if (provider === LOCAL_NEMOTRON_PROVIDER) {
     return NEMOTRON_LOCAL_MODEL;
   }
@@ -465,6 +486,7 @@ function providerForSettings(settings) {
   if (settings?.provider !== "local") {
     return settings?.provider || "groq";
   }
+  if (settings.model === QWEN_LARGE_LOCAL_MODEL) return LOCAL_QWEN_LARGE_PROVIDER;
   return settings.model === NEMOTRON_LOCAL_MODEL
     ? LOCAL_NEMOTRON_PROVIDER
     : LOCAL_QWEN_PROVIDER;
@@ -530,9 +552,9 @@ function toggleProviderFields(providerChoice) {
 
   apiKeyItem?.classList.remove("hidden");
   modelItem?.classList.toggle("hidden", isLocal);
-  const configurationProvider = inspectedLocalModel === NEMOTRON_LOCAL_MODEL
-    ? LOCAL_NEMOTRON_PROVIDER
-    : inspectedLocalModel === QWEN_LOCAL_MODEL ? LOCAL_QWEN_PROVIDER : providerChoice;
+  const configurationProvider = inspectedLocalModel
+    ? providerForSettings({ provider: "local", model: inspectedLocalModel })
+    : providerChoice;
   nemotronLatencyItem?.classList.toggle("hidden", configurationProvider !== LOCAL_NEMOTRON_PROVIDER);
   // GPU acceleration applies to the Qwen engine only: Nemotron runs on its
   // own runtime, and platforms without a GPU pack have nothing to switch.
@@ -540,7 +562,7 @@ function toggleProviderFields(providerChoice) {
     .getElementById("localComputeItem")
     ?.classList.toggle(
       "hidden",
-      !gpuRuntimeSupported || configurationProvider !== LOCAL_QWEN_PROVIDER
+      !gpuRuntimeSupported || ![LOCAL_QWEN_PROVIDER, LOCAL_QWEN_LARGE_PROVIDER].includes(configurationProvider)
     );
   const keyProvider = isLocal ? translateSelect?.value || "groq" : provider;
   fieldGroq.classList.toggle("hidden", keyProvider !== "groq");
@@ -679,31 +701,6 @@ async function handleLocalModelAction() {
   }
 }
 
-// Download finished from this page → offer (don't force) the switch to the
-// local engine; the backend save + broadcast keeps every window in sync.
-async function offerSwitchToLocal(model) {
-  if (currentSettings?.provider === "local" && currentSettings?.model === model) {
-    return;
-  }
-  if (!confirm(translate("settings.localModel.switchPrompt"))) {
-    return;
-  }
-  try {
-    await ipc.invoke("set-local-model", model);
-    currentSettings.provider = "local";
-    currentSettings.model = model;
-    const providerSelect = document.getElementById("providerSelect");
-    setSelectValue(providerSelect, providerForSettings(currentSettings), "groq");
-    toggleProviderFields(providerSelect?.value || "groq");
-    void refreshLocalModelStatus();
-  } catch (error) {
-    // Same reason as saveSettings: no modal on this page. The user is looking
-    // at the row that failed to change.
-    console.error("Failed to switch to the local engine:", error);
-    showSaveStatus("error", translate("settings.saveError"));
-  }
-}
-
 async function handleLocalModelDelete() {
   const confirmKey =
     localModelState === "partial"
@@ -754,9 +751,8 @@ function setupLocalModelSync() {
       void refreshLocalModelStatus();
     }
     if (payload.state === "ready" && localModelDownloadStartedHere === selectedLocalModel()) {
-      const model = localModelDownloadStartedHere;
       localModelDownloadStartedHere = "";
-      void offerSwitchToLocal(model);
+      renderEngineActivation();
     }
   });
 
@@ -927,8 +923,7 @@ function setupGpuRuntimeSync() {
 
 function revealLocalModelPanel(model = QWEN_LOCAL_MODEL) {
   // Inspect/download without selecting an engine that is not yet usable.
-  inspectedLocalModel = model;
-  toggleProviderFields(document.getElementById("providerSelect")?.value || "groq");
+  inspectEngine(providerForSettings({ provider: "local", model }));
   const advanced = document.getElementById("engineAdvanced");
   if (advanced) advanced.open = true;
   void refreshLocalModelStatus();
@@ -1184,12 +1179,14 @@ let commitTimer = null;
 function commitSoon(delayMs = 700) {
   window.clearTimeout(commitTimer);
   commitTimer = window.setTimeout(() => {
+    commitTimer = null;
     void saveSettings();
   }, delayMs);
 }
 
 function commitNow() {
   window.clearTimeout(commitTimer);
+  commitTimer = null;
   void saveSettings();
 }
 
@@ -1207,16 +1204,35 @@ function handleTranslateProviderChange() {
   commitNow();
 }
 
-function handleProviderChange(event) {
-  const providerChoice = event.target.value || "groq";
-  inspectedLocalModel = null;
-  renderEngineCards();
-  const provider = localModelForProvider(providerChoice) ? "local" : providerChoice;
-  if (provider !== "local") {
-    updateModelOptions(provider);
+function inspectEngine(providerChoice, { toggle = false } = {}) {
+  const select = document.getElementById("providerSelect");
+  if (!select || !Array.from(select.options).some((option) => option.value === providerChoice)) return;
+  if (toggle && expandedEngineProvider === providerChoice) {
+    expandedEngineProvider = null;
+    syncEngineDrawer();
+    return;
+  }
+  expandedEngineProvider = providerChoice;
+  const previousChoice = select.value;
+  const modelSelect = document.getElementById("modelSelect");
+  if (modelOptions[previousChoice]?.some((option) => option.value === modelSelect?.value)) {
+    engineCloudDrafts.set(previousChoice, modelSelect.value);
+  }
+  select.value = providerChoice;
+  inspectedLocalModel = localModelForProvider(providerChoice) || null;
+  if (!inspectedLocalModel) {
+    const candidate = engineCloudDrafts.get(providerChoice)
+      || (currentSettings.provider === providerChoice ? currentSettings.model : "");
+    updateModelOptions(providerChoice);
+    if (candidate) setSelectValue(modelSelect, candidate, modelSelect?.options[0]?.value || "");
   }
   toggleProviderFields(providerChoice);
+  renderEngineCards();
   void refreshLocalModelStatus();
+}
+
+function handleProviderChange(event) {
+  inspectEngine(event.target.value || "groq");
 }
 
 function handleThemeChange(event) {
@@ -1292,6 +1308,11 @@ function bindEventHandlers() {
   const themeSelect = document.getElementById("themeSelect");
 
   providerSelect?.addEventListener("change", handleProviderChange);
+  document.getElementById("engineUseBtn")?.addEventListener("click", () => void activateInspectedEngine());
+  document.getElementById("engineUndoBtn")?.addEventListener("click", () => {
+    if (engineUndoTarget) void activateEngine({ ...engineUndoTarget }, true);
+  });
+  document.getElementById("modelSelect")?.addEventListener("change", renderEngineActivation);
   document
     .getElementById("translateProviderSelect")
     ?.addEventListener("change", handleTranslateProviderChange);
@@ -1749,7 +1770,10 @@ async function loadSettings() {
       currentSettings.translateProvider || "groq",
       "groq"
     );
+    inspectedLocalModel = null;
+    engineCloudDrafts.clear();
     setSelectValue(providerSelect, providerChoice, "groq");
+    expandedEngineProvider = providerSelect?.value || providerChoice;
     if (provider !== "local") {
       updateModelOptions(provider);
     }
@@ -1800,42 +1824,138 @@ async function loadSettings() {
   }
 }
 
-async function saveSettings() {
-  // Keep whole-form writes ordered while model readiness IPC is in flight.
-  saveSettings.pending = (saveSettings.pending || Promise.resolve()).then(persistSettings);
-  return saveSettings.pending;
+let engineSwitchPending = false;
+let engineUndoTarget = null;
+let engineActivationMessage = "";
+
+function inspectedEngineTarget() {
+  const choice = document.getElementById("providerSelect")?.value || providerForSettings(currentSettings);
+  const localModel = localModelForProvider(choice);
+  return {
+    provider: localModel ? "local" : choice,
+    model: localModel || document.getElementById("modelSelect")?.value || "",
+  };
 }
 
-async function persistSettings() {
+function engineTargetLabel(target) {
+  if (target.provider !== "local") {
+    const labels = {
+      "whisper-large-v3": "settings.engine.whisperLarge",
+      "whisper-large-v3-turbo": "settings.engine.whisperTurbo",
+      "gpt-transcribe": "settings.engine.gptTranscribe",
+    };
+    return labels[target.model] ? translate(labels[target.model]) : target.model;
+  }
+  const key = providerForSettings(target).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+  return translate(`settings.engine.${key}.name`);
+}
+
+function renderEngineActivation() {
+  const button = document.getElementById("engineUseBtn");
+  if (!button) return;
+  const target = inspectedEngineTarget();
+  const active = target.provider === currentSettings.provider && target.model === currentSettings.model;
+  button.disabled = engineSwitchPending || active;
+  button.textContent = translate(engineSwitchPending ? "settings.engine.switching" : active ? "settings.engine.active" : "settings.engine.use", { model: engineTargetLabel(target) });
+  const notice = document.getElementById("engineCloudNotice");
+  if (notice) notice.hidden = target.provider === "local";
+  const message = document.getElementById("engineActivationStatus");
+  if (message) message.textContent = engineActivationMessage;
+  const undo = document.getElementById("engineUndoBtn");
+  if (undo) {
+    undo.hidden = !engineUndoTarget;
+    undo.disabled = engineSwitchPending;
+  }
+}
+
+async function activateInspectedEngine() {
+  // Capture the exact candidate before any await or queued whole-form write.
+  return activateEngine(inspectedEngineTarget());
+}
+
+async function activateEngine(target, undo = false) {
+  if (engineSwitchPending) return false;
+  const intent = { provider: target.provider, model: target.model };
+  engineSwitchPending = true;
+  engineActivationMessage = "";
+  renderEngineActivation();
+  try {
+    const success = await queueSettingsSave(intent);
+    if (success && undo) engineUndoTarget = null;
+    return success;
+  } finally {
+    engineSwitchPending = false;
+    renderEngineCards();
+  }
+}
+
+async function saveSettings() {
+  return queueSettingsSave(null);
+}
+
+function queueSettingsSave(intent) {
+  // Ordinary saves read the latest active engine only when their turn runs.
+  // Explicit activation carries an immutable intent rather than reading the UI later.
+  return queueSettingsOperation(() => persistSettings(intent));
+}
+
+function queueSettingsOperation(operation) {
+  const pending = (saveSettings.pending || Promise.resolve()).then(operation);
+  // A failed external mutation must reject its caller without poisoning the queue.
+  saveSettings.pending = pending.catch(() => {});
+  return pending;
+}
+
+async function refreshSettingsSnapshot() {
+  const snapshot = await ipc.invoke("get-settings");
+  if (!snapshot || typeof snapshot.provider !== "string" || typeof snapshot.model !== "string") {
+    throw new Error("Could not refresh active engine settings");
+  }
+  currentSettings = { ...currentSettings, ...snapshot };
+  saveSettings.snapshotNeedsRefresh = false;
+}
+
+function runEngineChange(change) {
+  // Enqueue the debounced edit before the external mutation, never after it.
+  let flushed = null;
+  if (commitTimer !== null) {
+    window.clearTimeout(commitTimer);
+    commitTimer = null;
+    if (settingsInitialized) flushed = queueSettingsSave(null);
+  }
+  return queueSettingsOperation(async () => {
+    if (flushed && await flushed === false) throw new Error("Could not save pending settings");
+    await initializeDependencies();
+    await refreshSettingsSnapshot();
+    // If the mutation succeeds but its refresh fails, a later save must retry
+    // the read instead of restoring the engine from a stale Settings snapshot.
+    saveSettings.snapshotNeedsRefresh = true;
+    try {
+      return await change({ ...currentSettings });
+    } finally {
+      await refreshSettingsSnapshot();
+      engineUndoTarget = null;
+      engineActivationMessage = "";
+      if (settingsInitialized) renderEngineCards();
+    }
+  });
+}
+
+async function persistSettings(intent = null) {
   try {
     await initializeDependencies();
-
-    const providerSelect = document.getElementById("providerSelect");
-    const providerChoice = providerSelect?.value || "groq";
-    let localModel = localModelForProvider(providerChoice);
-    let provider = localModel ? "local" : providerChoice;
-    let rejectedEngine = false;
-    let cloudModel = document.getElementById("modelSelect")?.value || "";
-    if (localModel && (currentSettings.provider !== "local" || currentSettings.model !== localModel)) {
-      // Query the requested model, not the last panel's cached status.
-      const status = await ipc.invoke("get-local-model-status", localModel);
-      if (status.state !== "ready") {
-        inspectedLocalModel = localModel;
-        rejectedEngine = true;
-        provider = currentSettings.provider;
-        localModel = provider === "local" ? currentSettings.model : null;
-        cloudModel = currentSettings.model;
-        // A later edit may already be queued; do not repaint over it.
-        if (providerSelect.value === providerChoice) {
-          setSelectValue(providerSelect, providerForSettings(currentSettings), "groq");
-          if (!localModel) {
-            updateModelOptions(provider);
-            setSelectValue(document.getElementById("modelSelect"), cloudModel, cloudModel);
-          }
-          toggleProviderFields(providerSelect.value);
-          renderLocalModelPanel(status);
-          renderEngineCards();
-        }
+    if (saveSettings.snapshotNeedsRefresh) await refreshSettingsSnapshot();
+    const previous = { provider: currentSettings.provider, model: currentSettings.model };
+    const target = intent || previous;
+    if (intent) {
+      if (target.provider === "local") {
+        const status = await ipc.invoke("get-local-model-status", target.model);
+        if (status.state !== "ready") throw new Error(translate("settings.localModel.notReady"));
+      } else {
+        const options = modelOptions[target.provider];
+        if (!options?.some((option) => option.value === target.model)) throw new Error(translate("settings.engine.invalidModel"));
+        const keyId = target.provider === "openai" ? "apiKeyOpenAI" : "apiKeyGroq";
+        if (!document.getElementById(keyId)?.value.trim()) throw new Error(translate("settings.engine.keyRequired"));
       }
     }
     const themeSelect = document.getElementById("themeSelect");
@@ -1846,11 +1966,11 @@ async function persistSettings() {
       language: document.getElementById("languageSelect")?.value || "auto",
       uiLanguage: document.getElementById("uiLanguageSelect")?.value || "auto",
       uiTheme: normalizeThemePref(themeSelect ? themeSelect.value : "elegant"),
-      model: localModel || cloudModel,
+      model: target.model,
       microphone: currentSettings.microphone,
       autoLaunch: !!document.getElementById("autoLaunchCheck")?.checked,
       startMinimized: !!document.getElementById("startMinimizedCheck")?.checked,
-      provider,
+      provider: target.provider,
       localCompute: document.getElementById("localComputeSelect")?.value || "auto",
       translateProvider: document.getElementById("translateProviderSelect")?.value || "",
       nemotronLatencyMs: Number(
@@ -1858,16 +1978,22 @@ async function persistSettings() {
       ),
     };
 
-    await ipc.invoke("save-settings", settings);
-    currentSettings = settings;
-    showSaveStatus(rejectedEngine ? "error" : "ok", translate(
-      rejectedEngine ? "settings.localModel.notReady" : "settings.saved"
-    ));
+    const saved = await ipc.invoke("save-settings", settings);
+    if (saved === false) throw new Error(translate("settings.saveError"));
+    currentSettings = { ...currentSettings, ...settings };
+    if (intent) {
+      engineUndoTarget = previous;
+      engineActivationMessage = translate("settings.engine.activated", { model: engineTargetLabel(target) });
+    }
+    showSaveStatus("ok", translate("settings.saved"));
+    renderEngineCards();
+    return true;
   } catch (error) {
-    // Never an alert: a write can fail while the user is mid-edit, and a modal
-    // there would eat the next keystroke. The marker persists instead.
     console.error("Failed to save settings:", error);
+    if (intent) engineActivationMessage = `${translate("settings.engine.switchFailed")} ${error.message || error}`;
     showSaveStatus("error", translate("settings.saveError"));
+    renderEngineActivation();
+    return false;
   }
 }
 
@@ -1895,7 +2021,14 @@ async function showSettings(target = null) {
   try {
     await initializeSettingsPage();
     if (wasInitialized) {
+      await saveSettings.pending;
       await loadSettings();
+    }
+
+    if (typeof target === "string" && target.startsWith("engine:")) {
+      activateSettingsTab("dictation");
+      inspectEngine(target.slice("engine:".length));
+      return;
     }
 
     if (typeof target === "string" && target.startsWith("local-model")) {
@@ -1918,6 +2051,8 @@ async function showSettings(target = null) {
 
 window.SayTypeSettings = {
   show: showSettings,
+  inspectEngine,
+  runEngineChange,
   save: saveSettings,
 };
 

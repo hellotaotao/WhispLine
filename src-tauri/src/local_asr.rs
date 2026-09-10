@@ -21,10 +21,12 @@ use tokio_util::sync::CancellationToken;
 
 pub const LOCAL_PROVIDER: &str = "local";
 pub const QWEN_MODEL_ID: &str = "qwen3-asr-0.6b-q8_0";
+pub const QWEN_LARGE_MODEL_ID: &str = "qwen3-asr-1.7b-q8_0";
 pub const NEMOTRON_MODEL_ID: &str = "nemotron-3.5-asr-streaming-0.6b-q8_0";
 
 pub fn normalize_local_model_id(model: &str) -> &'static str {
   match model.trim() {
+    QWEN_LARGE_MODEL_ID => QWEN_LARGE_MODEL_ID,
     NEMOTRON_MODEL_ID => NEMOTRON_MODEL_ID,
     _ => QWEN_MODEL_ID,
   }
@@ -73,6 +75,35 @@ pub const MODEL_ASSETS: &[Asset] = &[
     sha256: "41a342b5e4c514e968cb756de6cd1b7be39eff43c44c57a2ef5fc6522e36603d",
   },
 ];
+
+pub const LARGE_MODEL_ASSETS: &[Asset] = &[
+  Asset {
+    rel_path: "models/Qwen3-ASR-1.7B-Q8_0.gguf",
+    urls: &["https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/main/Qwen3-ASR-1.7B-Q8_0.gguf"],
+    bundled: None,
+    size: 2_165_034_944,
+    sha256: "58e22d0532d4eacaf034cfac17a6fed159f37c41390c710186783be439d1fc57",
+  },
+  Asset {
+    rel_path: "models/mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+    urls: &["https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/main/mmproj-Qwen3-ASR-1.7B-Q8_0.gguf"],
+    bundled: None,
+    size: 355_709_344,
+    sha256: "46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d",
+  },
+];
+
+fn qwen_assets(model: &str) -> &'static [Asset] {
+  if normalize_local_model_id(model) == QWEN_LARGE_MODEL_ID {
+    LARGE_MODEL_ASSETS
+  } else {
+    MODEL_ASSETS
+  }
+}
+
+fn qwen_total_bytes(model: &str) -> u64 {
+  qwen_assets(model).iter().map(|asset| asset.size).sum::<u64>() + llama_zip_asset().size
+}
 
 // One llama.cpp archive per platform; only the current platform's entry is
 // used. macOS/Linux releases are gzip-compressed tarballs, Windows is a real
@@ -196,6 +227,7 @@ fn runtime_asset(runtime: Runtime) -> Option<&'static Asset> {
   }
 }
 
+#[cfg(test)]
 pub fn total_download_bytes() -> u64 {
   MODEL_ASSETS.iter().map(|a| a.size).sum::<u64>() + llama_zip_asset().size
 }
@@ -239,6 +271,7 @@ pub fn cleanup_legacy_assets() -> Result<()> {
   cleanup_legacy_assets_at(&crate::settings::app_data_dir()?)
 }
 
+#[cfg(test)]
 pub fn bin_dir(base: &Path) -> PathBuf {
   runtime_bin_dir(base, Runtime::Cpu)
 }
@@ -316,37 +349,38 @@ fn local_asr_command(program: PathBuf) -> tokio::process::Command {
 
 /// Cheap readiness: every GGUF at its exact size, plus the extracted CLI
 /// present (executable on unix). sha256 is verified once at download time.
+#[cfg(test)]
 pub fn assets_ready_at(dir: &Path) -> bool {
-  let models_ok = models_ready_at(dir);
+  qwen_ready_at(dir, QWEN_MODEL_ID)
+}
+
+fn qwen_ready_at(dir: &Path, model: &str) -> bool {
+  let models_ok = qwen_assets(model).iter().all(|asset| {
+    fs::metadata(dir.join(asset.rel_path))
+      .map(|metadata| metadata.is_file() && metadata.len() == asset.size)
+      .unwrap_or(false)
+  });
   let cli = cli_path(dir);
   let cli_ok = fs::metadata(&cli).map(|m| m.is_file()).unwrap_or(false)
     && is_executable(&cli);
   models_ok && cli_ok
 }
 
-pub fn assets_ready() -> bool {
-  local_asr_dir()
-    .map(|d| {
-      if let Err(error) = ensure_bundled_runtime_at(&d) {
-        log::warn!("failed to install bundled local ASR runtime: {error}");
-      }
-      assets_ready_at(&d)
-    })
-    .unwrap_or(false)
-}
-
 #[cfg(test)]
 pub fn assets_ready_for_at(dir: &Path, model: &str) -> bool {
   match normalize_local_model_id(model) {
     NEMOTRON_MODEL_ID => crate::nemotron_asr::assets_ready_at(dir),
-    _ => assets_ready_at(dir),
+    _ => qwen_ready_at(dir, model),
   }
 }
 
 pub fn assets_ready_for(model: &str) -> bool {
   match normalize_local_model_id(model) {
     NEMOTRON_MODEL_ID => crate::nemotron_asr::assets_ready(),
-    _ => assets_ready(),
+    _ => local_asr_dir().map(|dir| {
+      let _ = ensure_bundled_runtime_at(&dir);
+      qwen_ready_at(&dir, model)
+    }).unwrap_or(false),
   }
 }
 
@@ -854,6 +888,15 @@ static RESIDENT_STARTS: AtomicU64 = AtomicU64::new(0);
 const PREWARM_IDLE_TIMEOUT: Duration = Duration::from_secs(80);
 const CHAT_PROMPT: &[u8] = b"\n> ";
 
+fn worker_identity_matches(
+  loaded_model: &str,
+  loaded_runtime: Runtime,
+  requested_model: &str,
+  requested_runtime: Runtime,
+) -> bool {
+  loaded_model == requested_model && loaded_runtime == requested_runtime
+}
+
 struct ResidentWorker {
   child: Child,
   stdin: ChildStdin,
@@ -862,6 +905,7 @@ struct ResidentWorker {
   /// Which extracted runtime this process was started from. A parked worker
   /// cannot change backend, so a preference change retires it.
   runtime: Runtime,
+  model: &'static str,
   generation: u64,
   epoch: u64,
   /// A worker belongs to one uninterrupted hotkey hold. It may serve each
@@ -881,10 +925,11 @@ impl ResidentWorker {
     ctx_size: u32,
     session_id: Option<u64>,
     runtime: Runtime,
+    model: &'static str,
   ) -> Result<Self> {
     let mut child = local_asr_command(runtime_cli_path(base, runtime))
-      .arg("-m").arg(base.join(MODEL_ASSETS[0].rel_path))
-      .arg("--mmproj").arg(base.join(MODEL_ASSETS[1].rel_path))
+      .arg("-m").arg(base.join(qwen_assets(model)[0].rel_path))
+      .arg("--mmproj").arg(base.join(qwen_assets(model)[1].rel_path))
       .arg("--no-warmup")
       .args(FIT_ARGS)
       .arg("-c").arg(ctx_size.to_string())
@@ -910,6 +955,7 @@ impl ResidentWorker {
       stdout,
       ctx_size,
       runtime,
+      model,
       generation: 0,
       session_id,
       last_transcript: None,
@@ -922,13 +968,18 @@ impl ResidentWorker {
   /// if the GPU one cannot start. A GPU pack that fails here is broken for the
   /// session (missing driver, no usable device, unsupported adapter), so it is
   /// switched off for the process rather than retried on every dictation.
-  async fn spawn_selected(base: &Path, ctx_size: u32, session_id: Option<u64>) -> Result<Self> {
+  async fn spawn_selected(
+    base: &Path,
+    ctx_size: u32,
+    session_id: Option<u64>,
+    model: &'static str,
+  ) -> Result<Self> {
     let runtime = selected_runtime(base);
-    match Self::spawn(base, ctx_size, session_id, runtime).await {
+    match Self::spawn(base, ctx_size, session_id, runtime, model).await {
       Ok(worker) => Ok(worker),
       Err(error) if runtime == Runtime::Gpu => {
         disable_gpu_for_process(&format!("worker start failed: {error:#}"));
-        Self::spawn(base, ctx_size, session_id, Runtime::Cpu).await
+        Self::spawn(base, ctx_size, session_id, Runtime::Cpu, model).await
       }
       Err(error) => Err(error),
     }
@@ -1158,6 +1209,14 @@ pub fn finish_resident_session(session_id: u64) -> bool {
 
 /// Stop the warm local worker when SayType exits, switches away from local, or
 /// removes the model files.
+pub fn sync_selected_model(model: &str) {
+  static SELECTED_MODEL: AtomicBool = AtomicBool::new(false);
+  let large = normalize_local_model_id(model) == QWEN_LARGE_MODEL_ID;
+  if SELECTED_MODEL.swap(large, Ordering::Relaxed) != large {
+    shutdown_resident_worker();
+  }
+}
+
 pub fn shutdown_resident_worker() {
   // Invalidate a worker currently checked out for inference as well as one in
   // the idle cache. A checked-out worker observes the new epoch in park() and
@@ -1244,19 +1303,30 @@ impl ResidentPrewarmOutcome {
 /// The shared inference permit makes this single-flight with both decode and
 /// other prewarm requests. Eligibility is rechecked after waiting for the
 /// permit, so a provider/model switch cannot start a stale worker.
+#[cfg(test)]
 pub async fn prewarm_resident_worker(
   session_id: u64,
   eligible: impl FnOnce() -> Result<bool>,
 ) -> Result<ResidentPrewarmOutcome> {
+  prewarm_resident_worker_for(QWEN_MODEL_ID, session_id, eligible).await
+}
+
+pub async fn prewarm_resident_worker_for(
+  model: &str,
+  session_id: u64,
+  eligible: impl FnOnce() -> Result<bool>,
+) -> Result<ResidentPrewarmOutcome> {
+  let model = normalize_local_model_id(model);
   let progress = PipelineProgress::new("prewarm", Some(session_id), None);
   with_pipeline_deadline(
-    prewarm_resident_worker_inner(session_id, eligible, &progress),
+    prewarm_resident_worker_inner(model, session_id, eligible, &progress),
     PREWARM_TIMEOUT,
     &progress,
   ).await
 }
 
 async fn prewarm_resident_worker_inner(
+  model: &'static str,
   session_id: u64,
   eligible: impl FnOnce() -> Result<bool>,
   progress: &PipelineProgress,
@@ -1281,14 +1351,14 @@ async fn prewarm_resident_worker_inner(
 
   let base = local_asr_dir()?;
   ensure_bundled_runtime_at(&base).map_err(anyhow::Error::msg)?;
-  if !assets_ready_at(&base) {
+  if !qwen_ready_at(&base, model) {
     log::info!("local-asr: prewarm outcome=assets_missing queue_ms={queue_ms}");
     return Ok(ResidentPrewarmOutcome::AssetsMissing);
   }
 
   let cached = RESIDENT_WORKER.lock().unwrap().take();
   if let Some(mut worker) = cached {
-    if worker.runtime == selected_runtime(&base)
+    if worker_identity_matches(worker.model, worker.runtime, model, selected_runtime(&base))
       && worker.session_id == Some(session_id)
       && worker.ctx_size == CTX_FLOOR
       && worker.is_running()
@@ -1307,13 +1377,13 @@ async fn prewarm_resident_worker_inner(
 
   let spawn_started = std::time::Instant::now();
   progress.enter("worker-start");
-  let mut worker = ResidentWorker::spawn_selected(&base, CTX_FLOOR, Some(session_id)).await?;
+  let mut worker = ResidentWorker::spawn_selected(&base, CTX_FLOOR, Some(session_id), model).await?;
   let resident_spawn_ms = spawn_started.elapsed().as_millis();
   let worker_runtime = worker.runtime.label();
   worker.epoch = lease_epoch;
   park_resident_worker_for(worker, PREWARM_IDLE_TIMEOUT);
   log::info!(
-    "local-asr: prewarm outcome=spawned runtime={} ctx={} queue_ms={} resident_spawn_ms={} idle_ms={}",
+    "local-asr: prewarm outcome=spawned model={model} runtime={} ctx={} queue_ms={} resident_spawn_ms={} idle_ms={}",
     worker_runtime,
     CTX_FLOOR,
     queue_ms,
@@ -1387,14 +1457,26 @@ fn partial_event_payload(
 /// dictation decodes as an ordered series of ≤75 s chunks; the frontend routes
 /// each partial to that chunk's slot so finalized chunks are not overwritten by
 /// a later chunk's in-progress text. `None` means the whole clip is one decode.
+#[cfg(test)]
 pub async fn transcribe_wav(
   app: Option<&tauri::AppHandle>,
   session_id: Option<u64>,
   chunk_index: Option<u32>,
   wav_bytes: &[u8],
 ) -> Result<String> {
+  transcribe_wav_for(QWEN_MODEL_ID, app, session_id, chunk_index, wav_bytes).await
+}
+
+pub async fn transcribe_wav_for(
+  model: &str,
+  app: Option<&tauri::AppHandle>,
+  session_id: Option<u64>,
+  chunk_index: Option<u32>,
+  wav_bytes: &[u8],
+) -> Result<String> {
+  let model = normalize_local_model_id(model);
   let progress = PipelineProgress::new("decode", session_id, chunk_index);
-  let inference = transcribe_wav_inner(session_id, chunk_index, wav_bytes, &progress, |text| {
+  let inference = transcribe_wav_inner_for(model, session_id, chunk_index, wav_bytes, &progress, |text| {
     let Some(app) = app else { return };
     // Broadcast rather than emit_to, by choice — not by necessity. (An earlier
     // version of this comment claimed an Any listener cannot receive a targeted
@@ -1414,7 +1496,8 @@ pub async fn transcribe_wav(
 /// far as tokens land (throttled to PARTIAL_EMIT_INTERVAL, and only when the
 /// text actually grew). Split out so tests can observe the streaming without
 /// standing up an AppHandle.
-async fn transcribe_wav_inner(
+async fn transcribe_wav_inner_for(
+  model: &'static str,
   session_id: Option<u64>,
   chunk_index: Option<u32>,
   wav_bytes: &[u8],
@@ -1446,7 +1529,7 @@ async fn transcribe_wav_inner(
 
   let base = local_asr_dir()?;
   ensure_bundled_runtime_at(&base).map_err(anyhow::Error::msg)?;
-  if !assets_ready_at(&base) {
+  if !qwen_ready_at(&base, model) {
     anyhow::bail!("LOCAL_MODEL_MISSING: local model assets are missing or incomplete");
   }
 
@@ -1464,7 +1547,9 @@ async fn transcribe_wav_inner(
   let (reusable, reuse_miss_reason) = match cached {
     None => (None, "cold"),
     Some(mut cached) => {
-      if cached.runtime != selected_runtime(&base) {
+      if !worker_identity_matches(cached.model, cached.runtime, model, cached.runtime) {
+        (None, "model_mismatch")
+      } else if cached.runtime != selected_runtime(&base) {
         // The backend changed under a parked worker (a preference switch, or
         // the GPU runtime being taken out of the session). Start a fresh one.
         (None, "runtime_mismatch")
@@ -1492,7 +1577,7 @@ async fn transcribe_wav_inner(
     None => {
       progress.enter("worker-start");
       let spawn_started = std::time::Instant::now();
-      let result = ResidentWorker::spawn_selected(&base, ctx_size, session_id).await;
+      let result = ResidentWorker::spawn_selected(&base, ctx_size, session_id, model).await;
       resident_spawn_ms = Some(spawn_started.elapsed().as_millis());
       match result {
         Ok(worker) => Some(worker),
@@ -1519,7 +1604,7 @@ async fn transcribe_wav_inner(
         park_resident_worker(worker);
         let total_ms = queued_at.elapsed().as_millis();
         log::info!(
-          "local-asr: decode mode=resident runtime={} session_id={} chunk_index={} ctx={} worker_reused={} reuse_miss={} resident_spawn_ms={} queue_ms={} total_ms={} resident_decode_ms={} first_visible_partial_ms={} wav_kb={} chars={}",
+          "local-asr: decode mode=resident model={model} runtime={} session_id={} chunk_index={} ctx={} worker_reused={} reuse_miss={} resident_spawn_ms={} queue_ms={} total_ms={} resident_decode_ms={} first_visible_partial_ms={} wav_kb={} chars={}",
           worker_runtime,
           session_id.map_or_else(|| "none".into(), |value| value.to_string()),
           chunk_index.map_or_else(|| "none".into(), |value| value.to_string()),
@@ -1569,8 +1654,8 @@ async fn transcribe_wav_inner(
   progress.enter("one-shot-decode");
   let one_shot_runtime = selected_runtime(&base);
   let mut child = local_asr_command(runtime_cli_path(&base, one_shot_runtime))
-    .arg("-m").arg(base.join(MODEL_ASSETS[0].rel_path))
-    .arg("--mmproj").arg(base.join(MODEL_ASSETS[1].rel_path))
+    .arg("-m").arg(base.join(qwen_assets(model)[0].rel_path))
+    .arg("--mmproj").arg(base.join(qwen_assets(model)[1].rel_path))
     .arg("--audio").arg(&tmp_path)
     // Each invocation performs real inference immediately and then exits.
     // llama.cpp's default dummy warmup is redundant here; on the Windows
@@ -1700,7 +1785,7 @@ async fn transcribe_wav_inner(
   let total_ms = queued_at.elapsed().as_millis();
   // Counts only -- no transcribed text in logs.
   log::info!(
-    "local-asr: decode mode=one_shot runtime={} session_id={} chunk_index={} ctx={} worker_reused={} reuse_miss={} resident_spawn_ms={} queue_ms={} total_ms={} one_shot_ms={} first_visible_partial_ms={} wav_kb={} chars={}",
+    "local-asr: decode mode=one_shot model={model} runtime={} session_id={} chunk_index={} ctx={} worker_reused={} reuse_miss={} resident_spawn_ms={} queue_ms={} total_ms={} one_shot_ms={} first_visible_partial_ms={} wav_kb={} chars={}",
     one_shot_runtime.label(),
     session_id.map_or_else(|| "none".into(), |value| value.to_string()),
     chunk_index.map_or_else(|| "none".into(), |value| value.to_string()),
@@ -1732,18 +1817,18 @@ pub struct ModelStatus {
   pub total_bytes: u64,
 }
 
-pub fn model_status(downloading: bool) -> ModelStatus {
+fn qwen_status(model: &str, downloading: bool) -> ModelStatus {
   match local_asr_dir() {
     Ok(dir) => {
       if let Err(error) = ensure_bundled_runtime_at(&dir) {
         log::warn!("failed to install bundled local ASR runtime: {error}");
       }
-      model_status_at(&dir, downloading)
+      qwen_status_at(&dir, model, downloading)
     }
     Err(_) => ModelStatus {
       state: "absent".into(),
       downloaded_bytes: 0,
-      total_bytes: total_download_bytes(),
+      total_bytes: qwen_total_bytes(model),
     },
   }
 }
@@ -1779,13 +1864,18 @@ fn ensure_bundled_runtime_at(dir: &Path) -> Result<(), String> {
   Ok(())
 }
 
+#[cfg(test)]
 fn model_status_at(dir: &Path, downloading: bool) -> ModelStatus {
+  qwen_status_at(dir, QWEN_MODEL_ID, downloading)
+}
+
+fn qwen_status_at(dir: &Path, model: &str, downloading: bool) -> ModelStatus {
   let mut downloaded = 0u64;
   let mut complete = true;
   let zip = llama_zip_asset();
   // Model files count by exact size; the zip counts as fully downloaded once
   // the extracted CLI exists (the archive is removed after extraction).
-  for a in MODEL_ASSETS {
+  for a in qwen_assets(model) {
     let got = fs::metadata(dir.join(a.rel_path)).map(|m| m.len()).unwrap_or(0);
     if got == a.size {
       downloaded += a.size;
@@ -1817,17 +1907,17 @@ fn model_status_at(dir: &Path, downloading: bool) -> ModelStatus {
   } else {
     "absent"
   };
-  ModelStatus { state: state.into(), downloaded_bytes: downloaded, total_bytes: total_download_bytes() }
+  ModelStatus { state: state.into(), downloaded_bytes: downloaded, total_bytes: qwen_total_bytes(model) }
 }
 
-fn emit_progress(app: &tauri::AppHandle, state: &str, downloaded: u64, message: Option<&str>) {
+fn emit_progress(model: &str, app: &tauri::AppHandle, state: &str, downloaded: u64, message: Option<&str>) {
   let _ = app.emit(
     "local-model-download-progress",
     serde_json::json!({
-      "model": QWEN_MODEL_ID,
+      "model": model,
       "state": state,
       "downloadedBytes": downloaded,
-      "totalBytes": total_download_bytes(),
+      "totalBytes": qwen_total_bytes(model),
       "message": message,
     }),
   );
@@ -1835,24 +1925,24 @@ fn emit_progress(app: &tauri::AppHandle, state: &str, downloaded: u64, message: 
 
 /// Download all missing assets (resumable), verify sha256, extract the llama
 /// archive, mark the CLI executable. Terminal events are emitted by the COMMAND.
-pub async fn download_model(app: tauri::AppHandle, cancel: CancellationToken) -> Result<(), String> {
+async fn download_qwen_model(model: &str, app: tauri::AppHandle, cancel: CancellationToken) -> Result<(), String> {
   let dir = local_asr_dir().map_err(|e| e.to_string())?;
   let client = reqwest::Client::builder()
     .connect_timeout(std::time::Duration::from_secs(15))
     .build()
     .map_err(|e| e.to_string())?;
 
-  let report = |downloaded: u64| emit_progress(&app, "downloading", downloaded, None);
+  let report = |downloaded: u64| emit_progress(model, &app, "downloading", downloaded, None);
 
   let mut done: u64 = 0;
-  for a in MODEL_ASSETS {
+  for a in qwen_assets(model) {
     if fs::metadata(dir.join(a.rel_path)).map(|m| m.len() == a.size).unwrap_or(false) {
       done += a.size;
       continue;
     }
     download_asset(&report, &client, &dir, a, &cancel, done).await?;
     done += a.size;
-    emit_progress(&app, "downloading", done, None);
+    emit_progress(model, &app, "downloading", done, None);
   }
 
   ensure_bundled_runtime_at(&dir)?;
@@ -2076,27 +2166,30 @@ async fn stream_to_part(
 }
 
 /// Settings "delete model": stop the Qwen worker, then remove only Qwen files.
-pub fn delete_model() -> Result<(), String> {
+fn delete_qwen_model(model: &str) -> Result<(), String> {
   shutdown_resident_worker();
   let dir = local_asr_dir().map_err(|e| e.to_string())?;
-  for asset in MODEL_ASSETS.iter().chain(std::iter::once(llama_zip_asset())) {
-    let _ = fs::remove_file(dir.join(asset.rel_path));
-    let _ = fs::remove_file(dir.join(format!("{}.part", asset.rel_path)));
+  delete_qwen_assets_at(&dir, model)
+}
+
+fn delete_qwen_assets_at(dir: &Path, model: &str) -> Result<(), String> {
+  // Both Qwen sizes share the runtime. Deleting one must preserve the other.
+  for asset in qwen_assets(model) {
+    for path in [dir.join(asset.rel_path), dir.join(format!("{}.part", asset.rel_path))] {
+      match fs::remove_file(path) {
+        Ok(()) => {},
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+        Err(error) => return Err(error.to_string()),
+      }
+    }
   }
-  // The GPU pack is useless without the models and would otherwise sit there
-  // as 33 MB the user cannot see, with Settings still reporting it ready.
-  let _ = delete_gpu_runtime();
-  match fs::remove_dir_all(bin_dir(&dir)) {
-    Ok(()) => Ok(()),
-    Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-    Err(err) => Err(err.to_string()),
-  }
+  Ok(())
 }
 
 pub fn model_status_for(model: &str, downloading: bool) -> ModelStatus {
   match normalize_local_model_id(model) {
     NEMOTRON_MODEL_ID => crate::nemotron_asr::model_status(downloading),
-    _ => model_status(downloading),
+    _ => qwen_status(model, downloading),
   }
 }
 
@@ -2107,20 +2200,54 @@ pub async fn download_model_for(
 ) -> Result<(), String> {
   match normalize_local_model_id(model) {
     NEMOTRON_MODEL_ID => crate::nemotron_asr::download_model(app, cancel).await,
-    _ => download_model(app, cancel).await,
+    _ => download_qwen_model(model, app, cancel).await,
   }
 }
 
 pub fn delete_model_for(model: &str) -> Result<(), String> {
   match normalize_local_model_id(model) {
     NEMOTRON_MODEL_ID => crate::nemotron_asr::delete_model(),
-    _ => delete_model(),
+    _ => delete_qwen_model(model),
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn worker_identity_rejects_model_and_runtime_switches() {
+    assert!(worker_identity_matches(QWEN_LARGE_MODEL_ID, Runtime::Cpu, QWEN_LARGE_MODEL_ID, Runtime::Cpu));
+    assert!(!worker_identity_matches(QWEN_MODEL_ID, Runtime::Cpu, QWEN_LARGE_MODEL_ID, Runtime::Cpu));
+    assert!(!worker_identity_matches(QWEN_LARGE_MODEL_ID, Runtime::Cpu, QWEN_MODEL_ID, Runtime::Cpu));
+    assert!(!worker_identity_matches(QWEN_LARGE_MODEL_ID, Runtime::Gpu, QWEN_LARGE_MODEL_ID, Runtime::Cpu));
+  }
+
+  #[test]
+  fn large_qwen_has_independent_assets_and_deletion() {
+    assert_eq!(normalize_local_model_id(QWEN_LARGE_MODEL_ID), QWEN_LARGE_MODEL_ID);
+    assert_eq!(qwen_assets(QWEN_LARGE_MODEL_ID).iter().map(|a| a.size).sum::<u64>(), 2_520_744_288);
+    let temp = tempfile::tempdir().unwrap();
+    let dir = temp.path();
+    fs::create_dir_all(dir.join("models")).unwrap();
+    for asset in MODEL_ASSETS.iter().chain(LARGE_MODEL_ASSETS) {
+      fs::File::create(dir.join(asset.rel_path)).unwrap().set_len(asset.size).unwrap();
+    }
+    let cli = cli_path(dir);
+    fs::create_dir_all(cli.parent().unwrap()).unwrap();
+    fs::write(&cli, "runtime").unwrap();
+    #[cfg(unix)] {
+      use std::os::unix::fs::PermissionsExt;
+      fs::set_permissions(&cli, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    assert!(qwen_ready_at(dir, QWEN_LARGE_MODEL_ID));
+    assert!(qwen_ready_at(dir, QWEN_MODEL_ID));
+    assert_eq!(qwen_status_at(dir, QWEN_LARGE_MODEL_ID, false).state, "ready");
+    delete_qwen_assets_at(dir, QWEN_LARGE_MODEL_ID).unwrap();
+    assert!(!qwen_ready_at(dir, QWEN_LARGE_MODEL_ID));
+    assert!(qwen_ready_at(dir, QWEN_MODEL_ID));
+    assert!(cli.exists());
+  }
 
   #[test]
   fn device_list_keeps_names_and_drops_the_header() {
@@ -2758,7 +2885,7 @@ mod tests {
 
     let started = std::time::Instant::now();
     let mut worker = rt
-      .block_on(ResidentWorker::spawn(&base, CTX_FLOOR, Some(9_003), Runtime::Gpu))
+      .block_on(ResidentWorker::spawn(&base, CTX_FLOOR, Some(9_003), Runtime::Gpu, QWEN_MODEL_ID))
       .expect("a GPU worker must start once the pack is installed");
     let spawn_ms = started.elapsed().as_millis();
     let decode_started = std::time::Instant::now();
@@ -2898,7 +3025,7 @@ mod tests {
       .iter()
       .map(|(label, path, len)| {
         let mut worker = rt
-          .block_on(ResidentWorker::spawn(&base, ctx, Some(9_002), Runtime::Cpu))
+          .block_on(ResidentWorker::spawn(&base, ctx, Some(9_002), Runtime::Cpu, QWEN_MODEL_ID))
           .expect("reference worker");
         let text = rt
           .block_on(worker.transcribe(Path::new(*path), *len, &mut |_: &str| {}))
@@ -2929,7 +3056,7 @@ mod tests {
     for session in 0..sessions {
       let session_id = 9_100 + session as u64;
       let mut worker = rt
-        .block_on(ResidentWorker::spawn(&base, ctx, Some(session_id), Runtime::Cpu))
+        .block_on(ResidentWorker::spawn(&base, ctx, Some(session_id), Runtime::Cpu, QWEN_MODEL_ID))
         .expect("session worker");
       let mut served = 0usize;
 
@@ -2966,7 +3093,7 @@ mod tests {
             eprintln!("session {session} chunk {chunk} clip {label} [{population}]: rejected: {message}");
             // Production retires a rejected worker and re-decodes one-shot, so
             // the next chunk here starts a fresh process too.
-            worker = match rt.block_on(ResidentWorker::spawn(&base, ctx, Some(session_id), Runtime::Cpu)) {
+            worker = match rt.block_on(ResidentWorker::spawn(&base, ctx, Some(session_id), Runtime::Cpu, QWEN_MODEL_ID)) {
               Ok(replacement) => replacement,
               Err(spawn_error) => {
                 // A box already saturated by this loop can fail to start a

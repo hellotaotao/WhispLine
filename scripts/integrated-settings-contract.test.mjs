@@ -97,8 +97,8 @@ test("local engines are provider choices while cloud providers retain model sele
   assert.match(transcription, /id="modelItem"/);
   assert.match(settingsJs, /localModelForProvider/);
   assert.match(settingsJs, /modelItem\?\.classList\.toggle\("hidden", isLocal\)/);
-  assert.match(settingsJs, /provider = localModel \? "local" : providerChoice/);
-  assert.match(settingsJs, /model: localModel \|\| cloudModel/);
+  assert.match(settingsJs, /provider: localModel \? "local" : choice/);
+  assert.match(settingsJs, /const target = intent \|\| previous/);
 });
 
 test("the engine is chosen from cards that show what a label cannot", () => {
@@ -111,7 +111,7 @@ test("the engine is chosen from cards that show what a label cannot", () => {
   // The select survives as the value holder and the keyboard path, so every
   // existing listener keeps working — cards drive it rather than replace it.
   assert.match(mainHtml, /id="providerSelect"/);
-  assert.match(settingsJs, /select\.dispatchEvent\(new Event\("change", \{ bubbles: true \}\)\)/);
+  assert.match(settingsJs, /card\.addEventListener\("click", \(\) => inspectEngine\(entry\.value, \{ toggle: true \}\)\)/);
   assert.match(settingsCss, /\.setting-control-fallback/);
   assert.doesNotMatch(settingsCss, /\.setting-control-fallback\s*\{[^}]*display:\s*none/);
   for (const key of ["needsKey", "keySet", "needsDownload"]) {
@@ -154,7 +154,7 @@ test("onboarding, Home, and tray expose Qwen and Nemotron as separate local engi
   assert.match(mainHtml, /id="obLocalQwenCard"[^>]*data-local-model="qwen3-asr-0\.6b-q8_0"/);
   assert.match(mainJs, /value: "local-nemotron"/);
   assert.match(mainJs, /value: "local-qwen"/);
-  assert.match(mainJs, /invoke\("set-local-model", localModel\)/);
+  assert.match(mainJs, /settingsTarget: `engine:\$\{providerChoice\}`/);
   assert.match(trayRs, /engine-local-nemotron/);
   assert.match(trayRs, /engine-local-qwen/);
 });
@@ -314,10 +314,10 @@ test("settings markup contains no literal escaped newlines", () => {
   assert.ok(!mainHtml.includes("\\n"));
 });
 
-test("engine cards offer Qwen then OpenAI then Groq then Nemotron", () => {
+test("engine cards offer both Qwen sizes then OpenAI then Groq then Nemotron", () => {
   const cards = settingsJs.match(/const ENGINE_CARDS = \[([\s\S]*?)\];/)?.[1] || "";
   const values = [...cards.matchAll(/value: ([^,]+)/g)].map((match) => match[1]);
-  assert.deepEqual(values, ["LOCAL_QWEN_PROVIDER", '"openai"', '"groq"', "LOCAL_NEMOTRON_PROVIDER"]);
+  assert.deepEqual(values, ["LOCAL_QWEN_PROVIDER", "LOCAL_QWEN_LARGE_PROVIDER", '"openai"', '"groq"', "LOCAL_NEMOTRON_PROVIDER"]);
 });
 
 test("optional local translation is a separate collapsed panel", () => {

@@ -1868,7 +1868,7 @@ async function createLifecycleHarness(options = {}) {
   });
   const prompt = createBarePrompt(VoiceInputPrompt, {
     currentProvider: "local",
-    currentModel: "qwen3-asr-0.6b-q8_0",
+    currentModel: options.model || "qwen3-asr-0.6b-q8_0",
     translateMode: false,
     cancelInProgress: false,
     stopRequested: false,
@@ -3440,4 +3440,17 @@ test("a stale translation session cannot paint a consent prompt over a new recor
   const result = prompt.askTranslateConsent("Groq", { id: 1 });
   assert.equal(prompt.consentActions.hidden, true);
   assert.equal(await result, false);
+});
+
+
+test("large Qwen retains its badge and chunked worker lifecycle", async () => {
+  const h = await createLifecycleHarness({ model: "qwen3-asr-1.7b-q8_0" });
+  assert.equal(h.prompt.resolveActiveModel(), "Qwen3 1.7B · Local");
+  assert.equal(h.session.qwenSession, true);
+  assert.ok(h.session.chunked);
+  h.prompt.stopRecording();
+  await settlePromises();
+  assert.deepEqual(h.inserted, ["final 0"]);
+  assert.equal(h.calls.filter(([command]) => command === "record-assembled-transcription").length, 1);
+  assert.equal(h.calls.filter(([command]) => command === "finish-qwen-worker-session").length, 1);
 });

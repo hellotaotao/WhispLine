@@ -16,6 +16,7 @@ const DEBUG_MICROPHONE_CLEANUP = false;
 const RECORD_DEFAULT_MODEL = { openai: "gpt-transcribe", groq: "whisper-large-v3-turbo" };
 const TRANSLATE_MODEL = { openai: "whisper-1", groq: "whisper-large-v3" };
 const QWEN_LOCAL_MODEL_ID = "qwen3-asr-0.6b-q8_0";
+const QWEN_LARGE_LOCAL_MODEL_ID = "qwen3-asr-1.7b-q8_0";
 const NEMOTRON_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b-q8_0";
 // Keep this paired with hotkey.rs CANCEL_THRESHOLD. Preloading a model-sized
 // worker before probation ends would make a discarded mis-trigger hold memory.
@@ -38,6 +39,7 @@ const MODEL_LABEL = {
   "whisper-large-v3": "Groq Whisper v3",
   "whisper-large-v3-turbo": "Groq Whisper v3 Turbo",
   [QWEN_LOCAL_MODEL_ID]: "Qwen3 · Local",
+  [QWEN_LARGE_LOCAL_MODEL_ID]: "Qwen3 1.7B · Local",
   [NEMOTRON_LOCAL_MODEL_ID]: "Nemotron 3.5 · Live Local",
 };
 // Audio capture constraints, shared by the launch prime and every recording.
@@ -776,7 +778,7 @@ class VoiceInputPrompt {
       // provider by key presence — the exact one isn't known here).
       const model = this.currentModel === NEMOTRON_LOCAL_MODEL_ID
         ? NEMOTRON_LOCAL_MODEL_ID
-        : QWEN_LOCAL_MODEL_ID;
+        : this.currentModel === QWEN_LARGE_LOCAL_MODEL_ID ? QWEN_LARGE_LOCAL_MODEL_ID : QWEN_LOCAL_MODEL_ID;
       return this.translateMode ? "Cloud Whisper" : MODEL_LABEL[model];
     }
     const provider = this.currentProvider === "groq" ? "groq" : "openai";

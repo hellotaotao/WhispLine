@@ -466,7 +466,7 @@ pub async fn stop_native_capture(
 fn qwen_prewarm_eligible(config: &AppConfig) -> bool {
   config.provider == crate::local_asr::LOCAL_PROVIDER
     && crate::local_asr::normalize_local_model_id(&config.model)
-      == crate::local_asr::QWEN_MODEL_ID
+      != crate::local_asr::NEMOTRON_MODEL_ID
 }
 
 #[tauri::command]
@@ -501,8 +501,13 @@ pub async fn prewarm_qwen_worker(
     return Err("Qwen prewarm is only accepted from input-prompt".into());
   }
 
-  let outcome = crate::local_asr::prewarm_resident_worker(session_id, || {
-    settings::read_config().map(|config| qwen_prewarm_eligible(&config))
+  let model = settings::read_config().map_err(stringify_error)?.model;
+  let outcome = crate::local_asr::prewarm_resident_worker_for(&model, session_id, || {
+    settings::read_config().map(|config| {
+      qwen_prewarm_eligible(&config)
+        && crate::local_asr::normalize_local_model_id(&config.model)
+          == crate::local_asr::normalize_local_model_id(&model)
+    })
   })
   .await
   .map_err(|error| {
@@ -721,6 +726,7 @@ pub fn apply_provider_change(app: &AppHandle, provider: &str) -> Result<(), Stri
 pub(crate) fn sync_local_runtime(app: &AppHandle, config: &AppConfig) {
   crate::local_asr::set_compute_preference(&config.local_compute);
   let selected = crate::local_asr::normalize_local_model_id(&config.model);
+  crate::local_asr::sync_selected_model(selected);
   if config.provider == crate::local_asr::LOCAL_PROVIDER
     && selected == crate::local_asr::NEMOTRON_MODEL_ID
   {
@@ -791,7 +797,7 @@ pub fn apply_local_model_change(app: &AppHandle, model: &str) -> Result<(), Stri
   Ok(())
 }
 
-fn show_main_settings(app: &AppHandle, target: &str) -> Result<(), String> {
+pub(crate) fn show_main_settings(app: &AppHandle, target: &str) -> Result<(), String> {
   if let Some(window) = app.get_webview_window("main") {
     window.show().map_err(stringify_error)?;
     window.unminimize().map_err(stringify_error)?;
@@ -2187,7 +2193,7 @@ async fn perform_local_transcription(
     )
     .await
   } else {
-    crate::local_asr::transcribe_wav(Some(app), session_id, chunk_index, &audio_buffer).await
+    crate::local_asr::transcribe_wav_for(&config.model, Some(app), session_id, chunk_index, &audio_buffer).await
   };
   result.map_err(|err| {
     if err.to_string().starts_with("LOCAL_MODEL_MISSING") {
@@ -2663,6 +2669,8 @@ mod tests {
 
     config.provider = crate::local_asr::LOCAL_PROVIDER.into();
     config.model = crate::local_asr::QWEN_MODEL_ID.into();
+    assert!(qwen_prewarm_eligible(&config));
+    config.model = crate::local_asr::QWEN_LARGE_MODEL_ID.into();
     assert!(qwen_prewarm_eligible(&config));
 
     config.model = crate::local_asr::NEMOTRON_MODEL_ID.into();

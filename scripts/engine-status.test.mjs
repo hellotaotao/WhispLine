@@ -18,18 +18,19 @@ test('each local engine reports its own readiness, not the open panel state',()=
 
 test('inspection draws controls for the inspected engine rather than the active engine',()=>{
   const fn = source.slice(source.indexOf('function toggleProviderFields'),source.indexOf('// --- Local model panel'));
-  for (const inspected of ['qwen', 'nemotron']) {
+  for (const inspected of ['qwen', 'qwen-large', 'nemotron']) {
     const hidden = {};
     const fields = Object.fromEntries(['nemotronLatencyItem','localComputeItem','apiKeyFieldGroq','apiKeyFieldOpenAI'].map(id=>[id,{classList:{toggle:(_name,value)=>{hidden[id]=value;}}}]));
     const context = vm.createContext({
       inspectedLocalModel:inspected,QWEN_LOCAL_MODEL:'qwen',NEMOTRON_LOCAL_MODEL:'nemotron',
-      LOCAL_QWEN_PROVIDER:'local-qwen',LOCAL_NEMOTRON_PROVIDER:'local-nemotron',
+      LOCAL_QWEN_PROVIDER:'local-qwen',LOCAL_QWEN_LARGE_PROVIDER:'local-qwen-large',LOCAL_NEMOTRON_PROVIDER:'local-nemotron',
+      providerForSettings:settings=> 'local-' + settings.model,
       localModelForProvider:()=> 'local',gpuRuntimeSupported:true,
       document:{getElementById:id=>fields[id]},syncEngineDrawer(){},
     });
     vm.runInContext(fn,context);
     vm.runInContext(`toggleProviderFields("${inspected==='qwen'?'local-nemotron':'local-qwen'}")`,context);
     assert.equal(hidden.nemotronLatencyItem,inspected !== 'nemotron');
-    assert.equal(hidden.localComputeItem,inspected !== 'qwen');
+    assert.equal(hidden.localComputeItem,inspected === 'nemotron');
   }
 });

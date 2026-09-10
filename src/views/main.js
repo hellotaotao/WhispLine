@@ -195,6 +195,7 @@ function bindEvents() {
       return;
     }
     const model = normalizeLocalModel(payload.model);
+    applyEngineDownloadProgress(payload);
     if (payload.state === "downloading") {
       obLocalStatuses[model] = {
         state: "downloading",
@@ -291,14 +292,19 @@ let axGuideTimedOut = false;
 let axPollTimer = null;
 let axPollDeadline = 0;
 
+let readinessRefreshVersion = 0;
 async function refreshReadiness() {
+  const version = ++readinessRefreshVersion;
   try {
-    cachedSettings = await ipc.invoke("get-settings");
+    const settings = await ipc.invoke("get-settings");
+    if (version !== readinessRefreshVersion) return;
+    cachedSettings = settings;
   } catch (error) {
     console.error("Failed to load settings:", error);
   }
 
-  const [micOk, axOk] = await Promise.all([checkMicOk(), checkAxOk()]);
+  const [micOk, axOk] = await Promise.all([checkMicOk(), checkAxOk(), refreshEngineAvailability()]);
+  if (version !== readinessRefreshVersion) return;
   if (axOk) {
     stopAxPolling();
     axGuideTimedOut = false;
@@ -585,16 +591,9 @@ function renderReadiness({ hasKey, micOk, axOk, recordShortcut, translateShortcu
   renderEngineCard();
 }
 
-// Engine quick-switch: its own card right under the readiness card. Cloud
-// providers stay provider-level choices; each local model is a concrete
-// choice because there is no second model selector here. Deliberately NOT
-// inside the readiness card: that card is pure status display, and burying an
-// interactive control among status rows made it unfindable. The Qwen
-// recommendation tag shows while another engine is selected. Selecting a
-// local model before its assets are downloaded is rejected by the backend —
-// we then open Settings on the download panel instead of silently switching
-// to an unusable engine.
+// Home switches ready engines directly; unavailable engines open setup without mutation.
 const QWEN_LOCAL_MODEL = "qwen3-asr-0.6b-q8_0";
+const QWEN_LARGE_LOCAL_MODEL = "qwen3-asr-1.7b-q8_0";
 const NEMOTRON_LOCAL_MODEL = "nemotron-3.5-asr-streaming-0.6b-q8_0";
 
 // Same order as the Settings engine cards — one list of engines shown in two
@@ -606,6 +605,7 @@ const ENGINE_OPTIONS = [
     model: QWEN_LOCAL_MODEL,
     recommended: true,
   },
+  { value: "local-qwen-large", labelKey: "home.engineLocalQwenLarge", experimental: true, model: QWEN_LARGE_LOCAL_MODEL },
   { value: "openai", label: "OpenAI" },
   { value: "groq", label: "Groq" },
   {
@@ -619,6 +619,7 @@ const ENGINE_CAPTION_KEY = {
   groq: "home.engineCaptionGroq",
   openai: "home.engineCaptionOpenai",
   "local-qwen": "home.engineCaptionLocalQwen",
+  "local-qwen-large": "home.engineCaptionLocalQwenLarge",
   "local-nemotron": "home.engineCaptionLocalNemotron",
 };
 
@@ -637,6 +638,7 @@ function availableEngineOptions() {
 }
 
 function normalizeLocalModel(model) {
+  if (model === QWEN_LARGE_LOCAL_MODEL) return QWEN_LARGE_LOCAL_MODEL;
   return model === NEMOTRON_LOCAL_MODEL ? NEMOTRON_LOCAL_MODEL : QWEN_LOCAL_MODEL;
 }
 
@@ -648,6 +650,7 @@ function selectedEngineValue() {
   if (cachedSettings?.provider !== "local") {
     return cachedSettings?.provider || "groq";
   }
+  if (cachedSettings.model === QWEN_LARGE_LOCAL_MODEL) return "local-qwen-large";
   return normalizeLocalModel(cachedSettings.model) === NEMOTRON_LOCAL_MODEL
     ? "local-nemotron"
     : "local-qwen";
@@ -765,80 +768,168 @@ function setupUpdateAffordances() {
   });
 }
 
+const engineAvailability = new Map();
+const engineAvailabilityVersions = new Map();
+
+function nextEngineAvailabilityVersion(value) {
+  const version = (engineAvailabilityVersions.get(value) || 0) + 1;
+  engineAvailabilityVersions.set(value, version);
+  return version;
+}
+
+async function refreshEngineAvailability() {
+  const options = availableEngineOptions();
+  const versions = new Map(options.map(({ value }) => [value, nextEngineAvailabilityVersion(value)]));
+  // Retain booleans only, never credentials, in the Home availability cache.
+  const cloud = ipc.invoke("get-api-keys").then(keys => ({
+    openai: !!String(keys?.apiKeyOpenAI || "").trim(),
+    groq: !!String(keys?.apiKeyGroq || "").trim(),
+  })).catch(() => null);
+  await Promise.all(options.map(async option => {
+    let status;
+    try {
+      if (option.model) {
+        status = await ipc.invoke("get-local-model-status", option.model);
+      } else {
+        const keys = await cloud;
+        status = { state: keys ? (keys[option.value] ? "ready" : "setup") : "checking" };
+      }
+    } catch (_) {
+      status = { state: "checking" };
+    }
+    if (engineAvailabilityVersions.get(option.value) === versions.get(option.value)) {
+      engineAvailability.set(option.value, status || { state: "checking" });
+    }
+  }));
+  renderEngineCard();
+}
+
+function applyEngineDownloadProgress(payload) {
+  const option = ENGINE_OPTIONS.find(entry => entry.model === payload.model);
+  if (!option) return;
+  nextEngineAvailabilityVersion(option.value);
+  engineAvailability.set(option.value, {
+    state: payload.state === "error" ? "absent" : payload.state,
+    downloadedBytes: payload.downloadedBytes || 0,
+    totalBytes: payload.totalBytes || 0,
+  });
+  renderEngineCard();
+}
+
+function engineReadinessLabel(option) {
+  const status = engineAvailability.get(option.value);
+  if (!status || status.state === "checking") return t("home.engineChecking");
+  if (status.state === "ready") return t(option.model ? "home.engineReadyLocal" : "home.engineReadyCloud");
+  if (status.state === "downloading") {
+    const percent = status.totalBytes > 0
+      ? Math.min(100, Math.max(0, Math.floor(100 * status.downloadedBytes / status.totalBytes))) : null;
+    return percent === null ? t("home.engineDownloading") : t("home.engineDownloadProgress", { percent });
+  }
+  return t(option.model ? "home.engineNeedsDownload" : "home.engineNeedsSetup");
+}
+
 function renderEngineCard() {
   const card = document.getElementById("engine-card");
   if (!card) {
     return;
   }
 
-  const iconWrap = document.createElement("div");
-  iconWrap.className = "readiness-icon";
-  iconWrap.appendChild(makeIcon("memory"));
-
-  const titles = document.createElement("div");
-  titles.className = "engine-titles";
+  const oldSeg = card.querySelector(".engine-seg");
+  const scrollLeft = oldSeg?.scrollLeft || 0;
+  const focusedValue = card.contains(document.activeElement)
+    ? document.activeElement?.getAttribute("data-engine") : null;
+  const header = document.createElement("div");
+  header.className = "engine-header";
+  header.appendChild(makeIcon("memory"));
   const title = document.createElement("div");
   title.className = "engine-title";
   title.textContent = t("home.engineLabel");
-  const sub = document.createElement("div");
-  sub.className = "engine-sub";
+  header.appendChild(title);
   const selectedEngine = selectedEngineValue();
-  const captionKey = ENGINE_CAPTION_KEY[selectedEngine];
-  sub.textContent = captionKey ? t(captionKey) : "";
-  titles.appendChild(title);
-  titles.appendChild(sub);
-
   const seg = document.createElement("div");
   seg.className = "engine-seg";
-  seg.setAttribute("role", "radiogroup");
-  availableEngineOptions().forEach(({ value, label, labelKey, model, recommended }) => {
+  seg.setAttribute("role", "group");
+  seg.setAttribute("aria-label", t("home.engineLabel"));
+  availableEngineOptions().forEach(option => {
+    const { value, label, labelKey, recommended, experimental } = option;
     const active = selectedEngine === value;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `engine-seg-btn${active ? " active" : ""}`;
-    btn.setAttribute("role", "radio");
-    btn.setAttribute("aria-checked", String(active));
+    btn.setAttribute("data-engine", value);
+    btn.setAttribute("aria-pressed", String(active));
+    btn.setAttribute("aria-disabled", String(engineSwitchPending));
     const text = document.createElement("span");
+    text.className = "engine-name";
     text.textContent = labelKey ? t(labelKey) : label;
-    btn.appendChild(text);
-    if (recommended && cachedSettings?.localCapable && !active) {
-      const tag = document.createElement("span");
-      tag.className = "engine-tag";
-      tag.textContent = t("home.engineRecommended");
-      btn.appendChild(tag);
-    }
-    btn.addEventListener("click", () => {
-      void selectEngine(value, model);
-    });
+    const tag = document.createElement("span");
+    tag.className = `engine-tag${recommended || experimental ? "" : " engine-tag-empty"}`;
+    tag.textContent = recommended ? t("home.engineRecommended") : experimental ? t("home.engineExperimental") : "\u00a0";
+    const status = document.createElement("span");
+    status.className = "engine-readiness";
+    status.textContent = engineReadinessLabel(option);
+    btn.append(text, tag, status);
+    btn.addEventListener("click", () => void selectEngine(value));
     seg.appendChild(btn);
   });
-
-  card.replaceChildren(iconWrap, titles, seg);
+  const sub = document.createElement("div");
+  sub.className = "engine-sub";
+  sub.setAttribute("aria-live", "polite");
+  const captionKey = ENGINE_CAPTION_KEY[selectedEngine];
+  sub.textContent = captionKey ? t(captionKey) : "";
+  card.replaceChildren(header, seg, sub);
+  seg.scrollLeft = scrollLeft;
+  if (focusedValue) {
+    seg.querySelector(`[data-engine="${focusedValue}"]`)?.focus({ preventScroll: true });
+  }
 }
 
-async function selectEngine(providerChoice, localModel = "") {
-  if (selectedEngineValue() === providerChoice) {
-    return;
-  }
+let engineSwitchPending = false;
+
+async function selectEngine(providerChoice) {
+  if (engineSwitchPending) return;
+  const option = ENGINE_OPTIONS.find((entry) => entry.value === providerChoice);
+  if (!option) return;
+  engineSwitchPending = true;
+  renderEngineCard();
   try {
-    if (localModel) {
-      await ipc.invoke("set-local-model", localModel);
-    } else {
-      await ipc.invoke("set-provider", providerChoice);
-    }
-    // The shortcut-updated broadcast re-renders too; refresh eagerly so the
-    // highlight moves without waiting on the event round-trip.
-    await refreshReadiness();
-  } catch (error) {
-    if (localModel) {
-      // Assets not downloaded yet — hand over to the settings download panel.
-      ipc.invoke("open-local-model-panel", localModel).catch((panelError) => {
-        console.error("Failed to open local model panel:", panelError);
-      });
+    const ready = await window.SayTypeSettings.runEngineChange(async (actualSettings) => {
+      if (option.model) {
+        const status = await ipc.invoke("get-local-model-status", option.model);
+        if (status?.state !== "ready") return false;
+      } else {
+        const keys = await ipc.invoke("get-api-keys");
+        const key = providerChoice === "openai" ? keys.apiKeyOpenAI : keys.apiKeyGroq;
+        if (!String(key || "").trim()) return false;
+      }
+      const active = option.model
+        ? actualSettings.provider === "local" && actualSettings.model === option.model
+        : actualSettings.provider === providerChoice;
+      if (active) return true;
+      const saved = option.model
+        ? await ipc.invoke("set-local-model", option.model)
+        : await ipc.invoke("set-provider", providerChoice);
+      if (saved === false) throw new Error("Engine switch was not saved");
+      return true;
+    });
+    if (!ready) {
+      await showPage("settings", { settingsTarget: `engine:${providerChoice}` });
       return;
     }
+    try {
+      await refreshReadiness();
+    } catch (error) {
+      console.error("Failed to refresh engine status:", error);
+      showNotification(String(error?.message || error), "warning");
+    }
+  } catch (error) {
     console.error("Failed to switch engine:", error);
     showNotification(String(error?.message || error), "warning");
+    await showPage("settings", { settingsTarget: `engine:${providerChoice}` });
+    return;
+  } finally {
+    engineSwitchPending = false;
+    renderEngineCard();
   }
 }
 
